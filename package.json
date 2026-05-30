@@ -1,0 +1,16 @@
+{
+  "name": "skyblue-cotizaciones",
+  "version": "1.0.0",
+  "description": "Sistema de cotizaciones SKY BLUE PERU S.A.C.",
+  "main": "api/index.js",
+  "scripts": {
+    "start": "node api/index.js",
+    "dev": "node api/index.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "express": "^4.18.2"
+  }
+}

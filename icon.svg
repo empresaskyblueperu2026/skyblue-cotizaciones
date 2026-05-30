@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="80" fill="#0d3b6e"/>
+  <rect y="320" width="512" height="192" rx="0" fill="#2ab7a9"/>
+  <rect x="0" y="300" width="512" height="40" fill="#2ab7a9"/>
+  <text x="256" y="230" font-family="Arial Black,Arial,sans-serif" font-size="160" font-weight="900"
+    text-anchor="middle" fill="white" letter-spacing="-4">SKY</text>
+  <text x="256" y="370" font-family="Arial,sans-serif" font-size="52" font-weight="700"
+    text-anchor="middle" fill="white" letter-spacing="6">BLUE PERU</text>
+</svg>
