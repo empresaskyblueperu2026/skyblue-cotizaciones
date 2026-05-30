@@ -1,6 +1,6 @@
 /*
-  SKY BLUE PWA — Backend corregido para estructura plana
-  Todos los archivos estan en la raiz del repo
+  SKY BLUE PWA — Backend servidor
+  Railway asigna el puerto automaticamente via variable PORT
 */
 
 const express = require('express');
@@ -9,19 +9,19 @@ const app     = express();
 
 app.use(express.json({ limit: '25mb' }));
 
-// Serve static files from current directory (todos en raiz)
+// Archivos estaticos (todos en la raiz del repo)
 app.use(express.static(__dirname));
 
 // Health check para Railway
 app.get('/health', function(req, res) {
-  res.status(200).json({ status: 'ok', app: 'SKY BLUE Cotizaciones' });
+  res.status(200).json({ status: 'ok' });
 });
 
-// API proxy — mantiene la API key segura en el servidor
+// Proxy seguro para la API de Claude
 app.post('/api/claude', async function(req, res) {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
-    return res.status(500).json({ error: 'ANTHROPIC_API_KEY no configurada en el servidor' });
+    return res.status(500).json({ error: 'API key no configurada' });
   }
   try {
     const response = await fetch('https://api.anthropic.com/v1/messages', {
@@ -37,17 +37,17 @@ app.post('/api/claude', async function(req, res) {
     const data = await response.json();
     res.status(response.status).json(data);
   } catch (err) {
-    console.error('API error:', err.message);
     res.status(502).json({ error: err.message });
   }
 });
 
-// Todas las rutas sirven index.html (SPA)
+// SPA fallback
 app.get('*', function(req, res) {
   res.sendFile(path.join(__dirname, 'index.html'));
 });
 
+// Railway pone el puerto en process.env.PORT — NUNCA hardcodear
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, '0.0.0.0', function() {
-  console.log('SKY BLUE PWA corriendo en puerto ' + PORT);
+  console.log('SKY BLUE corriendo en puerto ' + PORT);
 });
