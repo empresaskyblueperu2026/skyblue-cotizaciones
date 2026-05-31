@@ -62,6 +62,8 @@ input,select,textarea,button{font-family:inherit}
 }
 #_ibanner{display:none;position:fixed;bottom:72px;left:12px;right:12px;z-index:90;background:#0d3b6e;color:white;border-radius:14px;padding:12px 16px;box-shadow:0 4px 20px rgba(0,0,0,.3);flex-direction:column;gap:8px}
 #_offbar{display:none;position:fixed;top:52px;left:0;right:0;z-index:89;background:#f59e0b;color:white;text-align:center;font-size:12px;font-weight:600;padding:6px}
+@media(max-width:760px){#_tnav{display:none!important}#_usel{max-width:130px!important;font-size:11px!important}}
+@media(min-width:761px){#_bnav{display:none!important}#_cont{padding-bottom:20px!important}}
 </style>
 </head>
 <body>
@@ -567,38 +569,25 @@ function makePDFHtml(cotData){
 }
 
 function openPDF(html, filename){
-  /* Try multiple strategies for cross-device compatibility */
-  filename = filename || 'cotizacion.html';
-
-  /* Strategy 1: <a download> — works on Android Chrome, Desktop */
+  /* Open print-ready page in new window. User prints to PDF from there. */
+  /* This is the only reliable cross-device method (iOS Safari/Chrome, Android, PC) */
+  try{
+    var w=window.open('','_blank');
+    if(w&&w.document){
+      w.document.open();
+      w.document.write(html);
+      w.document.close();
+      return;
+    }
+  }catch(e){}
+  /* Fallback: blob URL in same tab */
   try{
     var blob=new Blob([html],{type:'text/html;charset=utf-8'});
     var url=URL.createObjectURL(blob);
-    var a=document.createElement('a');
-    a.href=url; a.download=filename; a.target='_blank';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    setTimeout(function(){URL.revokeObjectURL(url);},15000);
-    return;
-  }catch(e1){}
-
-  /* Strategy 2: window.open with document.write — iOS Safari, Desktop */
-  try{
-    var w2=window.open('','_blank');
-    if(w2&&w2.document){
-      w2.document.open();
-      w2.document.write(html);
-      w2.document.close();
-      return;
-    }
-  }catch(e2){}
-
-  /* Strategy 3: data URI — last resort */
-  try{
-    var enc=encodeURIComponent(html);
-    window.location.href='data:text/html;charset=utf-8,'+enc;
-  }catch(e3){ window.print(); }
+    window.location.href=url;
+  }catch(e2){
+    document.open();document.write(html);document.close();
+  }
 }
 
 function exportPDF(){
@@ -646,7 +635,7 @@ function renderItem(item,idx){
   acInp.type='text';
   acInp.placeholder='Buscar por nombre, codigo o proveedor...';
   acInp.value=item.desc||'';
-  acInp.style.cssText='width:100%;border:1px solid #e2e8f0;borderRadius:10px;padding:9px 12px;fontSize:13px;outline:none;background:white;boxSizing:border-box';
+  acInp.style.cssText='width:100%;border:1px solid #e2e8f0;border-radius:10px;padding:9px 12px;font-size:13px;outline:none;background:white;box-sizing:border-box';
   acInp.onfocus=function(){acInp.style.borderColor='#2ab7a9';acInp.style.boxShadow='0 0 0 3px rgba(42,183,169,.1)'; if(acDrop.innerHTML==='')showDrop(acInp.value);};
   acInp.onblur=function(){acInp.style.borderColor='#e2e8f0';acInp.style.boxShadow=''; setTimeout(function(){acDrop.style.display='none';},200);};
 
@@ -722,7 +711,7 @@ function renderItem(item,idx){
     var i=document.createElement('input');
     i.type='number'; i.value=String(val);
     i.min=isQty?'1':'0'; i.step=isQty?'1':'0.01';
-    i.style.cssText='width:100%;fontSize:14px;fontWeight:600;textAlign:'+(isQty?'center':'right')+';border:1px solid #e2e8f0;borderRadius:10px;padding:8px;outline:none;boxSizing:border-box';
+    i.style.cssText='width:100%;font-size:14px;font-weight:600;text-align:'+(isQty?'center':'right')+';border:1px solid #e2e8f0;borderRadius:10px;padding:8px;outline:none;boxSizing:border-box';
     i.onfocus=function(){i.style.borderColor='#2ab7a9';};
     i.onblur=function(){i.style.borderColor='#e2e8f0';};
     i.onchange=function(){
@@ -818,7 +807,7 @@ function buildPDF(){
   /* HEADER */
   var hdr=el('div','display:flex;justifyContent:space-between;alignItems:flex-start;padding:14px 20px 10px');
   var hL=el('div','');
-  var logoImg=document.createElement('img'); logoImg.src=LOGO; logoImg.style.cssText='height:38px;marginBottom:5px;display:block';
+  var logoImg=document.createElement('img'); logoImg.src=LOGO; logoImg.style.cssText='height:38px;margin-bottom:5px;display:block';
   hL.appendChild(logoImg);
   [
     {b:1,v:EMP.ruc+' - '+EMP.nombre},
@@ -833,7 +822,7 @@ function buildPDF(){
   hdr.appendChild(hL);
 
   var hR=el('div','display:flex;flexDirection:column;alignItems:flex-end;gap:8px');
-  var isoImg=document.createElement('img'); isoImg.src=LISO; isoImg.style.cssText='height:50px;objectFit:contain';
+  var isoImg=document.createElement('img'); isoImg.src=LISO; isoImg.style.cssText='height:50px;object-fit:contain';
   hR.appendChild(isoImg);
 
   var cb=el('div','border:1px solid #e2e8f0;borderRadius:4px;overflow:hidden;minWidth:230px');
@@ -880,13 +869,13 @@ function buildPDF(){
   /* table */
   var tw=el('div','padding:0 20px 12px');
   var tbl=document.createElement('table');
-  tbl.style.cssText='width:100%;borderCollapse:collapse;fontSize:9px;marginTop:8px';
+  tbl.style.cssText='width:100%;borderCollapse:collapse;font-size:9px;margin-top:8px';
   var thead=document.createElement('thead');
   var thr=document.createElement('tr');
   thr.style.cssText='background:#0d3b6e;color:white';
   ['LINEA','CODIGO','PRODUCTO / SERVICIO','UND','CANTIDAD','PRECIO UNITARIO','PRECIO TOTAL'].forEach(function(h,i){
     var th=document.createElement('th');
-    th.style.cssText='padding:6px 5px;textAlign:'+(i>3?'right':i===3?'center':'left')+';fontSize:8px;fontWeight:700;letterSpacing:.3px;whiteSpace:nowrap';
+    th.style.cssText='padding:6px 5px;text-align:'+(i>3?'right':i===3?'center':'left')+';fontSize:8px;fontWeight:700;letterSpacing:.3px;whiteSpace:nowrap';
     th.textContent=h; thr.appendChild(th);
   });
   thead.appendChild(thr); tbl.appendChild(thead);
@@ -991,7 +980,7 @@ function buildPDF(){
   /* footer logos */
   var fl=el('div','borderTop:3px solid #2ab7a9;padding:8px 20px 6px;background:#f8fafc');
   var provImg=document.createElement('img'); provImg.src=LPROV;
-  provImg.style.cssText='width:100%;height:32px;objectFit:contain;objectPosition:center;display:block';
+  provImg.style.cssText='width:100%;height:32px;object-fit:contain;object-position:center;display:block';
   fl.appendChild(provImg);
   fl.appendChild(el('div','textAlign:right;fontSize:7.5px;color:#94a3b8;marginTop:3px',['Pag. 1 / 1']));
   tw.appendChild(fl); pc.appendChild(tw); doc.appendChild(pc);
@@ -1122,7 +1111,7 @@ function renderCat(){
   var si=document.createElement('input');
   si.type='text'; si.placeholder='Buscar producto, codigo, proveedor...';
   si.value=_catQ;
-  si.style.cssText='flex:1;fontSize:14px;border:1px solid #e2e8f0;borderRadius:12px;padding:11px 16px;outline:none;background:white;boxSizing:border-box';
+  si.style.cssText='flex:1;font-size:14px;border:1px solid #e2e8f0;border-radius:12px;padding:11px 16px;outline:none;background:white;box-sizing:border-box';
   si.onfocus=function(){si.style.borderColor='#2ab7a9';};
   si.onblur=function(){si.style.borderColor='#e2e8f0';};
   var catDeb=null;
@@ -1136,7 +1125,7 @@ function renderCat(){
     var on=_catCat===c;
     var p=document.createElement('button');
     p.textContent=c;
-    p.style.cssText='flexShrink:0;fontSize:9px;fontWeight:700;letterSpacing:1.5px;textTransform:uppercase;padding:5px 10px;borderRadius:999px;cursor:pointer;border:'+(on?'none':'1px solid #e2e8f0')+';background:'+(on?'#2ab7a9':'white')+';color:'+(on?'white':'#64748b');
+    p.style.cssText='flex-shrink:0;font-size:9px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;padding:5px 10px;border-radius:999px;cursor:pointer;border:'+(on?'none':'1px solid #e2e8f0')+';background:'+(on?'#2ab7a9':'white')+';color:'+(on?'white':'#64748b');
     p.onclick=function(){ _catCat=c; updateCatList(list,_catQ,_catCat); pills.querySelectorAll('button').forEach(function(b,i){var cc=allCats()[i];b.style.background=cc===c?'#2ab7a9':'white';b.style.color=cc===c?'white':'#64748b';b.style.border=cc===c?'none':'1px solid #e2e8f0';}); };
     pills.appendChild(p);
   });
@@ -1231,20 +1220,20 @@ function renderCompras(){
 
     /* table */
     var tbl=document.createElement('table');
-    tbl.style.cssText='width:100%;borderCollapse:collapse;fontSize:12px';
+    tbl.style.cssText='width:100%;borderCollapse:collapse;font-size:12px';
     var thead2=document.createElement('thead');
     var thr2=document.createElement('tr');
-    thr2.style.cssText='background:#f8fafc;borderBottom:1px solid #e2e8f0';
+    thr2.style.cssText='background:#f8fafc;border-bottom:1px solid #e2e8f0';
     ['Codigo','Nombre / Descripcion','Cant.','P. Compra','P. Venta (editable)'].forEach(function(h){
       var th=document.createElement('th');
-      th.style.cssText='padding:6px 8px;textAlign:left;fontSize:10px;fontWeight:700;color:#64748b;textTransform:uppercase;letterSpacing:.5px';
+      th.style.cssText='padding:6px 8px;text-align:left;font-size:10px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.5px';
       th.textContent=h; thr2.appendChild(th);
     });
     thead2.appendChild(thr2); tbl.appendChild(thead2);
     var tbody2=document.createElement('tbody');
     co.items.forEach(function(it,ii){
       var row=document.createElement('tr');
-      row.style.cssText='borderBottom:1px solid #f8fafc;background:'+(ii%2===0?'white':'#fafafa');
+      row.style.cssText='border-bottom:1px solid #f8fafc;background:'+(ii%2===0?'white':'#fafafa');
       var cells=[
         {t:it.cod||'\\u2014',s:'fontFamily:monospace;fontSize:11px;color:#2ab7a9;padding:6px 8px'},
         {t:it.nombre,s:'padding:6px 8px;maxWidth:240px;fontSize:12px'},
@@ -1254,12 +1243,12 @@ function renderCompras(){
       cells.forEach(function(c2){var td=document.createElement('td');td.style.cssText=c2.s;td.textContent=c2.t;row.appendChild(td);});
       /* editable price cell */
       var ptd=document.createElement('td');
-      ptd.style.cssText='padding:4px 8px;textAlign:right';
+      ptd.style.cssText='padding:4px 8px;text-align:right';
       var pi=document.createElement('input');
       pi.type='number'; pi.min='0'; pi.step='0.01';
       pi.value=String(it.precio_venta||'');
       pi.placeholder='0.00';
-      pi.style.cssText='width:90px;fontSize:13px;fontWeight:700;color:#0d3b6e;border:1px solid #e2e8f0;borderRadius:6px;padding:4px 8px;textAlign:right;outline:none;boxSizing:border-box';
+      pi.style.cssText='width:90px;font-size:13px;font-weight:700;color:#0d3b6e;border:1px solid #e2e8f0;border-radius:6px;padding:4px 8px;text-align:right;outline:none;box-sizing:border-box';
       pi.onfocus=function(){pi.style.borderColor='#2ab7a9';};
       pi.onblur=function(){pi.style.borderColor='#e2e8f0';};
       (function(cIdx,iIdx){
@@ -1296,7 +1285,7 @@ function modalAdd(){
     var w=el('div','');
     w.appendChild(el('span','fontSize:10px;fontWeight:700;letterSpacing:2px;textTransform:uppercase;color:#94a3b8;display:block;marginBottom:4px',[l]));
     var i=document.createElement('input'); i.type=tp||'text'; i.placeholder=ph||'';
-    i.style.cssText='border:none;borderBottom:1px solid #e2e8f0;background:transparent;color:#1e293b;padding:5px 0;outline:none;width:100%;fontSize:14px;boxSizing:border-box';
+    i.style.cssText='border:none;border-bottom:1px solid #e2e8f0;background:transparent;color:#1e293b;padding:5px 0;outline:none;width:100%;font-size:14px;box-sizing:border-box';
     i.onfocus=function(){i.style.borderBottomColor='#2ab7a9';};
     i.onblur=function(){i.style.borderBottomColor='#e2e8f0';};
     i.oninput=function(){f[k]=i.value;};
@@ -1405,7 +1394,9 @@ function modalImport(){
         headers:{'Content-Type':'application/json'},
         body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:3000,messages:[{role:'user',content:content}]})
       }).then(function(r){return r.json();}).then(function(data){
-        var tx=(data&&data.content&&data.content[0]&&data.content[0].text)||'';
+        var tx='';
+        if(data&&data.content){for(var ci=0;ci<data.content.length;ci++){if(data.content[ci].type==='text'){tx+=data.content[ci].text;}}}
+        if(data&&data.error){statusEl.textContent='Error: '+(data.error.message||data.error);return;}
         var m=tx.match(/\\[[\\s\\S]*\\]/);
         if(m){
           try{
@@ -1533,7 +1524,7 @@ function el(tag,css,kids){
 }
 function card(){
   var d=document.createElement('div');
-  d.style.cssText='background:white;borderRadius:14px;border:1px solid #e2e8f0;boxShadow:0 1px 4px rgba(0,0,0,.06);padding:16px;marginBottom:12px';
+  d.style.cssText='background:white;border-radius:14px;border:1px solid #e2e8f0;box-shadow:0 1px 4px rgba(0,0,0,.06);padding:16px;margin-bottom:12px';
   return d;
 }
 function stitle(t){
@@ -1558,7 +1549,7 @@ function btn2(label,css,fn){
 function btnSmall(label,color,fn){
   var b=document.createElement('button');
   b.textContent=label;
-  b.style.cssText='fontSize:12px;fontWeight:700;color:'+color+';background:none;border:none;cursor:pointer';
+  b.style.cssText='font-size:12px;font-weight:700;color:'+color+';background:none;border:none;cursor:pointer';
   b.onclick=fn; return b;
 }
 function fieldEl(lbl,val,fn,opts){
@@ -1567,7 +1558,7 @@ function fieldEl(lbl,val,fn,opts){
   w.appendChild(el('span','fontSize:10px;fontWeight:700;letterSpacing:2px;textTransform:uppercase;color:#94a3b8;display:block;marginBottom:4px',[lbl]));
   var i=document.createElement('input');
   i.type=opts.type||'text'; i.value=val||''; i.placeholder=opts.ph||'';
-  i.style.cssText='border:none;borderBottom:1px solid #e2e8f0;background:transparent;color:#1e293b;padding:5px 0;outline:none;width:100%;fontSize:14px;boxSizing:border-box';
+  i.style.cssText='border:none;border-bottom:1px solid #e2e8f0;background:transparent;color:#1e293b;padding:5px 0;outline:none;width:100%;font-size:14px;box-sizing:border-box';
   i.onfocus=function(){i.style.borderBottomColor='#2ab7a9';};
   i.onblur=function(){i.style.borderBottomColor='#e2e8f0';};
   i.oninput=function(){fn(i.value);};
@@ -1577,7 +1568,7 @@ function selEl(lbl,val,opts,fn){
   var w=document.createElement('div');
   w.appendChild(el('span','fontSize:10px;fontWeight:700;letterSpacing:2px;textTransform:uppercase;color:#94a3b8;display:block;marginBottom:4px',[lbl]));
   var s=document.createElement('select');
-  s.style.cssText='border:none;borderBottom:1px solid #e2e8f0;background:transparent;color:#1e293b;padding:5px 0;outline:none;width:100%;fontSize:14px;cursor:pointer';
+  s.style.cssText='border:none;border-bottom:1px solid #e2e8f0;background:transparent;color:#1e293b;padding:5px 0;outline:none;width:100%;font-size:14px;cursor:pointer';
   s.onfocus=function(){s.style.borderBottomColor='#2ab7a9';};
   s.onblur=function(){s.style.borderBottomColor='#e2e8f0';};
   opts.forEach(function(o){var ov=o.v||o,ol=o.l||o;var op=document.createElement('option');op.value=ov;op.textContent=ol;if(ov===val)op.selected=true;s.appendChild(op);});
