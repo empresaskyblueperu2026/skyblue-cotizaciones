@@ -33,32 +33,60 @@ app.post('/api/data',function(req,res){
   catch(e){res.status(500).json({error:e.message});}
 });
 
-app.get('/api/ruc/:numero',async function(req,res){
-  var num=(req.params.numero||'').replace(/[^0-9]/g,'');
-  if(num.length!==11&&num.length!==8) return res.status(400).json({error:'RUC: 11 digitos. DNI: 8 digitos.'});
-  var isDNI=num.length===8;
-  
-  async function tryAPI(url,hdrs){
-    var r=await fetch(url,{headers:Object.assign({'Accept':'application/json','User-Agent':'Mozilla/5.0 (compatible)'},hdrs||{}),signal:AbortSignal.timeout(7000)});
-    if(!r.ok) return null;
-    var d=await r.json();
-    var n=d.razonSocial||d.nombreCompleto||d.nombre||'';
-    if(!n) return null;
-    return {tipo:isDNI?'DNI':'RUC',numero:num,nombre:n.trim(),direccion:d.direccion||d.domicilioFiscal||'',distrito:d.distrito||'',provincia:d.provincia||'',departamento:d.departamento||'',estado:d.estado||'',condicion:d.condicion||''};
-  }
-  
-  try{var r1=await tryAPI(isDNI?'https://api.apis.net.pe/v2/reniec/dni?numero='+num:'https://api.apis.net.pe/v2/sunat/ruc?numero='+num,{'Authorization':'Bearer apis-token-11888.hGSRe9tlQfE1gv0z'});if(r1)return res.json(r1);}catch(e){}
-  try{var r2=await tryAPI(isDNI?'https://apiperu.dev/api/dni/'+num:'https://apiperu.dev/api/ruc/'+num);if(r2)return res.json(r2);}catch(e){}
-  if(!isDNI){
-    try{var r3=await tryAPI('https://api.sunat.cloud/ruc/'+num);if(r3)return res.json(r3);}catch(e){}
-    try{
-      var sr=await fetch('https://e-consultaruc.sunat.gob.pe/cl-ti-itmrconsruc/jcrS00Alias?accion=consPorRuc&nroRuc='+num,{headers:{'User-Agent':'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36','Accept':'text/html','Accept-Language':'es-PE,es;q=0.9','Referer':'https://e-consultaruc.sunat.gob.pe/'},signal:AbortSignal.timeout(10000)});
-      var html=await sr.text();
-      var patterns=[/Nombre Comercial[^<]*<[^>]+>([^<]+)</i,/<td[^>]*>([A-Z][A-Z\s.&,0-9-]{4,60}(?:S\.A\.C\.|E\.I\.R\.L\.|S\.R\.L\.|S\.A\.))<\/td>/];
-      for(var p of patterns){var m2=html.match(p);if(m2&&m2[1]&&m2[1].trim().length>3) return res.json({tipo:'RUC',numero:num,nombre:m2[1].trim(),direccion:'',distrito:'',provincia:'',departamento:'',estado:'',condicion:''});}
-    }catch(e){console.log('SUNAT:',e.message);}
-  }
-  res.status(404).json({error:'No se encontraron datos. Verifique el numero ingresado.'});
+app.get('/api/ruc/:numero', async function(req, res){
+  var num = (req.params.numero || '').replace(/[^0-9]/g,'');
+  if(num.length !== 11 && num.length !== 8)
+    return res.status(400).json({error:'RUC: 11 digitos. DNI: 8 digitos.'});
+  var isDNI = num.length === 8;
+  var DECOLECTA_TOKEN = 'sk_16024.nKMK3s3YuoWiXGzkVgWdHZem4qgpsP2X';
+
+  /* METHOD 1: Decolecta API (token propio) */
+  try{
+    var url = isDNI
+      ? 'https://api.decolecta.com/v1/reniec/dni?numero=' + num
+      : 'https://api.decolecta.com/v1/sunat/ruc?numero=' + num;
+    var r = await fetch(url, {
+      headers:{
+        'Content-Type':'application/json',
+        'Authorization':'Bearer ' + DECOLECTA_TOKEN,
+        'Referer':'https://skyblue-cotizaciones-production.up.railway.app'
+      },
+      signal: AbortSignal.timeout(8000)
+    });
+    if(r.ok){
+      var d = await r.json();
+      var nombre = d.razon_social || d.nombre_completo || (d.nombres ? (d.nombres+' '+(d.apellido_paterno||'')+' '+(d.apellido_materno||'')).trim() : '') || d.nombre || '';
+      if(nombre){
+        var dir = d.direccion || '';
+        return res.json({
+          tipo: isDNI ? 'DNI' : 'RUC',
+          numero: num,
+          nombre: nombre.trim(),
+          direccion: dir.trim(),
+          distrito: d.distrito || '',
+          provincia: d.provincia || '',
+          departamento: d.departamento || '',
+          estado: d.estado || '',
+          condicion: d.condicion || ''
+        });
+      }
+    }
+  }catch(e){ console.log('Decolecta error:', e.message); }
+
+  /* METHOD 2: apis.net.pe fallback */
+  try{
+    var url2 = isDNI
+      ? 'https://api.apis.net.pe/v2/reniec/dni?numero=' + num
+      : 'https://api.apis.net.pe/v2/sunat/ruc?numero=' + num;
+    var r2 = await fetch(url2, {headers:{'Accept':'application/json','User-Agent':'Mozilla/5.0'},signal:AbortSignal.timeout(6000)});
+    if(r2.ok){
+      var d2 = await r2.json();
+      var n2 = d2.razonSocial||d2.nombre||d2.nombreCompleto||'';
+      if(n2) return res.json({tipo:isDNI?'DNI':'RUC',numero:num,nombre:n2.trim(),direccion:d2.direccion||'',distrito:d2.distrito||'',provincia:d2.provincia||'',departamento:d2.departamento||'',estado:d2.estado||'',condicion:d2.condicion||''});
+    }
+  }catch(e){}
+
+  res.status(404).json({error:'No se encontraron datos. Verifica el numero ingresado.'});
 });
 
 app.post('/api/claude',async function(req,res){
