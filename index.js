@@ -103,7 +103,7 @@ app.post('/api/gemini',async function(req,res){
     var parts=[{text:req.body.prompt}];
     if(req.body.imageBase64)parts.push({inline_data:{mime_type:req.body.mimeType||'application/pdf',data:req.body.imageBase64}});
     var body={contents:[{parts:parts}],generationConfig:{temperature:0.1,maxOutputTokens:4000}};
-    var r=await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key='+k,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    var r=await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key='+k,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
     var d=await r.json();
     res.status(r.status).json(d);
   }catch(e){res.status(502).json({error:e.message});}
