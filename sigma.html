@@ -353,6 +353,7 @@ aside.rpanel{width:284px;flex-shrink:0;background:linear-gradient(180deg,var(--c
 </div>
 <input type="file" id="pfile" style="display:none">
 <div id="pmodal"></div>
+<div id="delpmodal"></div>
 <div id="toast"></div>
 
 <script>
@@ -378,7 +379,8 @@ var IC={
  doc:'<path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8M8 17h6"/>',
  check:'<path d="M20 6L9 17l-5-5"/>',
  robot:'<rect x="4" y="8" width="16" height="12" rx="2.5"/><path d="M12 4.5V8"/><circle cx="12" cy="3.5" r="1.3"/><circle cx="9" cy="14" r="1.1"/><circle cx="15" cy="14" r="1.1"/><path d="M9.5 17.5h5"/>',
- spark:'<path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/>'
+ spark:'<path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/>',
+ trash:'<path d="M3 6h18"/><path d="M8 6V4a1 1 0 011-1h6a1 1 0 011 1v2"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v5M14 11v5"/>'
 };
 function icon(n,sw){return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="'+(sw||1.6)+'" stroke-linecap="round" stroke-linejoin="round">'+(IC[n]||IC.dashboard)+'</svg>'}
 
@@ -535,7 +537,7 @@ var STAGES=[
  {k:'fact',t:'Facturación', ag:'Ag. Facturación', ic:'card', lbl:'Comprobantes y estado SUNAT'}
 ];
 var AIPROMPTS={
- tdr:'Actúa como el MEJOR especialista en contrataciones con el Estado peruano (Ley N° 32069, OSCE, SEACE), experto en compras menores a 8 UIT. Analiza con el MÁXIMO detalle el siguiente TDR / Especificaciones Técnicas. Este análisis es el MAESTRO del proceso (los demás agentes se basarán en él). Devuelve ÚNICAMENTE un JSON válido, sin texto adicional, sin markdown y sin comillas triples, con EXACTAMENTE esta estructura:\n{"objeto":"","entidad":"","items":[{"descripcion":"","cantidad":"","unidad":""}],"requisitos_calificacion":[""],"especificaciones":[""],"plazo_entrega":"","lugar_entrega":"","forma_pago":"","garantias":"","penalidades":"","criterios_evaluacion":[""],"viabilidad":{"veredicto":"VIABLE","razones":[""]},"presupuesto":{"costo_estimado":"S/ 0","desglose":[{"item":"","costo":""}],"margen_estimado":"","observaciones":""},"riesgos":[""],"recomendacion":""}\nReglas: veredicto debe ser VIABLE, RIESGOSO o NO VIABLE. Completa todos los campos que puedas inferir del TDR. En presupuesto, estima costos de mercado peruano razonables por ítem (en soles). Si un dato no aparece, deja el campo vacío. Responde SOLO el JSON.\n\nTDR:',
+ tdr:'ROLE: Especialista MÁXIMO en contrataciones con el Estado peruano (Ley 32069, OSCE, SEACE), compras <8UIT. TASK: Analiza el TDR/Especificaciones. Esto es MAESTRO que todos usan. OUTPUT: SOLO JSON válido (NADA de texto, markdown, explicaciones, backticks, comillas triples). ESTRUCTURA EXACTA: {\n"objeto":"[desc objeto contratacion]",\n"entidad":"[nombre entidad]",\n"items":[{"descripcion":"[desc item]","cantidad":"[número]","unidad":"[unidad]"},{"descripcion":"...","cantidad":"...","unidad":"..."}],\n"requisitos_calificacion":["[experiencia años]","[RNP/habilitacion]","[certificados]","[personal clave]"],\n"especificaciones":["[esp técnica 1]","[esp técnica 2]"],\n"plazo_entrega":"[plazo: ej 30 días]",\n"lugar_entrega":"[lugar de entrega]",\n"forma_pago":"[forma de pago]",\n"garantias":"[garantías o vacío]",\n"penalidades":"[penalidades o vacío]",\n"criterios_evaluacion":["[criterio 1]","[criterio 2]"],\n"viabilidad":{"veredicto":"VIABLE","razones":["[razón 1]","[razón 2]"]},\n"presupuesto":{"costo_estimado":"S/ XXXXX","desglose":[{"item":"[item]","costo":"S/ XXX"},{"item":"[item2]","costo":"S/ YYY"}],"margen_estimado":"[% o vacío]","observaciones":"[obs o vacío]"},\n"riesgos":["[riesgo 1]","[riesgo 2]"],\n"recomendacion":"[recomendación breve]"\n}\nREGLAS:\n1) Veredicto: exactamente VIABLE|RIESGOSO|NO VIABLE\n2) ITEMS: extrae TODOS, son críticos (cantidad y unidad OBLIGATORIOS)\n3) REQUISITOS: experiencia, RNP, habilitaciones, certificados, personal (¡NO OMITAS!)\n4) PRESUPUESTO: estima costos Perú reales por ítem en soles\n5) Dato faltante = string vacío ""\n6) RESPONDE PURO JSON. Sin backticks, sin markdown, sin explicaciones.\nTDR:\n',
  viab:'Como analista de contrataciones públicas en Perú, evalúa la VIABILIDAD de participar en esta contratación menor a 8 UIT. Da un veredicto (VIABLE / RIESGOSO / NO VIABLE) y justifica por requisitos, plazo y margen. Información:',
  cot:'Estructura una estrategia de cotización con múltiples proveedores para estos ítems de una contratación pública peruana, con criterios de selección y un cuadro comparativo. Ítems:',
  prop:'Redacta un resumen de propuesta técnico-económica para esta contratación pública peruana menor a 8 UIT, lista para presentar. Datos:',
@@ -555,7 +557,7 @@ function ddlBadge(f){var d=daysLeft(f);if(d===null)return '<span class="ddl" sty
  var c=d<0?'#ef4444':d<=3?'#ef4444':d<=7?'#f59e0b':'#16a34a';var t=d<0?'Vencido':(d+' días');
  return '<span class="ddl" style="background:'+bg(c,.14)+';color:'+c+'">'+t+'</span>'}
 function esc(s){return (''+(s||'')).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
-function parseJSON(txt){var s=(''+txt).trim();s=s.replace(/^```[a-z]*/i,'').replace(/```$/,'').trim();var a=s.indexOf('{'),b=s.lastIndexOf('}');if(a>=0&&b>a)s=s.slice(a,b+1);try{return JSON.parse(s)}catch(e){return null}}
+function parseJSON(txt){var s=(''+txt).trim();s=s.replace(/^```[a-z]*/i,'').replace(/```$/,'').trim();s=s.replace(/^json\s*/i,'').trim();var a=s.indexOf('{'),b=s.lastIndexOf('}');if(a>=0&&b>a)s=s.slice(a,b+1);try{var obj=JSON.parse(s);console.log('JSON parseado OK:',obj);return obj}catch(e){console.error('JSON parse fail:',e,s.substring(0,200));return null}}
 function rblock(title,ic,inner){return '<div class="rblock"><div class="rb-t">'+icon(ic)+title+'</div>'+inner+'</div>'}
 function renderMaster(d){
   var h='<div class="rblocks">';
@@ -627,8 +629,14 @@ function renderProyDetail(){
       h+='<textarea class="ta" placeholder="Información extra para este agente (opcional)…" oninput="stInput('+si+',this.value)">'+esc(st.input)+'</textarea>';
       h+='<div style="margin-top:10px"><button class="aibtn" '+((st._loading||!hasTdr)?'disabled':'')+' onclick="aiAnalyze('+si+')">'+(st._loading?'Analizando…':(icon('spark',1.6)+' Analizar con IA'))+'</button></div>';
     }
-    if(si===0&&st.data){h+='<div class="sp-lbl">Resultado del análisis (maestro)</div>'+renderMaster(st.data);}
-    else if(st.resumen){h+='<div class="sp-lbl">Resultado IA</div><div class="aires">'+esc(st.resumen)+'</div>';}
+    if(si===0){
+      if(st.data){h+='<div class="sp-lbl">✓ Resultado del análisis (maestro JSON parseado)</div>'+renderMaster(st.data);}
+      else if(st.resumen){
+        h+='<div class="sp-lbl">⚠ Respuesta IA (no se pudo parsear JSON)</div>';
+        h+='<div style="background:var(--alertbg);border:1px solid var(--alertborder);border-radius:10px;padding:11px;font-size:11.5px;margin:8px 0;color:var(--tmuted)">La IA devolvió texto pero no un JSON válido. Verifica la respuesta abajo; si ves backticks o markdown, el prompt necesita ajuste.</div>';
+        h+='<div class="aires">'+esc(st.resumen)+'</div>';
+      }
+    } else if(st.resumen){h+='<div class="sp-lbl">Resultado IA</div><div class="aires">'+esc(st.resumen)+'</div>';}
   } else {
     h+='<div class="sp-lbl">'+esc(meta.lbl)+'</div>';
     h+='<textarea class="ta" placeholder="Escribe aquí…" oninput="stNotas('+si+',this.value)">'+esc(st.notas)+'</textarea>';
@@ -636,8 +644,9 @@ function renderProyDetail(){
   h+='<div class="sp-lbl">Documentos</div>';
   h+='<div class="dropz" id="dz_'+si+'" onclick="pickFile('+si+')" ondragover="dzOver(event,'+si+',1)" ondragleave="dzOver(event,'+si+',0)" ondrop="dzDrop(event,'+si+')">Arrastra archivos aquí o haz clic para seleccionar<br><span style="font-size:10.5px;opacity:.7">PDF, imágenes, Word, Excel · se vincularán a Google Drive próximamente</span></div>';
   if(st.docs&&st.docs.length){h+='<div>';st.docs.forEach(function(d,di){h+='<span class="docchip">'+icon('doc')+esc(d.name)+' <span style="color:var(--tmuted)">'+(d.size||0)+'KB</span><span class="dx" onclick="rmDoc('+si+','+di+')">✕</span></span>'});h+='</div>'}
-  h+='<div class="sp-foot"><div style="font-size:11px;color:var(--tmuted)">Etapa '+(si+1)+' de '+p.stages.length+'</div>'+
-    (st.done?'<button class="doneb re" onclick="toggleDone('+si+')">Reabrir etapa</button>':'<button class="doneb go" onclick="toggleDone('+si+')">'+icon('check',2.4)+' Marcar completada</button>')+'</div>';
+  h+='<div class="sp-foot"><div style="font-size:11px;color:var(--tmuted)">Etapa '+(si+1)+' de '+p.stages.length+'</div><div style="display:flex;gap:8px">'+
+    (st.done?'<button class="doneb re" onclick="toggleDone('+si+')">Reabrir etapa</button>':'<button class="doneb go" onclick="toggleDone('+si+')">'+icon('check',2.4)+' Marcar completada</button>')+
+    '<button class="doneb re" onclick="openDelProy()" title="Eliminar proyecto"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:14px;height:14px"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg></button></div></div>';
   h+='</div>';
   $('content').innerHTML=h;
 }
@@ -662,10 +671,10 @@ function aiAnalyze(si){
     if(_pendingFile){body.imageBase64=_pendingFile.b64;body.mimeType=_pendingFile.type}
   } else {
     var m0=CURP.stages[0];
-    var base=m0.data?JSON.stringify(m0.data):((m0.resumen||'').trim());
-    if(!base){toast('Primero ejecuta el análisis del TDR en la etapa 1');return}
+    if(!m0.data&&!m0.resumen){toast('Primero ejecuta el análisis del TDR en la etapa 1');return}
+    var base=m0.data?('DATOS MAESTRO (JSON):\n'+JSON.stringify(m0.data,null,2)):(('DATOS MAESTRO (texto):\n'+(m0.resumen||'')));
     var extra=(st.input||'').trim()?('\n\nNOTAS ADICIONALES DEL USUARIO:\n'+st.input):'';
-    body={prompt:AIPROMPTS[meta.k]+'\n\nANÁLISIS DEL TDR (JSON maestro, úsalo como única fuente; no pidas más datos):\n'+base+extra};
+    body={prompt:AIPROMPTS[meta.k]+'\n\n'+base+extra};
   }
   st._loading=true;renderProyDetail();
   fetch('/api/gemini',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
@@ -694,6 +703,20 @@ function saveNewProy(){
     monto:parseFloat(document.getElementById('np_m').value)||0,fecha:document.getElementById('np_f').value||'',
     creado:Date.now(),stages:STAGES.map(function(s){return {k:s.k,mode:'manual',done:false,notas:'',input:'',resumen:'',data:null,docs:[]}})};
   loadProy();PROY.unshift(p);saveProy();closeNewProy();openProy(p.id);
+}
+function openDelProy(){
+  var m=document.getElementById('delpmodal');
+  m.innerHTML='<div class="pmbox"><h3>Eliminar proyecto</h3><div style="font-size:12px;color:var(--tmuted);margin-bottom:16px;">Ingresa la contraseña para eliminar este proyecto. Esta acción no se puede deshacer.</div>'+
+   '<div class="fld"><label>Contraseña</label><input id="del_pwd" type="password" placeholder="••••••••"></div>'+
+   '<div class="pmrow"><button class="cancel" onclick="closeDelProy()">Cancelar</button><button class="save" onclick="confirmDelProy()">Eliminar proyecto</button></div></div>';
+  m.classList.add('show');
+  setTimeout(function(){document.getElementById('del_pwd').focus()},100);
+}
+function closeDelProy(){document.getElementById('delpmodal').classList.remove('show')}
+function confirmDelProy(){
+  var pwd=(document.getElementById('del_pwd').value||'');
+  if(pwd!=='7777'){toast('Contraseña incorrecta');return}
+  var id=CURP.id;loadProy();PROY=PROY.filter(function(x){return x.id!==id});saveProy();closeDelProy();toast('Proyecto eliminado');renderProyectos();
 }
 (function(){var pf=document.getElementById('pfile');if(pf)pf.onchange=function(){if(this.files&&this.files[0]&&_fileStage>=0)addFile(_fileStage,this.files[0])}})();
 
