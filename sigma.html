@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#0d3b6e">
+<meta name="theme-color" content="#eef2f8">
 <title>SIGMA · Plataforma ERP</title>
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 <link rel="manifest" href="/manifest.json">
@@ -16,15 +16,13 @@
   --green:#16a34a; --orange:#f59e0b; --red:#ef4444; --yellow:#eab308;
   --grad:linear-gradient(135deg,#0d3b6e 0%,#0ea5e9 65%,#22d3ee 100%);
   --grad-soft:linear-gradient(135deg,#14b8a6,#0ea5e9);
-  /* chrome lateral navy (constante en ambos temas) */
-  --chrome:#0d3b6e; --chrome-2:#0a2e57;
-  --chrome-text:#eaf1fb; --chrome-muted:rgba(255,255,255,.56);
-  --chrome-hover:rgba(255,255,255,.08); --chrome-active:rgba(255,255,255,.14);
-  --chrome-accent:#5eead4; --chrome-border:rgba(255,255,255,.09);
 }
 [data-theme="light"]{
-  --bg:#e9f0fa; --card:#ffffff; --border:rgba(13,59,110,.1);
-  --workbg:radial-gradient(1200px 620px at 50% -16%,rgba(14,165,233,.18),transparent 58%),radial-gradient(900px 520px at 100% 8%,rgba(20,184,166,.1),transparent 55%),linear-gradient(180deg,#eaf2fc 0%,#e3ecf8 100%);
+  --bg:#eef2f8; --card:#ffffff; --border:rgba(13,59,110,.09);
+  --workbg:radial-gradient(1200px 640px at 50% -18%,rgba(56,189,248,.16),transparent 58%),radial-gradient(820px 480px at 96% 4%,rgba(45,212,191,.1),transparent 56%),radial-gradient(720px 440px at 2% 108%,rgba(251,191,36,.06),transparent 60%),linear-gradient(180deg,#f3f7fd 0%,#eaf1f9 100%);
+  --chrome:#fbfcff; --chrome-2:#f1f5fc; --chrome-text:#16304d; --chrome-muted:#6a7890;
+  --chrome-hover:rgba(13,59,110,.05); --chrome-active:rgba(14,165,233,.13);
+  --chrome-accent:#0d9488; --chrome-border:rgba(13,59,110,.08);
   --tprimary:#0d2740; --tmuted:#5b6b80; --input:rgba(13,59,110,.04);
   --hover:rgba(13,59,110,.045); --rowhover:rgba(13,59,110,.022);
   --accent:#0d9488; --pillbg:rgba(20,184,166,.1); --pillborder:rgba(20,184,166,.24);
@@ -34,6 +32,9 @@
 [data-theme="dark"]{
   --bg:#0a0f1c; --card:#0e1526; --border:rgba(255,255,255,.07);
   --workbg:radial-gradient(1200px 620px at 50% -16%,rgba(14,165,233,.14),transparent 55%),radial-gradient(900px 520px at 100% 8%,rgba(20,184,166,.08),transparent 55%),#0a0f1c;
+  --chrome:#0c1322; --chrome-2:#0a0f1c; --chrome-text:#e8eef7; --chrome-muted:rgba(255,255,255,.55);
+  --chrome-hover:rgba(255,255,255,.06); --chrome-active:rgba(255,255,255,.1);
+  --chrome-accent:#5eead4; --chrome-border:rgba(255,255,255,.08);
   --tprimary:#e8eef7; --tmuted:#7b8597; --input:rgba(255,255,255,.04);
   --hover:rgba(255,255,255,.05); --rowhover:rgba(255,255,255,.022);
   --accent:#2dd4bf; --pillbg:rgba(14,165,233,.13); --pillborder:rgba(14,165,233,.27);
@@ -74,14 +75,14 @@ svg{display:block}
 /* ===== SHELL ===== */
 #app{display:none}
 .shell{display:flex;height:100vh;overflow:hidden}
-aside.side{width:226px;flex-shrink:0;background:linear-gradient(180deg,#0e3f73 0%,#0a2c52 100%);border-right:1px solid var(--chrome-border);display:flex;flex-direction:column;z-index:10}
+aside.side{width:226px;flex-shrink:0;background:linear-gradient(180deg,var(--chrome) 0%,var(--chrome-2) 100%);border-right:1px solid var(--chrome-border);display:flex;flex-direction:column;z-index:10}
 .side-logo{height:58px;padding:0 16px;display:flex;align-items:center;gap:11px;border-bottom:1px solid var(--chrome-border);flex-shrink:0}
 .side-logo .lm{width:31px;height:31px;border-radius:8px;background:linear-gradient(135deg,#0ea5e9,#22d3ee);display:flex;align-items:center;justify-content:center;flex-shrink:0}
 .side-logo .lm svg{width:15px;height:15px}
 .side-logo .nm{font-size:16px;font-weight:700;letter-spacing:-.5px;line-height:1.1;color:var(--chrome-text)}
 .side-logo .sb{font-size:8.5px;color:var(--chrome-muted);letter-spacing:1.2px;text-transform:uppercase;margin-top:2px}
 nav.navlist{flex:1;padding:10px;overflow-y:auto}
-nav.navlist::-webkit-scrollbar-thumb{background:rgba(255,255,255,.14)}
+nav.navlist::-webkit-scrollbar-thumb{background:rgba(120,140,170,.3)}
 .nav-cat{font-size:8.5px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;color:var(--chrome-muted);padding:12px 9px 5px;opacity:.6}
 .nav-item{display:flex;align-items:center;gap:11px;padding:8px 10px;border-radius:8px;cursor:pointer;margin-bottom:2px;user-select:none;transition:background .12s}
 .nav-item:hover{background:var(--chrome-hover)}
@@ -91,7 +92,7 @@ nav.navlist::-webkit-scrollbar-thumb{background:rgba(255,255,255,.14)}
 .nav-item.on .ic{color:var(--chrome-accent)}
 .nav-item .lb{font-size:12.5px;font-weight:400;color:var(--chrome-muted);flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .nav-item:hover .lb{color:var(--chrome-text)}
-.nav-item.on .lb{color:#fff;font-weight:600}
+.nav-item.on .lb{color:var(--chrome-accent);font-weight:600}
 .nav-item .soon{font-size:8px;color:var(--chrome-muted);opacity:.5;flex-shrink:0}
 .side-user{padding:12px 14px;border-top:1px solid var(--chrome-border);flex-shrink:0;display:flex;align-items:center;gap:10px}
 .side-user .av{width:30px;height:30px;border-radius:50%;background:var(--grad-soft);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#fff;flex-shrink:0}
@@ -171,7 +172,7 @@ table.ptable{width:100%;border-collapse:collapse}
 .prog .fill{height:100%;background:var(--grad-soft);border-radius:3px}
 .prog .pct{font-size:9.5px;color:var(--tmuted);font-family:'DM Mono',monospace;width:30px;text-align:right;flex-shrink:0}
 
-aside.rpanel{width:284px;flex-shrink:0;background:linear-gradient(180deg,#0e3f73 0%,#0a2c52 100%);border-left:1px solid var(--chrome-border);display:flex;flex-direction:column}
+aside.rpanel{width:284px;flex-shrink:0;background:linear-gradient(180deg,var(--chrome) 0%,var(--chrome-2) 100%);border-left:1px solid var(--chrome-border);display:flex;flex-direction:column}
 .rp-head{height:58px;padding:0 18px;display:flex;align-items:center;border-bottom:1px solid var(--chrome-border);flex-shrink:0}
 .rp-head .rt{font-size:12.5px;font-weight:700;color:var(--chrome-text)}
 .rp-head .rs{font-size:10px;color:var(--chrome-muted);margin-top:2px;display:flex;align-items:center;gap:5px}
@@ -179,12 +180,12 @@ aside.rpanel{width:284px;flex-shrink:0;background:linear-gradient(180deg,#0e3f73
 .agents{padding:14px 12px;border-bottom:1px solid var(--chrome-border);flex-shrink:0}
 .agent{display:flex;align-items:center;gap:10px;padding:9px 8px;border-radius:9px;margin-bottom:3px;cursor:pointer;transition:background .12s}
 .agent:hover{background:var(--chrome-hover)}
-.agent .ag-ic{width:31px;height:31px;border-radius:9px;background:rgba(255,255,255,.08);display:flex;align-items:center;justify-content:center;color:var(--chrome-accent);flex-shrink:0}
+.agent .ag-ic{width:31px;height:31px;border-radius:9px;background:var(--chrome-active);display:flex;align-items:center;justify-content:center;color:var(--chrome-accent);flex-shrink:0}
 .agent .ag-ic svg{width:15px;height:15px}
 .agent .ag-n{font-size:11.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--chrome-text)}
 .agent .ag-s{font-size:10px;color:var(--chrome-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px}
 .feed{flex:1;overflow-y:auto;padding:16px 14px 20px}
-.feed::-webkit-scrollbar-thumb{background:rgba(255,255,255,.14)}
+.feed::-webkit-scrollbar-thumb{background:rgba(120,140,170,.3)}
 .feed .ft{font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--chrome-muted);margin-bottom:15px}
 .act{display:flex;gap:11px;margin-bottom:16px}
 .act .a-ic{width:29px;height:29px;border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px}
