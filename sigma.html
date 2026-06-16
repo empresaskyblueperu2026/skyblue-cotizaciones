@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#09090f">
+<title>SIGMA · Plataforma ERP</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="manifest" href="/manifest.json">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --blue:#4f7ef3; --purple:#7c5cf6; --green:#22c55e; --orange:#f97316;
+  --red:#ef4444; --yellow:#eab308; --cyan:#06b6d4;
+  --grad:linear-gradient(135deg,#4f7ef3 0%,#7c5cf6 100%);
+}
+[data-theme="dark"]{
+  --bg:#09090f; --sidebar:#0b0b16; --card:#0f0f1e; --border:rgba(255,255,255,.068);
+  --tprimary:#e7e7f3; --tmuted:#69697e; --input:rgba(255,255,255,.038);
+  --hover:rgba(255,255,255,.05); --rowhover:rgba(255,255,255,.025);
+  --pillbg:rgba(79,126,243,.12); --pillborder:rgba(79,126,243,.25);
+  --alertbg:rgba(79,126,243,.06); --alertborder:rgba(79,126,243,.17);
+  --chartgrid:rgba(255,255,255,.055); --chartlabel:rgba(255,255,255,.3);
+}
+[data-theme="light"]{
+  --bg:#f2f2f7; --sidebar:#ffffff; --card:#ffffff; --border:rgba(0,0,0,.072);
+  --tprimary:#111120; --tmuted:#71717a; --input:rgba(0,0,0,.03);
+  --hover:rgba(0,0,0,.035); --rowhover:rgba(0,0,0,.022);
+  --pillbg:rgba(79,126,243,.07); --pillborder:rgba(79,126,243,.14);
+  --alertbg:rgba(79,126,243,.04); --alertborder:rgba(79,126,243,.1);
+  --chartgrid:rgba(0,0,0,.065); --chartlabel:rgba(0,0,0,.3);
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--tprimary);transition:background .28s,color .28s;-webkit-font-smoothing:antialiased}
+::-webkit-scrollbar{width:5px;height:5px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:rgba(120,120,150,.2);border-radius:3px}
+::-webkit-scrollbar-thumb:hover{background:rgba(120,120,150,.35)}
+@keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.38}}
+@keyframes spin{to{transform:rotate(360deg)}}
+.mono{font-family:'DM Mono',monospace}
+.fade{animation:fadeUp .35s ease both}
+
+/* ========== PORTAL ========== */
+#portal{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:32px 18px;background:
+  radial-gradient(900px 500px at 50% -10%,rgba(79,126,243,.12),transparent 60%),var(--bg)}
+.brandbig{display:flex;align-items:center;gap:14px;margin-bottom:8px}
+.logomark{width:54px;height:54px;border-radius:14px;background:var(--grad);display:flex;align-items:center;justify-content:center;box-shadow:0 8px 28px rgba(79,126,243,.4);flex-shrink:0}
+.logomark svg{width:26px;height:26px}
+.brandname{font-size:38px;font-weight:700;letter-spacing:-1.5px;line-height:1}
+.brandsub{font-size:11px;letter-spacing:3px;text-transform:uppercase;color:var(--tmuted);margin-top:4px}
+.vtag{font-size:10px;font-weight:700;color:var(--blue);background:var(--pillbg);border:1px solid var(--pillborder);padding:3px 9px;border-radius:20px;letter-spacing:.5px;vertical-align:middle}
+.portal-title{font-size:14px;color:var(--tmuted);margin:26px 0 18px;text-align:center}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px;width:100%;max-width:760px}
+.ecard{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:18px;cursor:pointer;transition:transform .15s,border-color .15s,box-shadow .15s;display:flex;flex-direction:column;gap:12px}
+.ecard:hover{transform:translateY(-3px);border-color:var(--pillborder);box-shadow:0 12px 32px rgba(0,0,0,.25)}
+.eavatar{width:46px;height:46px;border-radius:11px;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:700;color:#fff;flex-shrink:0}
+.ename{font-size:15px;font-weight:600;line-height:1.25}
+.emeta{font-size:11px;color:var(--tmuted);margin-top:2px}
+.eenter{font-size:12px;color:var(--blue);font-weight:600;display:flex;align-items:center;gap:5px;margin-top:2px}
+.portal-foot{margin-top:34px;font-size:11px;color:var(--tmuted);text-align:center;line-height:1.7}
+
+/* ========== APP SHELL ========== */
+#app{display:none;height:100vh;overflow:hidden}
+.shell{display:flex;height:100vh;overflow:hidden}
+aside.side{width:222px;flex-shrink:0;background:var(--sidebar);border-right:1px solid var(--border);display:flex;flex-direction:column;z-index:10;transition:background .28s}
+.side-logo{height:56px;padding:0 14px;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--border);flex-shrink:0}
+.side-logo .lm{width:30px;height:30px;border-radius:7px;background:var(--grad);display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(79,126,243,.35);flex-shrink:0}
+.side-logo .lm svg{width:14px;height:14px}
+.side-logo .nm{font-size:15px;font-weight:700;letter-spacing:-.5px;line-height:1.1}
+.side-logo .sb{font-size:8.5px;color:var(--tmuted);letter-spacing:1px;text-transform:uppercase;margin-top:1px}
+nav.navlist{flex:1;padding:8px 8px;overflow-y:auto}
+.nav-sep{height:1px;background:var(--border);margin:6px 4px}
+.nav-cat{font-size:8.5px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--tmuted);padding:8px 8px 4px;opacity:.7}
+.nav-item{display:flex;align-items:center;gap:9px;padding:7px 9px;border-radius:7px;cursor:pointer;margin-bottom:1px;user-select:none;transition:background .12s}
+.nav-item:hover{background:var(--hover)}
+.nav-item.on{background:var(--pillbg)}
+.nav-item .ic{font-size:13px;width:18px;text-align:center;flex-shrink:0}
+.nav-item .lb{font-size:12.5px;font-weight:400;color:var(--tmuted);flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.nav-item.on .lb{color:var(--blue);font-weight:600}
+.nav-item .bd{background:var(--blue);color:#fff;font-size:9px;font-weight:700;padding:1px 6px;border-radius:9px;flex-shrink:0}
+.nav-item .soon{font-size:8px;color:var(--tmuted);border:1px solid var(--border);padding:1px 5px;border-radius:9px;flex-shrink:0}
+.side-user{padding:11px 12px;border-top:1px solid var(--border);flex-shrink:0;display:flex;align-items:center;gap:9px}
+.side-user .av{width:28px;height:28px;border-radius:50%;background:var(--grad);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#fff;flex-shrink:0}
+.side-user .un{font-size:11.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.side-user .ur{font-size:10px;color:var(--tmuted)}
+.icbtn{cursor:pointer;width:26px;height:26px;border-radius:6px;border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:12px;color:var(--tmuted);flex-shrink:0;transition:background .15s;background:transparent}
+.icbtn:hover{background:var(--hover)}
+
+main.main{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0}
+.topbar{height:56px;flex-shrink:0;background:var(--sidebar);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 18px;gap:10px;transition:background .28s}
+.search{flex:1;max-width:330px;background:var(--input);border:1px solid var(--border);border-radius:8px;display:flex;align-items:center;padding:0 11px;gap:8px;height:32px;cursor:text}
+.search input{background:transparent;border:none;outline:none;color:var(--tprimary);font-family:inherit;font-size:12.5px;flex:1}
+.search input::placeholder{color:var(--tmuted)}
+.kbd{font-size:9.5px;color:var(--tmuted);background:var(--border);padding:1px 5px;border-radius:4px;font-family:'DM Mono',monospace}
+.topright{margin-left:auto;display:flex;align-items:center;gap:9px}
+.compsw{display:flex;align-items:center;gap:8px;background:var(--input);border:1px solid var(--border);border-radius:8px;padding:5px 10px;cursor:pointer;transition:background .15s}
+.compsw:hover{background:var(--hover)}
+.compsw .cav{width:20px;height:20px;border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:#fff;flex-shrink:0}
+.compsw .cnm{font-size:11.5px;font-weight:600;max-width:130px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.btn-new{background:var(--grad);color:#fff;font-size:12.5px;font-weight:600;padding:6px 14px;border-radius:8px;cursor:pointer;white-space:nowrap;box-shadow:0 2px 8px rgba(79,126,243,.3);border:none;font-family:inherit}
+.scroll{flex:1;overflow-y:auto;padding:20px 22px 40px}
+
+.pagehead{margin-bottom:16px}
+.pagehead .row{display:flex;align-items:center;gap:9px;margin-bottom:4px;flex-wrap:wrap}
+.pagehead h1{font-size:20px;font-weight:700;letter-spacing:-.5px}
+.pagehead .sub{font-size:12.5px;color:var(--tmuted)}
+.pill{font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--blue);background:var(--pillbg);border:1px solid var(--pillborder);padding:3px 9px;border-radius:20px}
+
+.aibanner{background:var(--alertbg);border:1px solid var(--alertborder);border-radius:10px;padding:11px 15px;margin-bottom:16px;display:flex;align-items:center;gap:12px;cursor:pointer;transition:border-color .15s}
+.aibanner:hover{border-color:rgba(79,126,243,.34)}
+.aibanner .ai-ic{width:30px;height:30px;background:var(--grad);border-radius:7px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.aibanner .ai-tx{flex:1;min-width:0}
+.aibanner .ai-t1{font-size:12.5px;font-weight:600}
+.aibanner .ai-t2{font-size:11px;color:var(--tmuted);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.aibanner .ai-go{font-size:11.5px;color:var(--blue);font-weight:600;white-space:nowrap;flex-shrink:0}
+
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:14px}
+.kpi{background:var(--card);border:1px solid var(--border);border-radius:11px;padding:15px;cursor:pointer;transition:border-color .15s,transform .15s}
+.kpi:hover{border-color:var(--pillborder);transform:translateY(-2px)}
+.kpi .top{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:11px}
+.kpi .kic{width:33px;height:33px;border-radius:8px;background:rgba(79,126,243,.11);display:flex;align-items:center;justify-content:center;font-size:14px}
+.kpi .trend{font-size:10px;font-weight:700;padding:2px 7px;border-radius:8px}
+.kpi .val{font-size:22px;font-weight:700;letter-spacing:-.6px;line-height:1.1;margin-bottom:3px}
+.kpi .lab{font-size:11px;color:var(--tmuted);line-height:1.3}
+.up{color:var(--green);background:rgba(34,197,94,.13)}
+.down{color:var(--red);background:rgba(239,68,68,.13)}
+
+.charts{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px}
+.card{background:var(--card);border:1px solid var(--border);border-radius:11px;padding:16px}
+.card .chead{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+.card .ct{font-size:13.5px;font-weight:600}
+.card .cs{font-size:11px;color:var(--tmuted);margin-top:1px}
+.card .cbtn{font-size:10.5px;color:var(--tmuted);background:var(--input);border:1px solid var(--border);padding:3px 9px;border-radius:6px;cursor:pointer}
+.bars{display:flex;gap:6px;height:118px}
+.barcol{flex:1;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;gap:4px}
+.barcol .bc{font-size:9px;font-weight:700;color:var(--tmuted);font-family:'DM Mono',monospace}
+.barcol .bar{width:100%;border-radius:4px 4px 0 0}
+.barcol .bn{font-size:8px;color:var(--tmuted);text-align:center;line-height:1.2}
+
+.kanban{display:flex;gap:8px;overflow-x:auto;padding-bottom:4px}
+.kstage{border-radius:9px;padding:10px 12px;min-width:118px;flex-shrink:0;cursor:pointer;transition:transform .15s}
+.kstage:hover{transform:translateY(-2px)}
+.kstage .kn{font-size:8.5px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.kstage .kc{font-size:21px;font-weight:700;font-family:'DM Mono',monospace;letter-spacing:-.4px;line-height:1.1}
+.kstage .ka{font-size:10px;color:var(--tmuted);margin-top:2px;font-family:'DM Mono',monospace}
+
+table.ptable{width:100%;border-collapse:collapse}
+.ptable th{font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--tmuted);text-align:left;padding:5px 6px 9px;border-bottom:1px solid var(--border)}
+.ptable td{padding:10px 6px;border-bottom:1px solid var(--border);font-size:12px}
+.ptable tr{cursor:pointer;transition:background .1s}
+.ptable tbody tr:hover{background:var(--rowhover)}
+.pname{font-weight:500}.pdl{font-size:10px;color:var(--tmuted);margin-top:1px}
+.badge{font-size:10px;font-weight:600;padding:2px 8px;border-radius:6px;white-space:nowrap;display:inline-block}
+.prog{display:flex;align-items:center;gap:7px}
+.prog .track{flex:1;height:4px;background:var(--border);border-radius:2px;overflow:hidden;min-width:48px}
+.prog .fill{height:100%;background:var(--grad);border-radius:2px}
+.prog .pct{font-size:9.5px;color:var(--tmuted);font-family:'DM Mono',monospace;width:30px;text-align:right;flex-shrink:0}
+
+aside.rpanel{width:280px;flex-shrink:0;background:var(--sidebar);border-left:1px solid var(--border);display:flex;flex-direction:column;transition:background .28s}
+.rp-head{height:56px;padding:0 14px;display:flex;align-items:center;border-bottom:1px solid var(--border);flex-shrink:0}
+.rp-head .rt{font-size:12.5px;font-weight:700}
+.rp-head .rs{font-size:10px;color:var(--tmuted);margin-top:2px;display:flex;align-items:center;gap:5px}
+.dot{width:6px;height:6px;border-radius:50%;display:inline-block;flex-shrink:0}
+.agents{padding:8px;border-bottom:1px solid var(--border);flex-shrink:0;max-height:42vh;overflow-y:auto}
+.agent{display:flex;align-items:center;gap:9px;padding:7px;border-radius:7px;margin-bottom:1px;cursor:pointer;transition:background .12s}
+.agent:hover{background:var(--hover)}
+.agent .ag-ic{width:28px;height:28px;border-radius:7px;background:rgba(255,255,255,.06);display:flex;align-items:center;justify-content:center;font-size:12px;flex-shrink:0}
+[data-theme="light"] .agent .ag-ic{background:rgba(0,0,0,.05)}
+.agent .ag-n{font-size:11.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.agent .ag-s{font-size:10px;color:var(--tmuted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px}
+.feed{flex:1;overflow-y:auto;padding:13px 12px 18px}
+.feed .ft{font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--tmuted);margin-bottom:12px}
+.act{display:flex;gap:10px;margin-bottom:13px}
+.act .a-ic{width:26px;height:26px;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:11px;flex-shrink:0;margin-top:1px}
+.act .a-tx{font-size:11.5px;font-weight:500;line-height:1.4}
+.act .a-tm{font-size:10px;color:var(--tmuted);margin-top:2px}
+
+/* placeholder module view */
+.soonview{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:60px 20px;gap:14px}
+.soonview .si{width:64px;height:64px;border-radius:16px;background:var(--pillbg);border:1px solid var(--pillborder);display:flex;align-items:center;justify-content:center;font-size:28px}
+.soonview h2{font-size:20px;font-weight:700;letter-spacing:-.4px}
+.soonview p{font-size:13px;color:var(--tmuted);max-width:420px;line-height:1.6}
+.soonview .sbtn{margin-top:6px;font-size:12.5px;font-weight:600;color:#fff;background:var(--grad);padding:9px 18px;border-radius:9px;cursor:pointer;border:none;font-family:inherit}
+
+/* toast */
+#toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);background:#1b1b2e;color:#fff;font-size:12.5px;font-weight:600;padding:9px 18px;border-radius:999px;z-index:200;box-shadow:0 6px 22px rgba(0,0,0,.35);opacity:0;pointer-events:none;transition:opacity .2s,transform .2s}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+/* responsive */
+@media(max-width:1100px){aside.rpanel{display:none}}
+@media(max-width:760px){
+  aside.side{position:fixed;left:-240px;top:0;bottom:0;transition:left .25s;box-shadow:0 0 40px rgba(0,0,0,.4)}
+  aside.side.open{left:0}
+  .menutgl{display:flex!important}
+  .charts{grid-template-columns:1fr}
+  .kpis{grid-template-columns:repeat(2,1fr)}
+  .search{max-width:none}
+  .compsw .cnm{max-width:90px}
+  #ovl{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9}
+  #ovl.show{display:block}
+}
+.menutgl{display:none;align-items:center;justify-content:center}
+</style>
+</head>
+<body>
+
+<!-- ========== PORTAL DE EMPRESAS ========== -->
+<div id="portal">
+  <div class="brandbig">
+    <div class="logomark">
+      <svg viewBox="0 0 24 24" fill="none"><path d="M4 7l8-4 8 4-8 4-8-4z" stroke="#fff" stroke-width="1.7" stroke-linejoin="round"/><path d="M4 12l8 4 8-4M4 17l8 4 8-4" stroke="#fff" stroke-width="1.7" stroke-linejoin="round" opacity=".75"/></svg>
+    </div>
+    <div>
+      <div class="brandname">SIGMA <span class="vtag">v1.0</span></div>
+      <div class="brandsub">Plataforma ERP · IA</div>
+    </div>
+  </div>
+  <div class="portal-title">Selecciona la empresa con la que vas a trabajar</div>
+  <div class="cards" id="ecards">
+    <div style="grid-column:1/-1;text-align:center;color:var(--tmuted);font-size:13px;padding:30px">Cargando empresas…</div>
+  </div>
+  <div class="portal-foot">
+    SIGMA centraliza cotizaciones, órdenes de compra, proyectos y facturación de todas tus empresas.<br>
+    Datos en la nube · accesible desde cualquier lugar.
+  </div>
+</div>
+
+<!-- ========== APP SHELL (DASHBOARD) ========== -->
+<div id="app">
+<div class="shell">
+  <div id="ovl" onclick="toggleMenu(false)"></div>
+
+  <!-- SIDEBAR -->
+  <aside class="side" id="sidebar">
+    <div class="side-logo">
+      <div class="lm"><svg viewBox="0 0 24 24" fill="none"><path d="M4 7l8-4 8 4-8 4-8-4z" stroke="#fff" stroke-width="1.7" stroke-linejoin="round"/><path d="M4 12l8 4 8-4M4 17l8 4 8-4" stroke="#fff" stroke-width="1.7" stroke-linejoin="round" opacity=".75"/></svg></div>
+      <div><div class="nm">SIGMA</div><div class="sb">ERP Platform · v1.0</div></div>
+    </div>
+    <nav class="navlist" id="navlist"></nav>
+    <div class="side-user">
+      <div class="av" id="userav">JM</div>
+      <div style="flex:1;min-width:0"><div class="un" id="username">Administrador</div><div class="ur">SIGMA Admin</div></div>
+      <div class="icbtn" onclick="toggleTheme()" id="themebtn" title="Tema">☀</div>
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <main class="main">
+    <div class="topbar">
+      <div class="icbtn menutgl" onclick="toggleMenu(true)" style="margin-right:2px">☰</div>
+      <div class="search"><svg width="13" height="13" viewBox="0 0 16 16" fill="none"><circle cx="6.5" cy="6.5" r="5" stroke="var(--tmuted)" stroke-width="1.5"/><path d="M10.5 10.5L13 13" stroke="var(--tmuted)" stroke-width="1.5" stroke-linecap="round"/></svg><input placeholder="Buscar proyectos, cotizaciones, facturas…"><span class="kbd">⌘K</span></div>
+      <div class="topright">
+        <div class="compsw" onclick="goPortal()" title="Cambiar empresa"><div class="cav" id="topcav">D</div><div class="cnm" id="topcnm">Empresa</div><span style="color:var(--tmuted);font-size:11px">⇄</span></div>
+        <button class="btn-new" onclick="quickNew()">+ Nuevo</button>
+      </div>
+    </div>
+    <div class="scroll" id="content"></div>
+  </main>
+
+  <!-- RIGHT PANEL -->
+  <aside class="rpanel">
+    <div class="rp-head">
+      <div style="flex:1"><div class="rt">Agentes IA</div><div class="rs"><span class="dot" style="background:var(--green);animation:pulse 2s infinite"></span> <span id="agcount">7</span> activos · trabajando</div></div>
+    </div>
+    <div class="agents" id="agents"></div>
+    <div class="feed"><div class="ft">Actividad Reciente</div><div id="activity"></div></div>
+  </aside>
+</div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+var EMP=null, EMPRESAS=[], ACCENTS=['#4f7ef3','#7c5cf6','#06b6d4','#22c55e','#f97316','#eab308','#ef4444','#ec4899'];
+var ACTIVE='dashboard';
+function $(id){return document.getElementById(id)}
+function initials(n){return (n||'?').replace(/S\.A\.C\.?|E\.I\.R\.L\.?|S\.R\.L\.?/gi,'').trim().split(/\s+/).slice(0,2).map(function(w){return w[0];}).join('').toUpperCase()||'?'}
+function accentFor(i){return ACCENTS[i%ACCENTS.length]}
+function toast(m){var t=$('toast');t.textContent=m;t.classList.add('show');clearTimeout(t._t);t._t=setTimeout(function(){t.classList.remove('show')},2200)}
+
+/* ---- theme ---- */
+function applyTheme(th){document.documentElement.setAttribute('data-theme',th);localStorage.setItem('sigma_theme',th);$('themebtn').textContent=th==='dark'?'☀':'◑'}
+function toggleTheme(){applyTheme(document.documentElement.getAttribute('data-theme')==='dark'?'light':'dark')}
+applyTheme(localStorage.getItem('sigma_theme')||'dark');
+
+/* ---- navigation model ---- */
+var NAV=[
+  {cat:'Principal'},
+  {id:'dashboard',ic:'⊞',lb:'Dashboard'},
+  {cat:'Comercial'},
+  {id:'oportunidades',ic:'🔍',lb:'Oportunidades',badge:'4',soon:true},
+  {id:'proyectos',ic:'📋',lb:'Proyectos',soon:true},
+  {id:'cotizaciones',ic:'💬',lb:'Cotizaciones',badge:'7',tab:'cot'},
+  {id:'solicitudes',ic:'📤',lb:'Solicitud Cotiz.',tab:'sc'},
+  {id:'ordenes',ic:'📦',lb:'Órdenes de Compra',tab:'oc'},
+  {id:'proveedores',ic:'🏭',lb:'Proveedores',tab:'compras'},
+  {id:'catalogo',ic:'🗃',lb:'Catálogo',tab:'cat'},
+  {cat:'Operaciones'},
+  {id:'logistica',ic:'🚚',lb:'Logística',soon:true},
+  {id:'inventario',ic:'📦',lb:'Inventario',soon:true},
+  {id:'facturacion',ic:'💳',lb:'Facturación',badge:'3',soon:true},
+  {id:'cobranza',ic:'💰',lb:'Cobranza',badge:'5',soon:true},
+  {cat:'Gestión'},
+  {id:'historial',ic:'📄',lb:'Historial',tab:'hist'},
+  {id:'reportes',ic:'📈',lb:'Reportes',soon:true},
+  {id:'agentes',ic:'🤖',lb:'Agentes IA',soon:true},
+  {id:'config',ic:'⚙',lb:'Configuración',soon:true}
+];
+function renderNav(){
+  var n=$('navlist');n.innerHTML='';
+  NAV.forEach(function(it){
+    if(it.cat){var c=document.createElement('div');c.className='nav-cat';c.textContent=it.cat;n.appendChild(c);return;}
+    var d=document.createElement('div');d.className='nav-item'+(it.id===ACTIVE?' on':'');
+    d.innerHTML='<span class="ic">'+it.ic+'</span><span class="lb">'+it.lb+'</span>'+
+      (it.badge?'<span class="bd">'+it.badge+'</span>':'')+(it.soon?'<span class="soon">pronto</span>':'');
+    d.onclick=function(){navClick(it)};
+    n.appendChild(d);
+  });
+}
+function navClick(it){
+  toggleMenu(false);
+  if(it.tab){ window.location.href='/cotizador?tab='+it.tab; return; }
+  ACTIVE=it.id; renderNav();
+  if(it.id==='dashboard'){ renderDashboard(); }
+  else { renderSoon(it); }
+}
+
+/* ---- company selection ---- */
+function selectEmpresa(e){
+  EMP=e; localStorage.setItem('sigma_empresa',e.id);
+  $('portal').style.display='none'; $('app').style.display='block';
+  var idx=EMPRESAS.indexOf(e), col=e.color_primario&&e.color_primario!=='#0d3b6e'?e.color_primario:accentFor(idx<0?0:idx);
+  $('topcav').textContent=initials(e.nombre); $('topcav').style.background=col;
+  $('topcnm').textContent=e.nombre;
+  ACTIVE='dashboard'; renderNav(); renderDashboard(); renderAgents(); renderActivity();
+}
+function goPortal(){ $('app').style.display='none'; $('portal').style.display='flex'; }
+function renderPortal(){
+  var w=$('ecards');
+  if(!EMPRESAS.length){w.innerHTML='<div style="grid-column:1/-1;text-align:center;color:var(--tmuted);font-size:13px;padding:30px">No hay empresas. Crea una en Supabase.</div>';return;}
+  w.innerHTML='';
+  EMPRESAS.forEach(function(e,i){
+    var col=e.color_primario&&e.color_primario!=='#0d3b6e'?e.color_primario:accentFor(i);
+    var c=document.createElement('div');c.className='ecard fade';c.style.animationDelay=(i*0.05)+'s';
+    c.innerHTML='<div class="eavatar" style="background:'+col+'">'+initials(e.nombre)+'</div>'+
+      '<div><div class="ename">'+e.nombre+'</div><div class="emeta">'+(e.ruc?'RUC '+e.ruc:'Sin RUC')+' · /'+(e.subdominio||'')+'</div></div>'+
+      '<div class="eenter">Entrar →</div>';
+    c.onclick=function(){selectEmpresa(e)};
+    w.appendChild(c);
+  });
+}
+
+/* ---- dashboard content ---- */
+function renderDashboard(){
+  var mes='JUNIO 2026';
+  var kpis=[
+    {ic:'🔍',lb:'Oportunidades Activas',v:'24',t:'+3',up:1},
+    {ic:'💬',lb:'Cotizaciones en Proceso',v:'37',t:'+7',up:1},
+    {ic:'📦',lb:'Órdenes en Ejecución',v:'18',t:'-2',up:0},
+    {ic:'🚚',lb:'Entregas Pendientes',v:'9',t:'-1',up:1},
+    {ic:'💳',lb:'Facturas Emitidas',v:'142',t:'+12',up:1},
+    {ic:'💰',lb:'Cobranza Pendiente',v:'S/ 248K',t:'⚠ 5',up:0},
+    {ic:'📈',lb:'Ventas del Mes',v:'S/ 812K',t:'+18%',up:1},
+    {ic:'✨',lb:'Margen Proyectado',v:'23.4%',t:'+2.1%',up:1}
+  ];
+  var bars=[{n:'Opor.',c:6},{n:'Anál.',c:4},{n:'Cotiz.',c:7},{n:'OC',c:3},{n:'Logí.',c:5},{n:'Fact.',c:4},{n:'Cerr.',c:12}];
+  var maxc=12;
+  var kan=[
+    {n:'Oportunidad',c:'6',a:'S/ 420K',col:'#4f7ef3'},{n:'Análisis IA',c:'4',a:'S/ 210K',col:'#7c5cf6'},
+    {n:'Cotizaciones',c:'7',a:'S/ 180K',col:'#eab308'},{n:'OC Emitida',c:'3',a:'S/ 89K',col:'#f97316'},
+    {n:'Logística',c:'5',a:'S/ 230K',col:'#22c55e'},{n:'Facturación',c:'4',a:'S/ 310K',col:'#06b6d4'},
+    {n:'Cobranza',c:'5',a:'S/ 240K',col:'#ef4444'},{n:'Cerrado ✓',c:'12',a:'S/ 680K',col:'#22c55e'}
+  ];
+  var proj=[
+    {n:'Adquisición EPP - GORE La Libertad',cl:'GORE LL',m:'S/ 120K',st:'Cotizaciones',stc:'#eab308',dl:'18 Jun',pr:45,r:'Medio',rc:'#f97316'},
+    {n:'Señalética Vial - MTC',cl:'MTC',m:'S/ 89K',st:'Logística',stc:'#22c55e',dl:'25 Jun',pr:72,r:'Bajo',rc:'#22c55e'},
+    {n:'Insumos Seguridad - EsSalud',cl:'EsSalud',m:'S/ 310K',st:'OC Emitida',stc:'#f97316',dl:'30 Jun',pr:31,r:'Alto',rc:'#ef4444'},
+    {n:'Equipos Clínicos - MINSA',cl:'MINSA',m:'S/ 56K',st:'Facturación',stc:'#4f7ef3',dl:'22 Jun',pr:89,r:'Bajo',rc:'#22c55e'},
+    {n:'Herramientas - Munic. Trujillo',cl:'MPT',m:'S/ 230K',st:'Análisis IA',stc:'#7c5cf6',dl:'15 Jul',pr:18,r:'Medio',rc:'#f97316'}
+  ];
+  function bg(hex,a){return hex+(''+Math.round(a*255).toString(16)).padStart(2,'0')}
+  var h='';
+  h+='<div class="pagehead fade"><div class="row"><h1>Dashboard</h1><span class="pill">'+mes+'</span></div>'+
+     '<div class="sub">Bienvenido. Resumen de <b>'+(EMP?EMP.nombre:'')+'</b> — martes 16 Jun.</div></div>';
+  h+='<div class="aibanner fade" onclick="toast(\'Panel de alertas IA — pr\\u00f3ximamente\')"><div class="ai-ic"><svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M8 1l2 5h5l-4 3 1.5 5L8 11l-4.5 3L5 9 1 6h5z" stroke="#fff" stroke-width="1.3" stroke-linejoin="round" fill="rgba(255,255,255,.18)"/></svg></div>'+
+     '<div class="ai-tx"><div class="ai-t1">El Agente IA detectó 3 alertas importantes</div><div class="ai-t2">Licitación GORE vence en 48h · Factura F001-892 vence hoy · Proveedor recomendado disponible</div></div><div class="ai-go">Ver →</div></div>';
+  // kpis
+  h+='<div class="kpis">';
+  kpis.forEach(function(k){h+='<div class="kpi fade"><div class="top"><div class="kic">'+k.ic+'</div><span class="trend '+(k.up?'up':'down')+'">'+k.t+'</span></div><div class="val mono">'+k.v+'</div><div class="lab">'+k.lb+'</div></div>'});
+  h+='</div>';
+  // charts
+  h+='<div class="charts">';
+  h+='<div class="card fade"><div class="chead"><div><div class="ct">Pipeline de Proyectos</div><div class="cs">12 activos · por etapa</div></div><div class="cbtn">Ver todo</div></div><div class="bars">';
+  bars.forEach(function(b,i){var hpx=Math.round(b.c/maxc*84);var c1=i%2===0?'#4f7ef3':'#7c5cf6';h+='<div class="barcol"><span class="bc">'+b.c+'</span><div class="bar" style="height:'+hpx+'px;background:linear-gradient(180deg,'+c1+' 0%,'+bg(c1,.28)+' 100%)"></div><span class="bn">'+b.n+'</span></div>'});
+  h+='</div></div>';
+  h+='<div class="card fade"><div class="chead"><div><div class="ct">Ventas del Año</div><div class="cs">Últimos 6 meses · S/ miles</div></div><div class="cbtn">Exportar</div></div>'+
+     '<svg viewBox="0 0 330 100" style="width:100%;height:108px;display:block;overflow:visible"><defs><linearGradient id="af" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#4f7ef3" stop-opacity=".22"/><stop offset="100%" stop-color="#4f7ef3" stop-opacity="0"/></linearGradient></defs>'+
+     '<line x1="0" y1="20" x2="330" y2="20" stroke="var(--chartgrid)" stroke-dasharray="3 4"/><line x1="0" y1="50" x2="330" y2="50" stroke="var(--chartgrid)" stroke-dasharray="3 4"/><line x1="0" y1="80" x2="330" y2="80" stroke="var(--chartgrid)" stroke-dasharray="3 4"/>'+
+     '<path d="M14,82 L76,68 L142,74 L208,52 L272,36 L322,14 L322,90 L14,90 Z" fill="url(#af)"/><path d="M14,82 L76,68 L142,74 L208,52 L272,36 L322,14" fill="none" stroke="#4f7ef3" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>'+
+     '<circle cx="14" cy="82" r="3" fill="#4f7ef3"/><circle cx="76" cy="68" r="3" fill="#4f7ef3"/><circle cx="142" cy="74" r="3" fill="#4f7ef3"/><circle cx="208" cy="52" r="3" fill="#4f7ef3"/><circle cx="272" cy="36" r="3" fill="#4f7ef3"/><circle cx="322" cy="14" r="3.5" fill="#4f7ef3"/>'+
+     '<text x="14" y="100" text-anchor="middle" fill="var(--chartlabel)" style="font-size:8px">Ene</text><text x="76" y="100" text-anchor="middle" fill="var(--chartlabel)" style="font-size:8px">Feb</text><text x="142" y="100" text-anchor="middle" fill="var(--chartlabel)" style="font-size:8px">Mar</text><text x="208" y="100" text-anchor="middle" fill="var(--chartlabel)" style="font-size:8px">Abr</text><text x="272" y="100" text-anchor="middle" fill="var(--chartlabel)" style="font-size:8px">May</text><text x="322" y="100" text-anchor="middle" fill="var(--chartlabel)" style="font-size:8px">Jun</text>'+
+     '<text x="318" y="9" text-anchor="end" fill="var(--chartlabel)" style="font-size:8px" class="mono">S/812K</text></svg></div>';
+  h+='</div>';
+  // kanban
+  h+='<div class="card fade" style="margin-bottom:14px"><div class="chead"><div class="ct">Kanban — Pipeline Activo</div><div style="font-size:11.5px;color:var(--blue);font-weight:600;cursor:pointer" onclick="toast(\'Tablero Kanban \\u2014 pr\\u00f3ximamente\')">Ver tablero →</div></div><div class="kanban">';
+  kan.forEach(function(s){h+='<div class="kstage" style="background:'+bg(s.col,.06)+';border:1px solid '+bg(s.col,.22)+'"><div class="kn" style="color:'+s.col+'">'+s.n+'</div><div class="kc">'+s.c+'</div><div class="ka">'+s.a+'</div></div>'});
+  h+='</div></div>';
+  // table
+  h+='<div class="card fade"><div class="chead"><div class="ct">Proyectos Activos</div><div style="display:flex;gap:7px"><div class="cbtn">Filtrar</div><div class="cbtn" style="color:#fff;background:var(--grad);border:none" onclick="window.location.href=\'/cotizador?tab=cot\'">+ Proyecto</div></div></div>'+
+     '<table class="ptable"><thead><tr><th>Proyecto</th><th>Cliente</th><th>Monto</th><th>Etapa</th><th>Avance</th><th>Riesgo IA</th></tr></thead><tbody>';
+  proj.forEach(function(p){h+='<tr><td><div class="pname">'+p.n+'</div><div class="pdl">Vence: '+p.dl+'</div></td><td style="color:var(--tmuted)">'+p.cl+'</td><td class="mono" style="font-weight:600">'+p.m+'</td>'+
+     '<td><span class="badge" style="color:'+p.stc+';background:'+bg(p.stc,.14)+'">'+p.st+'</span></td>'+
+     '<td><div class="prog"><div class="track"><div class="fill" style="width:'+p.pr+'%"></div></div><span class="pct">'+p.pr+'%</span></div></td>'+
+     '<td><span class="badge" style="color:'+p.rc+';background:'+bg(p.rc,.14)+'">'+p.r+'</span></td></tr>'});
+  h+='</tbody></table></div>';
+  $('content').innerHTML=h;
+}
+function renderSoon(it){
+  $('content').innerHTML='<div class="soonview fade"><div class="si">'+it.ic+'</div><h2>'+it.lb+'</h2>'+
+    '<p>Este módulo es parte de la hoja de ruta de SIGMA. Lo construiremos por fases, conectado a tus datos en la nube y con asistencia de IA.</p>'+
+    '<button class="sbtn" onclick="ACTIVE=\'dashboard\';renderNav();renderDashboard()">← Volver al Dashboard</button></div>';
+}
+function renderAgents(){
+  var ag=[
+    {e:'⚡',n:'Ag. Licitaciones',s:'Analizando SEACE...',d:'#22c55e',p:'pulse 2s infinite'},
+    {e:'💰',n:'Ag. Cotizador',s:'3 cotizaciones listas',d:'#22c55e',p:'pulse 2s infinite'},
+    {e:'🛒',n:'Ag. Compras',s:'OC F001-2847 generada',d:'#22c55e',p:'pulse 2s infinite'},
+    {e:'🚚',n:'Ag. Logística',s:'Siguiendo 5 despachos',d:'#22c55e',p:'pulse 2s infinite'},
+    {e:'📄',n:'Ag. Facturación',s:'Revisando 3 facturas',d:'#eab308',p:'pulse 3s infinite'},
+    {e:'💳',n:'Ag. Cobranza',s:'5 recordatorios enviados',d:'#ef4444',p:'none'},
+    {e:'📊',n:'Ag. Gerencial',s:'Reporte mensual listo',d:'#22c55e',p:'pulse 2s infinite'}
+  ];
+  var h='';ag.forEach(function(a){h+='<div class="agent"><div class="ag-ic">'+a.e+'</div><div style="flex:1;min-width:0"><div class="ag-n">'+a.n+'</div><div class="ag-s">'+a.s+'</div></div><div class="dot" style="background:'+a.d+';animation:'+a.p+'"></div></div>'});
+  $('agents').innerHTML=h;$('agcount').textContent=ag.length;
+}
+function renderActivity(){
+  var ac=[
+    {e:'⚡',c:'#4f7ef3',t:'IA detectó licitación GORE — EPP',tm:'hace 2 min'},
+    {e:'✅',c:'#22c55e',t:'OC F001-2847 aprobada',tm:'hace 8 min'},
+    {e:'📦',c:'#f97316',t:'Entrega confirmada — EsSalud',tm:'hace 23 min'},
+    {e:'⚠️',c:'#ef4444',t:'Alerta: Factura F001-892 vence hoy',tm:'hace 1h'},
+    {e:'🤖',c:'#7c5cf6',t:'Agente cotizó 4 proveedores',tm:'hace 2h'},
+    {e:'📊',c:'#4f7ef3',t:'Reporte mensual generado',tm:'hace 3h'}
+  ];
+  function bg(hex,a){return hex+(''+Math.round(a*255).toString(16)).padStart(2,'0')}
+  var h='';ac.forEach(function(a){h+='<div class="act"><div class="a-ic" style="background:'+bg(a.c,.16)+'">'+a.e+'</div><div style="flex:1;min-width:0"><div class="a-tx">'+a.t+'</div><div class="a-tm">'+a.tm+'</div></div></div>'});
+  $('activity').innerHTML=h;
+}
+function quickNew(){ window.location.href='/cotizador?tab=cot'; }
+function toggleMenu(open){var s=$('sidebar'),o=$('ovl');if(!s)return;if(open){s.classList.add('open');o&&o.classList.add('show')}else{s.classList.remove('open');o&&o.classList.remove('show')}}
+
+/* ---- boot ---- */
+fetch('/api/empresas').then(function(r){return r.json()}).then(function(list){
+  EMPRESAS=Array.isArray(list)?list:[];
+  renderPortal();
+  var saved=localStorage.getItem('sigma_empresa');
+  if(saved){var e=EMPRESAS.filter(function(x){return x.id===saved})[0];if(e)selectEmpresa(e);}
+}).catch(function(){
+  $('ecards').innerHTML='<div style="grid-column:1/-1;text-align:center;color:var(--tmuted);font-size:13px;padding:30px">No se pudo conectar con el servidor. Reintenta.</div>';
+});
+</script>
+</body>
+</html>
