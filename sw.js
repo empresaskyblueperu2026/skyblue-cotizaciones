@@ -1,5 +1,5 @@
 /* SKY BLUE PWA - Service Worker */
-const CACHE = 'skyblue-v17';
+const CACHE = 'skyblue-v18';
 const ASSETS = ['/', '/index.html', '/manifest.json', '/icon-192.png', '/icon-512.png'];
 
 self.addEventListener('install', function(e){

@@ -200,6 +200,81 @@ aside.rpanel{width:284px;flex-shrink:0;background:linear-gradient(180deg,var(--c
 .soonview p{font-size:13px;color:var(--tmuted);max-width:440px;line-height:1.65}
 .soonview .sbtn{margin-top:8px;font-size:12.5px;font-weight:600;color:#fff;background:var(--grad-soft);padding:10px 20px;border-radius:10px;cursor:pointer;border:none;font-family:inherit}
 
+/* ===== Módulo Proyectos Públicos < 8 UIT ===== */
+.pmod-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:24px;flex-wrap:wrap}
+.pgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:15px}
+.pcard{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:18px;cursor:pointer;transition:transform .15s,border-color .15s,box-shadow .15s}
+.pcard:hover{transform:translateY(-2px);border-color:var(--pillborder);box-shadow:0 10px 26px rgba(13,59,110,.08)}
+.pcard .pc-top{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:6px}
+.pcard .pc-nm{font-size:14px;font-weight:600;line-height:1.3}
+.pcard .pc-en{font-size:11px;color:var(--tmuted);margin-top:2px}
+.pcard .pc-mt{font-size:13px;font-weight:700;font-family:'DM Mono',monospace;white-space:nowrap}
+.pcard .pc-uit{font-size:9px;color:var(--tmuted);text-align:right}
+.pc-stage{font-size:11px;color:var(--accent);font-weight:600;margin:12px 0 7px;display:flex;align-items:center;gap:6px}
+.pc-stage svg{width:13px;height:13px}
+.pbar{height:6px;background:var(--border);border-radius:3px;overflow:hidden}
+.pbar>i{display:block;height:100%;background:var(--grad-soft);border-radius:3px;transition:width .3s}
+.pc-foot{display:flex;justify-content:space-between;align-items:center;margin-top:10px;font-size:10.5px;color:var(--tmuted)}
+.ddl{font-weight:700;padding:2px 8px;border-radius:7px;font-size:10px}
+.empty{text-align:center;padding:60px 20px;color:var(--tmuted)}
+.empty .ei{width:64px;height:64px;border-radius:16px;background:var(--pillbg);border:1px solid var(--pillborder);display:flex;align-items:center;justify-content:center;color:var(--accent);margin:0 auto 14px}
+.empty .ei svg{width:28px;height:28px}
+.pback{font-size:12px;color:var(--accent);font-weight:600;cursor:pointer;margin-bottom:14px;display:inline-flex;align-items:center;gap:5px}
+.pdet-head{display:flex;justify-content:space-between;align-items:flex-start;gap:14px;flex-wrap:wrap;margin-bottom:20px}
+.pdet-head h1{font-size:21px;font-weight:700;letter-spacing:-.5px}
+.pdet-head .pe{font-size:12.5px;color:var(--tmuted);margin-top:3px}
+.pdet-meta{display:flex;gap:20px;align-items:flex-start}
+.pmeta-v{font-size:16px;font-weight:700;font-family:'DM Mono',monospace}
+.pmeta-l{font-size:9.5px;color:var(--tmuted);text-transform:uppercase;letter-spacing:.5px;margin-top:2px}
+.stepper{display:flex;align-items:flex-start;background:var(--card);border:1px solid var(--border);border-radius:14px;padding:18px 10px;margin-bottom:18px;overflow-x:auto}
+.step{flex:1;min-width:94px;display:flex;flex-direction:column;align-items:center;text-align:center;position:relative;cursor:pointer;padding:0 2px}
+.step .scir{width:34px;height:34px;border-radius:50%;border:2px solid var(--border);background:var(--card);display:flex;align-items:center;justify-content:center;color:var(--tmuted);z-index:1;transition:.15s}
+.step .scir svg{width:16px;height:16px}
+.step.done .scir{background:var(--grad-soft);border-color:transparent;color:#fff}
+.step.on .scir{border-color:var(--accent);color:var(--accent);box-shadow:0 0 0 4px var(--pillbg)}
+.step .sl{font-size:9px;color:var(--tmuted);margin-top:7px;line-height:1.25;max-width:88px}
+.step.on .sl,.step.done .sl{color:var(--tprimary);font-weight:600}
+.step .sline{position:absolute;top:17px;left:50%;width:100%;height:2px;background:var(--border);z-index:0}
+.step.done .sline{background:var(--accent)}
+.step:last-child .sline{display:none}
+.stage-panel{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:20px}
+.sp-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px;flex-wrap:wrap}
+.sp-title{font-size:15px;font-weight:700}
+.sp-ag{font-size:11px;color:var(--accent);font-weight:600;display:flex;align-items:center;gap:6px;margin-top:3px}
+.sp-ag svg{width:13px;height:13px}
+.seg{display:inline-flex;background:var(--input);border:1px solid var(--border);border-radius:9px;padding:3px}
+.seg button{border:none;background:transparent;font-family:inherit;font-size:11.5px;font-weight:600;color:var(--tmuted);padding:6px 11px;border-radius:7px;cursor:pointer;display:flex;align-items:center;gap:5px}
+.seg button svg{width:13px;height:13px}
+.seg button.on{background:var(--card);color:var(--accent);box-shadow:0 1px 4px rgba(13,59,110,.12)}
+.sp-lbl{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--tmuted);margin:16px 0 7px}
+.ta{width:100%;min-height:88px;background:var(--input);border:1px solid var(--border);border-radius:10px;padding:11px;font-family:inherit;font-size:12.5px;color:var(--tprimary);resize:vertical;outline:none;line-height:1.5}
+.ta:focus{border-color:var(--pillborder)}
+.aires{background:var(--alertbg);border:1px solid var(--alertborder);border-radius:10px;padding:13px;font-size:12px;line-height:1.6;white-space:pre-wrap;margin-top:8px;max-height:300px;overflow:auto}
+.aibtn{font-size:12px;font-weight:600;color:#fff;background:var(--grad-soft);border:none;padding:8px 14px;border-radius:9px;cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;gap:6px}
+.aibtn svg{width:13px;height:13px}
+.aibtn:disabled{opacity:.6;cursor:default}
+.dropz{border:1.5px dashed var(--pillborder);border-radius:12px;padding:18px;text-align:center;color:var(--tmuted);font-size:12px;cursor:pointer;transition:.15s;background:var(--input);line-height:1.5}
+.dropz.drag{border-color:var(--accent);background:var(--pillbg);color:var(--accent)}
+.docchip{display:inline-flex;align-items:center;gap:6px;background:var(--input);border:1px solid var(--border);border-radius:8px;padding:6px 10px;font-size:11.5px;margin:7px 6px 0 0}
+.docchip svg{width:13px;height:13px;color:var(--accent)}
+.docchip .dx{cursor:pointer;color:var(--tmuted);font-size:12px;margin-left:2px}
+.sp-foot{display:flex;justify-content:space-between;align-items:center;margin-top:20px;flex-wrap:wrap;gap:10px}
+.doneb{font-size:12.5px;font-weight:600;padding:9px 16px;border-radius:10px;cursor:pointer;border:none;font-family:inherit;display:inline-flex;align-items:center;gap:6px}
+.doneb svg{width:14px;height:14px}
+.doneb.go{background:var(--grad-soft);color:#fff}
+.doneb.re{background:var(--input);color:var(--tmuted);border:1px solid var(--border)}
+#pmodal{position:fixed;inset:0;background:rgba(13,30,55,.45);display:none;align-items:center;justify-content:center;z-index:300;padding:20px}
+#pmodal.show{display:flex}
+.pmbox{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:24px;width:100%;max-width:440px;box-shadow:0 20px 60px rgba(13,30,55,.3)}
+.pmbox h3{font-size:16px;font-weight:700;margin-bottom:16px}
+.fld{margin-bottom:13px}
+.fld label{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--tmuted);display:block;margin-bottom:5px}
+.fld input{width:100%;background:var(--input);border:1px solid var(--border);border-radius:9px;padding:10px;font-family:inherit;font-size:13px;color:var(--tprimary);outline:none}
+.fld input:focus{border-color:var(--pillborder)}
+.pmrow{display:flex;gap:10px;justify-content:flex-end;margin-top:18px}
+.pmrow button{font-size:12.5px;font-weight:600;padding:9px 16px;border-radius:9px;cursor:pointer;border:none;font-family:inherit}
+.pmrow .cancel{background:var(--input);color:var(--tmuted)}
+.pmrow .save{background:var(--grad-soft);color:#fff}
 #toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--navy);color:#fff;font-size:12.5px;font-weight:600;padding:10px 20px;border-radius:999px;z-index:200;box-shadow:0 8px 26px rgba(13,59,110,.35);opacity:0;pointer-events:none;transition:opacity .2s}
 #toast.show{opacity:1}
 
@@ -262,6 +337,8 @@ aside.rpanel{width:284px;flex-shrink:0;background:linear-gradient(180deg,var(--c
   </aside>
 </div>
 </div>
+<input type="file" id="pfile" style="display:none">
+<div id="pmodal"></div>
 <div id="toast"></div>
 
 <script>
@@ -308,7 +385,7 @@ var NAV=[
   {id:'dashboard',ic:'dashboard',lb:'Dashboard'},
   {cat:'Comercial'},
   {id:'oportunidades',ic:'search',lb:'Oportunidades',soon:true},
-  {id:'proyectos',ic:'clipboard',lb:'Proyectos',soon:true},
+  {id:'proyectos',ic:'clipboard',lb:'Proyectos Públicos'},
   {id:'cotizaciones',ic:'chat',lb:'Cotizaciones',tab:'cot'},
   {id:'solicitudes',ic:'send',lb:'Solicitud Cotiz.',tab:'sc'},
   {id:'ordenes',ic:'box',lb:'Órdenes de Compra',tab:'oc'},
@@ -336,7 +413,7 @@ function navClick(it){
   toggleMenu(false);
   if(it.tab){window.location.href='/cotizador?tab='+it.tab;return}
   ACTIVE=it.id;renderNav();
-  if(it.id==='dashboard')renderDashboard();else renderSoon(it);
+  if(it.id==='dashboard')renderDashboard();else if(it.id==='proyectos')renderProyectos();else renderSoon(it);
 }
 
 function selectEmpresa(e){
@@ -433,6 +510,144 @@ function renderActivity(){
   var h='';ac.forEach(function(a){h+='<div class="act"><div class="a-ic" style="background:'+bg(a.c,.18)+';color:'+a.c+'">'+icon(a.ic)+'</div><div style="flex:1;min-width:0"><div class="a-tx">'+a.t+'</div><div class="a-tm">'+a.tm+'</div></div></div>'});
   $('activity').innerHTML=h;
 }
+/* ===== Módulo: Proyectos Públicos < 8 UIT ===== */
+var UIT=5350; /* S/ referencial (configurable) */
+var PROY=[], CURP=null, _pendingFile=null, _fileStage=-1;
+var STAGES=[
+ {k:'tdr', t:'Análisis TDR y Requisitos', ag:'Ag. TDR', ic:'clipboard', lbl:'Resumen del TDR · ítems · requisitos de calificación'},
+ {k:'viab',t:'Evaluación de Viabilidad', ag:'Ag. Análisis', ic:'search', lbl:'Veredicto de viabilidad y observaciones'},
+ {k:'cot', t:'Cotización (proveedores)', ag:'Ag. Cotizador', ic:'chat', lbl:'Proveedores y precios comparados'},
+ {k:'prop',t:'Generación de Propuesta', ag:'Ag. Propuestas', ic:'doc', lbl:'Propuesta técnico-económica'},
+ {k:'entr',t:'Seguimiento de Entregas', ag:'Ag. Logística', ic:'truck', lbl:'Estado de entregas y plazos'},
+ {k:'fact',t:'Facturación', ag:'Ag. Facturación', ic:'card', lbl:'Comprobantes y estado SUNAT'}
+];
+var AIPROMPTS={
+ tdr:'Eres especialista en contrataciones con el Estado peruano (montos menores a 8 UIT). Analiza el siguiente TDR y responde en español, claro y estructurado:\n1) OBJETO de la contratación.\n2) ÍTEMS con cantidad y unidad de medida.\n3) REQUISITOS DE CALIFICACIÓN (experiencia, RNP, habilitación, etc.).\n4) PLAZO de entrega.\n5) LUGAR de entrega.\n6) Recomendación breve.\n\nTDR:',
+ viab:'Como analista de contrataciones públicas en Perú, evalúa la VIABILIDAD de participar en esta contratación menor a 8 UIT. Da un veredicto (VIABLE / RIESGOSO / NO VIABLE) y justifica por requisitos, plazo y margen. Información:',
+ cot:'Estructura una estrategia de cotización con múltiples proveedores para estos ítems de una contratación pública peruana, con criterios de selección y un cuadro comparativo. Ítems:',
+ prop:'Redacta un resumen de propuesta técnico-económica para esta contratación pública peruana menor a 8 UIT, lista para presentar. Datos:',
+ entr:'Genera un checklist de seguimiento de entregas (hitos, fechas, responsables) para esta contratación pública. Datos:',
+ fact:'Indica los pasos de facturación electrónica ante SUNAT para esta contratación pública peruana (serie, numeración, documentos). Datos:'
+};
+function proyKey(){return 'sigma_proy_'+(EMP?EMP.id:'x')}
+function loadProy(){try{PROY=JSON.parse(localStorage.getItem(proyKey())||'[]')}catch(e){PROY=[]}}
+function saveProy(){try{localStorage.setItem(proyKey(),JSON.stringify(PROY))}catch(e){}}
+function fmtMonto(m){return 'S/ '+(m||0).toLocaleString('es-PE')}
+function uitOf(m){return ((m||0)/UIT).toFixed(1)}
+function stageDone(p){return p.stages.filter(function(s){return s.done}).length}
+function curStage(p){for(var i=0;i<p.stages.length;i++)if(!p.stages[i].done)return i;return p.stages.length-1}
+function daysLeft(f){if(!f)return null;return Math.ceil((new Date(f+'T23:59:59')-new Date())/86400000)}
+function ddlBadge(f){var d=daysLeft(f);if(d===null)return '<span class="ddl" style="background:var(--input);color:var(--tmuted)">sin plazo</span>';
+ var c=d<0?'#ef4444':d<=3?'#ef4444':d<=7?'#f59e0b':'#16a34a';var t=d<0?'Vencido':(d+' días');
+ return '<span class="ddl" style="background:'+bg(c,.14)+';color:'+c+'">'+t+'</span>'}
+function esc(s){return (''+(s||'')).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
+
+function renderProyectos(){
+  loadProy();
+  var h='<div class="pmod-head fade"><div><h1 style="font-size:23px;font-weight:700;letter-spacing:-.6px">Proyectos Públicos &lt; 8 UIT</h1>'+
+    '<div style="font-size:13px;color:var(--tmuted);margin-top:4px">Contrataciones menores · '+(EMP?EMP.nombre:'')+'</div></div>'+
+    '<button class="btn-new" onclick="openNewProy()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" style="width:13px;height:13px"><path d="M12 5v14M5 12h14"/></svg>Nuevo proyecto</button></div>';
+  if(!PROY.length){
+    h+='<div class="empty fade"><div class="ei">'+icon('clipboard',1.5)+'</div><div style="font-size:15px;font-weight:600;color:var(--tprimary);margin-bottom:6px">Aún no tienes proyectos</div>'+
+      '<div style="font-size:13px;max-width:400px;margin:0 auto;line-height:1.6">Crea tu primer proyecto de contratación pública. SIGMA te guía por cada etapa: TDR, viabilidad, cotización, propuesta, entregas y facturación — automático con IA o manual.</div></div>';
+  } else {
+    h+='<div class="pgrid">';
+    PROY.forEach(function(p){
+      var cs=curStage(p),prog=Math.round(stageDone(p)/p.stages.length*100);
+      h+='<div class="pcard fade" onclick="openProy(\''+p.id+'\')">'+
+        '<div class="pc-top"><div><div class="pc-nm">'+esc(p.nombre||'(sin nombre)')+'</div><div class="pc-en">'+esc(p.entidad||'Sin entidad')+'</div></div>'+
+        '<div><div class="pc-mt">'+fmtMonto(p.monto)+'</div><div class="pc-uit">'+uitOf(p.monto)+' UIT</div></div></div>'+
+        '<div class="pc-stage">'+icon(STAGES[cs].ic)+' '+(prog===100?'Completado':esc(STAGES[cs].t))+'</div>'+
+        '<div class="pbar"><i style="width:'+prog+'%"></i></div>'+
+        '<div class="pc-foot"><span>'+stageDone(p)+'/'+p.stages.length+' etapas · '+prog+'%</span>'+ddlBadge(p.fecha)+'</div></div>';
+    });
+    h+='</div>';
+  }
+  $('content').innerHTML=h;
+}
+function openProy(id){CURP=PROY.filter(function(x){return x.id===id})[0];if(!CURP)return;CURP._sel=curStage(CURP);renderProyDetail()}
+
+function renderProyDetail(){
+  var p=CURP;if(!p)return renderProyectos();
+  var si=(p._sel==null?curStage(p):p._sel), st=p.stages[si], meta=STAGES[si];
+  var prog=Math.round(stageDone(p)/p.stages.length*100);
+  var h='<div class="pback fade" onclick="renderProyectos()">← Proyectos</div>';
+  h+='<div class="pdet-head fade"><div><h1>'+esc(p.nombre||'(sin nombre)')+'</h1><div class="pe">'+esc(p.entidad||'Sin entidad')+'</div></div>'+
+    '<div class="pdet-meta"><div><div class="pmeta-v">'+fmtMonto(p.monto)+'</div><div class="pmeta-l">'+uitOf(p.monto)+' UIT</div></div>'+
+    '<div><div class="pmeta-v">'+prog+'%</div><div class="pmeta-l">Avance</div></div>'+
+    '<div style="text-align:right"><div style="margin-bottom:4px">'+ddlBadge(p.fecha)+'</div><div class="pmeta-l">'+(p.fecha||'sin plazo')+'</div></div></div></div>';
+  h+='<div class="stepper fade">';
+  p.stages.forEach(function(s,i){
+    var cls=s.done?'done':(i===si?'on':'');
+    h+='<div class="step '+cls+'" onclick="selStage('+i+')"><div class="sline"></div><div class="scir">'+(s.done?icon('check',2.4):icon(STAGES[i].ic))+'</div><div class="sl">'+esc(STAGES[i].t)+'</div></div>';
+  });
+  h+='</div>';
+  h+='<div class="stage-panel fade"><div class="sp-head"><div><div class="sp-title">'+esc(meta.t)+'</div><div class="sp-ag">'+icon('robot')+' '+meta.ag+'</div></div>'+
+    '<div class="seg"><button class="'+(st.mode==='auto'?'on':'')+'" onclick="setMode('+si+',\'auto\')">'+icon('spark',1.6)+' Automático IA</button>'+
+    '<button class="'+(st.mode!=='auto'?'on':'')+'" onclick="setMode('+si+',\'manual\')">✍ Manual</button></div></div>';
+  if(st.mode==='auto'){
+    h+='<div class="sp-lbl">Contenido a analizar (pega el TDR o arrastra un PDF abajo)</div>';
+    h+='<textarea class="ta" placeholder="Pega aquí el texto del TDR o la información de esta etapa…" oninput="stInput('+si+',this.value)">'+esc(st.input)+'</textarea>';
+    h+='<div style="margin-top:10px"><button class="aibtn" '+(st._loading?'disabled':'')+' onclick="aiAnalyze('+si+')">'+(st._loading?'Analizando…':(icon('spark',1.6)+' Analizar con IA'))+'</button></div>';
+    if(st.resumen)h+='<div class="sp-lbl">Resultado IA</div><div class="aires">'+esc(st.resumen)+'</div>';
+  } else {
+    h+='<div class="sp-lbl">'+esc(meta.lbl)+'</div>';
+    h+='<textarea class="ta" placeholder="Escribe aquí…" oninput="stNotas('+si+',this.value)">'+esc(st.notas)+'</textarea>';
+  }
+  h+='<div class="sp-lbl">Documentos</div>';
+  h+='<div class="dropz" id="dz_'+si+'" onclick="pickFile('+si+')" ondragover="dzOver(event,'+si+',1)" ondragleave="dzOver(event,'+si+',0)" ondrop="dzDrop(event,'+si+')">Arrastra archivos aquí o haz clic para seleccionar<br><span style="font-size:10.5px;opacity:.7">PDF, imágenes, Word, Excel · se vincularán a Google Drive próximamente</span></div>';
+  if(st.docs&&st.docs.length){h+='<div>';st.docs.forEach(function(d,di){h+='<span class="docchip">'+icon('doc')+esc(d.name)+' <span style="color:var(--tmuted)">'+(d.size||0)+'KB</span><span class="dx" onclick="rmDoc('+si+','+di+')">✕</span></span>'});h+='</div>'}
+  h+='<div class="sp-foot"><div style="font-size:11px;color:var(--tmuted)">Etapa '+(si+1)+' de '+p.stages.length+'</div>'+
+    (st.done?'<button class="doneb re" onclick="toggleDone('+si+')">Reabrir etapa</button>':'<button class="doneb go" onclick="toggleDone('+si+')">'+icon('check',2.4)+' Marcar completada</button>')+'</div>';
+  h+='</div>';
+  $('content').innerHTML=h;
+}
+function selStage(i){CURP._sel=i;renderProyDetail()}
+function setMode(i,m){CURP.stages[i].mode=m;saveProy();renderProyDetail()}
+function stNotas(i,v){CURP.stages[i].notas=v;saveProy()}
+function stInput(i,v){CURP.stages[i].input=v;saveProy()}
+function toggleDone(i){CURP.stages[i].done=!CURP.stages[i].done;saveProy();if(CURP.stages[i].done&&i+1<CURP.stages.length)CURP._sel=i+1;renderProyDetail()}
+function rmDoc(i,di){CURP.stages[i].docs.splice(di,1);saveProy();renderProyDetail()}
+function dzOver(e,i,on){e.preventDefault();var z=document.getElementById('dz_'+i);if(z)z.classList.toggle('drag',!!on)}
+function dzDrop(e,i){e.preventDefault();var z=document.getElementById('dz_'+i);if(z)z.classList.remove('drag');var f=e.dataTransfer.files[0];if(f)addFile(i,f)}
+function pickFile(i){_fileStage=i;var inp=document.getElementById('pfile');inp.value='';inp.click()}
+function addFile(i,f){var st=CURP.stages[i];st.docs=st.docs||[];st.docs.push({name:f.name,size:Math.round(f.size/1024)});saveProy();
+  if(/pdf|image/.test(f.type||'')){var rd=new FileReader();rd.onload=function(){_pendingFile={type:f.type,b64:(''+rd.result).split(',')[1]};toast('Documento listo para análisis IA')};rd.readAsDataURL(f)}
+  renderProyDetail()}
+function aiAnalyze(si){
+  var st=CURP.stages[si],meta=STAGES[si];
+  var input=st.input||st.notas||'';
+  if(!input.trim()&&!_pendingFile){toast('Pega el contenido o arrastra un PDF primero');return}
+  var body={prompt:AIPROMPTS[meta.k]+'\n'+(input||'(ver documento adjunto)')};
+  if(_pendingFile){body.imageBase64=_pendingFile.b64;body.mimeType=_pendingFile.type}
+  st._loading=true;renderProyDetail();
+  fetch('/api/gemini',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
+   .then(function(r){return r.json()}).then(function(d){
+     var txt='';try{txt=d.candidates[0].content.parts[0].text}catch(e){txt=(d.error&&d.error.message)||'La IA no devolvió respuesta. Verifica GEMINI_API_KEY en el servidor.'}
+     st.resumen=txt;st._loading=false;_pendingFile=null;saveProy();renderProyDetail();
+   }).catch(function(e){st._loading=false;toast('Error IA: '+e.message);renderProyDetail()});
+}
+function openNewProy(){
+  var m=document.getElementById('pmodal');
+  m.innerHTML='<div class="pmbox"><h3>Nuevo proyecto · contratación &lt; 8 UIT</h3>'+
+   '<div class="fld"><label>Nombre / objeto</label><input id="np_n" placeholder="Ej. Adquisición de EPP industrial"></div>'+
+   '<div class="fld"><label>Entidad convocante</label><input id="np_e" placeholder="Ej. GORE La Libertad"></div>'+
+   '<div class="fld"><label>Monto referencial (S/)</label><input id="np_m" type="number" placeholder="0"></div>'+
+   '<div class="fld"><label>Fecha límite</label><input id="np_f" type="date"></div>'+
+   '<div class="pmrow"><button class="cancel" onclick="closeNewProy()">Cancelar</button><button class="save" onclick="saveNewProy()">Crear proyecto</button></div></div>';
+  m.classList.add('show');
+}
+function closeNewProy(){document.getElementById('pmodal').classList.remove('show')}
+function saveNewProy(){
+  var n=(document.getElementById('np_n').value||'').trim();
+  if(!n){toast('Ponle un nombre al proyecto');return}
+  var p={id:'p'+Date.now(),nombre:n,entidad:(document.getElementById('np_e').value||'').trim(),
+    monto:parseFloat(document.getElementById('np_m').value)||0,fecha:document.getElementById('np_f').value||'',
+    creado:Date.now(),stages:STAGES.map(function(s){return {k:s.k,mode:'manual',done:false,notas:'',input:'',resumen:'',docs:[]}})};
+  loadProy();PROY.unshift(p);saveProy();closeNewProy();openProy(p.id);
+}
+(function(){var pf=document.getElementById('pfile');if(pf)pf.onchange=function(){if(this.files&&this.files[0]&&_fileStage>=0)addFile(_fileStage,this.files[0])}})();
+
 function quickNew(){window.location.href='/cotizador?tab=cot'}
 function toggleMenu(open){var s=$('sidebar'),o=$('ovl');if(!s)return;if(open){s.classList.add('open');o&&o.classList.add('show')}else{s.classList.remove('open');o&&o.classList.remove('show')}}
 
