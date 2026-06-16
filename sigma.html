@@ -259,6 +259,18 @@ aside.rpanel{width:284px;flex-shrink:0;background:linear-gradient(180deg,var(--c
 .docchip svg{width:13px;height:13px;color:var(--accent)}
 .aibase{display:flex;gap:9px;align-items:flex-start}
 .aibase svg{width:16px;height:16px;flex-shrink:0;margin-top:1px}
+.rblocks{display:flex;flex-direction:column;gap:12px;margin-top:8px}
+.rblock{background:var(--input);border:1px solid var(--border);border-radius:11px;padding:14px 15px}
+.rb-t{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--accent);margin-bottom:10px;display:flex;align-items:center;gap:7px}
+.rb-t svg{width:14px;height:14px}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:7px 14px;font-size:12px;line-height:1.4}
+.kv .k{color:var(--tmuted);font-weight:600}
+.rtab{width:100%;border-collapse:collapse;font-size:12px}
+.rtab th{text-align:left;font-size:9.5px;text-transform:uppercase;letter-spacing:.5px;color:var(--tmuted);padding:0 8px 6px;border-bottom:1px solid var(--border)}
+.rtab td{padding:7px 8px;border-bottom:1px solid var(--border)}
+.rtab tr:last-child td{border-bottom:none}
+.ulist{margin:0;padding-left:18px;font-size:12px;line-height:1.7}
+.vbadge{font-size:12.5px;font-weight:700;padding:4px 12px;border-radius:8px;display:inline-block}
 .docchip .dx{cursor:pointer;color:var(--tmuted);font-size:12px;margin-left:2px}
 .sp-foot{display:flex;justify-content:space-between;align-items:center;margin-top:20px;flex-wrap:wrap;gap:10px}
 .doneb{font-size:12.5px;font-weight:600;padding:9px 16px;border-radius:10px;cursor:pointer;border:none;font-family:inherit;display:inline-flex;align-items:center;gap:6px}
@@ -516,15 +528,14 @@ function renderActivity(){
 var UIT=5350; /* S/ referencial (configurable) */
 var PROY=[], CURP=null, _pendingFile=null, _fileStage=-1;
 var STAGES=[
- {k:'tdr', t:'Análisis TDR y Requisitos', ag:'Ag. TDR', ic:'clipboard', lbl:'Resumen del TDR · ítems · requisitos de calificación'},
- {k:'viab',t:'Evaluación de Viabilidad', ag:'Ag. Análisis', ic:'search', lbl:'Veredicto de viabilidad y observaciones'},
+ {k:'tdr', t:'Análisis · Viabilidad · Presupuesto', ag:'Ag. Maestro TDR', ic:'clipboard', lbl:'Datos clave, ítems, requisitos, viabilidad y presupuesto'},
  {k:'cot', t:'Cotización (proveedores)', ag:'Ag. Cotizador', ic:'chat', lbl:'Proveedores y precios comparados'},
  {k:'prop',t:'Generación de Propuesta', ag:'Ag. Propuestas', ic:'doc', lbl:'Propuesta técnico-económica'},
  {k:'entr',t:'Seguimiento de Entregas', ag:'Ag. Logística', ic:'truck', lbl:'Estado de entregas y plazos'},
  {k:'fact',t:'Facturación', ag:'Ag. Facturación', ic:'card', lbl:'Comprobantes y estado SUNAT'}
 ];
 var AIPROMPTS={
- tdr:'Actúa como el MEJOR especialista en contrataciones con el Estado peruano (Ley N° 32069, OSCE, SEACE), experto en compras menores a 8 UIT. Analiza con el MÁXIMO detalle el siguiente TDR / Especificaciones Técnicas y entrega un informe estructurado en español que servirá de FUENTE ÚNICA para todo el proceso (los demás agentes se basarán en él, así que sé preciso y completo). Incluye:\n1) OBJETO de la contratación.\n2) ÍTEMS (bienes/servicios): lista con cantidad y unidad de medida.\n3) REQUISITOS DE CALIFICACIÓN: experiencia del postor, RNP, habilitaciones, certificaciones, personal clave, etc.\n4) ESPECIFICACIONES TÉCNICAS clave por ítem.\n5) PLAZO de entrega/ejecución.\n6) LUGAR de entrega.\n7) FORMA DE PAGO.\n8) GARANTÍAS y PENALIDADES (si se indican).\n9) CRITERIOS DE EVALUACIÓN / admisibilidad.\n10) RIESGOS u observaciones y una RECOMENDACIÓN de participación.\n\nTDR:',
+ tdr:'Actúa como el MEJOR especialista en contrataciones con el Estado peruano (Ley N° 32069, OSCE, SEACE), experto en compras menores a 8 UIT. Analiza con el MÁXIMO detalle el siguiente TDR / Especificaciones Técnicas. Este análisis es el MAESTRO del proceso (los demás agentes se basarán en él). Devuelve ÚNICAMENTE un JSON válido, sin texto adicional, sin markdown y sin comillas triples, con EXACTAMENTE esta estructura:\n{"objeto":"","entidad":"","items":[{"descripcion":"","cantidad":"","unidad":""}],"requisitos_calificacion":[""],"especificaciones":[""],"plazo_entrega":"","lugar_entrega":"","forma_pago":"","garantias":"","penalidades":"","criterios_evaluacion":[""],"viabilidad":{"veredicto":"VIABLE","razones":[""]},"presupuesto":{"costo_estimado":"S/ 0","desglose":[{"item":"","costo":""}],"margen_estimado":"","observaciones":""},"riesgos":[""],"recomendacion":""}\nReglas: veredicto debe ser VIABLE, RIESGOSO o NO VIABLE. Completa todos los campos que puedas inferir del TDR. En presupuesto, estima costos de mercado peruano razonables por ítem (en soles). Si un dato no aparece, deja el campo vacío. Responde SOLO el JSON.\n\nTDR:',
  viab:'Como analista de contrataciones públicas en Perú, evalúa la VIABILIDAD de participar en esta contratación menor a 8 UIT. Da un veredicto (VIABLE / RIESGOSO / NO VIABLE) y justifica por requisitos, plazo y margen. Información:',
  cot:'Estructura una estrategia de cotización con múltiples proveedores para estos ítems de una contratación pública peruana, con criterios de selección y un cuadro comparativo. Ítems:',
  prop:'Redacta un resumen de propuesta técnico-económica para esta contratación pública peruana menor a 8 UIT, lista para presentar. Datos:',
@@ -532,7 +543,8 @@ var AIPROMPTS={
  fact:'Indica los pasos de facturación electrónica ante SUNAT para esta contratación pública peruana (serie, numeración, documentos). Datos:'
 };
 function proyKey(){return 'sigma_proy_'+(EMP?EMP.id:'x')}
-function loadProy(){try{PROY=JSON.parse(localStorage.getItem(proyKey())||'[]')}catch(e){PROY=[]}}
+function migrateProj(p){if(!p)return p;var old=p.stages||[],byk={};old.forEach(function(s){if(s&&s.k)byk[s.k]=s});p.stages=STAGES.map(function(s){var ex=byk[s.k];return ex?{k:s.k,mode:ex.mode||'manual',done:!!ex.done,notas:ex.notas||'',input:ex.input||'',resumen:ex.resumen||'',data:ex.data||null,docs:ex.docs||[]}:{k:s.k,mode:'manual',done:false,notas:'',input:'',resumen:'',data:null,docs:[]}});if(p._sel!=null&&p._sel>=p.stages.length)p._sel=0;return p}
+function loadProy(){try{PROY=JSON.parse(localStorage.getItem(proyKey())||'[]')}catch(e){PROY=[]}PROY=PROY.map(migrateProj)}
 function saveProy(){try{localStorage.setItem(proyKey(),JSON.stringify(PROY))}catch(e){}}
 function fmtMonto(m){return 'S/ '+(m||0).toLocaleString('es-PE')}
 function uitOf(m){return ((m||0)/UIT).toFixed(1)}
@@ -543,6 +555,21 @@ function ddlBadge(f){var d=daysLeft(f);if(d===null)return '<span class="ddl" sty
  var c=d<0?'#ef4444':d<=3?'#ef4444':d<=7?'#f59e0b':'#16a34a';var t=d<0?'Vencido':(d+' días');
  return '<span class="ddl" style="background:'+bg(c,.14)+';color:'+c+'">'+t+'</span>'}
 function esc(s){return (''+(s||'')).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
+function parseJSON(txt){var s=(''+txt).trim();s=s.replace(/^```[a-z]*/i,'').replace(/```$/,'').trim();var a=s.indexOf('{'),b=s.lastIndexOf('}');if(a>=0&&b>a)s=s.slice(a,b+1);try{return JSON.parse(s)}catch(e){return null}}
+function rblock(title,ic,inner){return '<div class="rblock"><div class="rb-t">'+icon(ic)+title+'</div>'+inner+'</div>'}
+function renderMaster(d){
+  var h='<div class="rblocks">';
+  var kv='';function row(k,v){if(v)kv+='<div class="k">'+esc(k)+'</div><div>'+esc(v)+'</div>'}
+  row('Objeto',d.objeto);row('Entidad',d.entidad);row('Plazo de entrega',d.plazo_entrega);row('Lugar de entrega',d.lugar_entrega);row('Forma de pago',d.forma_pago);row('Garantías',d.garantias);row('Penalidades',d.penalidades);
+  if(kv)h+=rblock('Datos del proceso','clipboard','<div class="kv">'+kv+'</div>');
+  if(d.items&&d.items.length){var t='<table class="rtab"><thead><tr><th>Ítem</th><th>Cant.</th><th>Unidad</th></tr></thead><tbody>';d.items.forEach(function(it){t+='<tr><td>'+esc(it.descripcion||it.desc||it.item||'')+'</td><td>'+esc(it.cantidad||it.qty||'')+'</td><td>'+esc(it.unidad||it.unit||'')+'</td></tr>'});t+='</tbody></table>';h+=rblock('Ítems requeridos','box',t)}
+  if(d.requisitos_calificacion&&d.requisitos_calificacion.length){var u='<ul class="ulist">';d.requisitos_calificacion.forEach(function(r){u+='<li>'+esc(r)+'</li>'});u+='</ul>';h+=rblock('Requisitos de calificación','check',u)}
+  if(d.especificaciones&&d.especificaciones.length){var e2='<ul class="ulist">';d.especificaciones.forEach(function(r){e2+='<li>'+esc(r)+'</li>'});e2+='</ul>';h+=rblock('Especificaciones técnicas','doc',e2)}
+  if(d.viabilidad){var ver=(''+(d.viabilidad.veredicto||'')).toUpperCase();var c=ver.indexOf('NO')===0?'#ef4444':(ver.indexOf('RIESG')>=0?'#f59e0b':'#16a34a');var vi='<span class="vbadge" style="color:'+c+';background:'+bg(c,.14)+'">'+esc(d.viabilidad.veredicto||'—')+'</span>';if(d.viabilidad.razones&&d.viabilidad.razones.length){vi+='<ul class="ulist" style="margin-top:10px">';d.viabilidad.razones.forEach(function(r){vi+='<li>'+esc(r)+'</li>'});vi+='</ul>'}h+=rblock('Análisis de viabilidad','search',vi)}
+  if(d.presupuesto){var p=d.presupuesto,pi='';if(p.costo_estimado)pi+='<div style="font-size:19px;font-weight:700;font-family:DM Mono,monospace">'+esc(p.costo_estimado)+'</div><div style="font-size:9.5px;color:var(--tmuted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">Costo estimado</div>';if(p.desglose&&p.desglose.length){pi+='<table class="rtab"><thead><tr><th>Concepto</th><th>Costo</th></tr></thead><tbody>';p.desglose.forEach(function(x){pi+='<tr><td>'+esc(x.item||x.concepto||'')+'</td><td>'+esc(x.costo||'')+'</td></tr>'});pi+='</tbody></table>'}if(p.margen_estimado)pi+='<div style="margin-top:9px;font-size:12px"><span style="color:var(--tmuted)">Margen estimado: </span><b>'+esc(p.margen_estimado)+'</b></div>';if(p.observaciones)pi+='<div style="margin-top:6px;font-size:11.5px;color:var(--tmuted)">'+esc(p.observaciones)+'</div>';h+=rblock('Presupuesto y costo estimado','wallet',pi)}
+  var rr='';if(d.riesgos&&d.riesgos.length){rr+='<ul class="ulist">';d.riesgos.forEach(function(r){rr+='<li>'+esc(r)+'</li>'});rr+='</ul>'}if(d.recomendacion)rr+='<div style="margin-top:'+(rr?'10px':'0')+';font-size:12px"><b>Recomendación: </b>'+esc(d.recomendacion)+'</div>';if(rr)h+=rblock('Riesgos y recomendación','spark',rr);
+  h+='</div>';return h;
+}
 
 function renderProyectos(){
   loadProy();
@@ -593,14 +620,15 @@ function renderProyDetail(){
       h+='<textarea class="ta" placeholder="Pega aquí el texto completo del TDR / especificaciones técnicas…" oninput="stInput('+si+',this.value)">'+esc(st.input)+'</textarea>';
       h+='<div style="margin-top:10px"><button class="aibtn" '+(st._loading?'disabled':'')+' onclick="aiAnalyze('+si+')">'+(st._loading?'Analizando…':(icon('spark',1.6)+' Analizar TDR con IA'))+'</button></div>';
     } else {
-      var hasTdr=!!((CURP.stages[0].resumen||'').trim());
+      var hasTdr=!!(CURP.stages[0].data||(CURP.stages[0].resumen||'').trim());
       var col=hasTdr?'var(--accent)':'#f59e0b';
       h+='<div class="aibase" style="padding:11px 13px;border-radius:10px;margin-top:4px;font-size:11.5px;line-height:1.5;background:'+(hasTdr?'var(--alertbg)':'rgba(245,158,11,.08)')+';border:1px solid '+(hasTdr?'var(--alertborder)':'rgba(245,158,11,.28)')+'"><span style="color:'+col+'">'+icon(hasTdr?'spark':'search')+'</span><div>'+(hasTdr?'Este agente parte del <b>análisis del TDR</b> (etapa 1) — no necesitas volver a pegar el TDR.':'Aún no se ha analizado el TDR. Ve a la <b>etapa 1</b> y ejecuta el análisis primero; los demás agentes se basan en él.')+'</div></div>';
       h+='<div class="sp-lbl">Notas adicionales (opcional)</div>';
       h+='<textarea class="ta" placeholder="Información extra para este agente (opcional)…" oninput="stInput('+si+',this.value)">'+esc(st.input)+'</textarea>';
       h+='<div style="margin-top:10px"><button class="aibtn" '+((st._loading||!hasTdr)?'disabled':'')+' onclick="aiAnalyze('+si+')">'+(st._loading?'Analizando…':(icon('spark',1.6)+' Analizar con IA'))+'</button></div>';
     }
-    if(st.resumen)h+='<div class="sp-lbl">Resultado IA</div><div class="aires">'+esc(st.resumen)+'</div>';
+    if(si===0&&st.data){h+='<div class="sp-lbl">Resultado del análisis (maestro)</div>'+renderMaster(st.data);}
+    else if(st.resumen){h+='<div class="sp-lbl">Resultado IA</div><div class="aires">'+esc(st.resumen)+'</div>';}
   } else {
     h+='<div class="sp-lbl">'+esc(meta.lbl)+'</div>';
     h+='<textarea class="ta" placeholder="Escribe aquí…" oninput="stNotas('+si+',this.value)">'+esc(st.notas)+'</textarea>';
@@ -633,16 +661,19 @@ function aiAnalyze(si){
     body={prompt:AIPROMPTS.tdr+'\n'+(input||'(analiza el documento adjunto)')};
     if(_pendingFile){body.imageBase64=_pendingFile.b64;body.mimeType=_pendingFile.type}
   } else {
-    var base=(CURP.stages[0].resumen||'').trim();
+    var m0=CURP.stages[0];
+    var base=m0.data?JSON.stringify(m0.data):((m0.resumen||'').trim());
     if(!base){toast('Primero ejecuta el análisis del TDR en la etapa 1');return}
     var extra=(st.input||'').trim()?('\n\nNOTAS ADICIONALES DEL USUARIO:\n'+st.input):'';
-    body={prompt:AIPROMPTS[meta.k]+'\n\nANÁLISIS DEL TDR (fuente provista por el Ag. TDR, úsala como base; no pidas más datos):\n'+base+extra};
+    body={prompt:AIPROMPTS[meta.k]+'\n\nANÁLISIS DEL TDR (JSON maestro, úsalo como única fuente; no pidas más datos):\n'+base+extra};
   }
   st._loading=true;renderProyDetail();
   fetch('/api/gemini',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
    .then(function(r){return r.json()}).then(function(d){
      var txt='';try{txt=d.candidates[0].content.parts[0].text}catch(e){txt=(d.error&&d.error.message)||'La IA no devolvió respuesta. Verifica GEMINI_API_KEY en el servidor.'}
-     st.resumen=txt;st._loading=false;_pendingFile=null;saveProy();renderProyDetail();
+     st.resumen=txt;st._loading=false;
+     if(si===0){st.data=parseJSON(txt)||null;}
+     _pendingFile=null;saveProy();renderProyDetail();
    }).catch(function(e){st._loading=false;toast('Error IA: '+e.message);renderProyDetail()});
 }
 function openNewProy(){
@@ -661,7 +692,7 @@ function saveNewProy(){
   if(!n){toast('Ponle un nombre al proyecto');return}
   var p={id:'p'+Date.now(),nombre:n,entidad:(document.getElementById('np_e').value||'').trim(),
     monto:parseFloat(document.getElementById('np_m').value)||0,fecha:document.getElementById('np_f').value||'',
-    creado:Date.now(),stages:STAGES.map(function(s){return {k:s.k,mode:'manual',done:false,notas:'',input:'',resumen:'',docs:[]}})};
+    creado:Date.now(),stages:STAGES.map(function(s){return {k:s.k,mode:'manual',done:false,notas:'',input:'',resumen:'',data:null,docs:[]}})};
   loadProy();PROY.unshift(p);saveProy();closeNewProy();openProy(p.id);
 }
 (function(){var pf=document.getElementById('pfile');if(pf)pf.onchange=function(){if(this.files&&this.files[0]&&_fileStage>=0)addFile(_fileStage,this.files[0])}})();
