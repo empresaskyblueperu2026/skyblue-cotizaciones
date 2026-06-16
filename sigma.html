@@ -257,6 +257,8 @@ aside.rpanel{width:284px;flex-shrink:0;background:linear-gradient(180deg,var(--c
 .dropz.drag{border-color:var(--accent);background:var(--pillbg);color:var(--accent)}
 .docchip{display:inline-flex;align-items:center;gap:6px;background:var(--input);border:1px solid var(--border);border-radius:8px;padding:6px 10px;font-size:11.5px;margin:7px 6px 0 0}
 .docchip svg{width:13px;height:13px;color:var(--accent)}
+.aibase{display:flex;gap:9px;align-items:flex-start}
+.aibase svg{width:16px;height:16px;flex-shrink:0;margin-top:1px}
 .docchip .dx{cursor:pointer;color:var(--tmuted);font-size:12px;margin-left:2px}
 .sp-foot{display:flex;justify-content:space-between;align-items:center;margin-top:20px;flex-wrap:wrap;gap:10px}
 .doneb{font-size:12.5px;font-weight:600;padding:9px 16px;border-radius:10px;cursor:pointer;border:none;font-family:inherit;display:inline-flex;align-items:center;gap:6px}
@@ -522,7 +524,7 @@ var STAGES=[
  {k:'fact',t:'Facturación', ag:'Ag. Facturación', ic:'card', lbl:'Comprobantes y estado SUNAT'}
 ];
 var AIPROMPTS={
- tdr:'Eres especialista en contrataciones con el Estado peruano (montos menores a 8 UIT). Analiza el siguiente TDR y responde en español, claro y estructurado:\n1) OBJETO de la contratación.\n2) ÍTEMS con cantidad y unidad de medida.\n3) REQUISITOS DE CALIFICACIÓN (experiencia, RNP, habilitación, etc.).\n4) PLAZO de entrega.\n5) LUGAR de entrega.\n6) Recomendación breve.\n\nTDR:',
+ tdr:'Actúa como el MEJOR especialista en contrataciones con el Estado peruano (Ley N° 32069, OSCE, SEACE), experto en compras menores a 8 UIT. Analiza con el MÁXIMO detalle el siguiente TDR / Especificaciones Técnicas y entrega un informe estructurado en español que servirá de FUENTE ÚNICA para todo el proceso (los demás agentes se basarán en él, así que sé preciso y completo). Incluye:\n1) OBJETO de la contratación.\n2) ÍTEMS (bienes/servicios): lista con cantidad y unidad de medida.\n3) REQUISITOS DE CALIFICACIÓN: experiencia del postor, RNP, habilitaciones, certificaciones, personal clave, etc.\n4) ESPECIFICACIONES TÉCNICAS clave por ítem.\n5) PLAZO de entrega/ejecución.\n6) LUGAR de entrega.\n7) FORMA DE PAGO.\n8) GARANTÍAS y PENALIDADES (si se indican).\n9) CRITERIOS DE EVALUACIÓN / admisibilidad.\n10) RIESGOS u observaciones y una RECOMENDACIÓN de participación.\n\nTDR:',
  viab:'Como analista de contrataciones públicas en Perú, evalúa la VIABILIDAD de participar en esta contratación menor a 8 UIT. Da un veredicto (VIABLE / RIESGOSO / NO VIABLE) y justifica por requisitos, plazo y margen. Información:',
  cot:'Estructura una estrategia de cotización con múltiples proveedores para estos ítems de una contratación pública peruana, con criterios de selección y un cuadro comparativo. Ítems:',
  prop:'Redacta un resumen de propuesta técnico-económica para esta contratación pública peruana menor a 8 UIT, lista para presentar. Datos:',
@@ -586,9 +588,18 @@ function renderProyDetail(){
     '<div class="seg"><button class="'+(st.mode==='auto'?'on':'')+'" onclick="setMode('+si+',\'auto\')">'+icon('spark',1.6)+' Automático IA</button>'+
     '<button class="'+(st.mode!=='auto'?'on':'')+'" onclick="setMode('+si+',\'manual\')">✍ Manual</button></div></div>';
   if(st.mode==='auto'){
-    h+='<div class="sp-lbl">Contenido a analizar (pega el TDR o arrastra un PDF abajo)</div>';
-    h+='<textarea class="ta" placeholder="Pega aquí el texto del TDR o la información de esta etapa…" oninput="stInput('+si+',this.value)">'+esc(st.input)+'</textarea>';
-    h+='<div style="margin-top:10px"><button class="aibtn" '+(st._loading?'disabled':'')+' onclick="aiAnalyze('+si+')">'+(st._loading?'Analizando…':(icon('spark',1.6)+' Analizar con IA'))+'</button></div>';
+    if(si===0){
+      h+='<div class="sp-lbl">Contenido a analizar (pega el TDR o arrastra un PDF abajo)</div>';
+      h+='<textarea class="ta" placeholder="Pega aquí el texto completo del TDR / especificaciones técnicas…" oninput="stInput('+si+',this.value)">'+esc(st.input)+'</textarea>';
+      h+='<div style="margin-top:10px"><button class="aibtn" '+(st._loading?'disabled':'')+' onclick="aiAnalyze('+si+')">'+(st._loading?'Analizando…':(icon('spark',1.6)+' Analizar TDR con IA'))+'</button></div>';
+    } else {
+      var hasTdr=!!((CURP.stages[0].resumen||'').trim());
+      var col=hasTdr?'var(--accent)':'#f59e0b';
+      h+='<div class="aibase" style="padding:11px 13px;border-radius:10px;margin-top:4px;font-size:11.5px;line-height:1.5;background:'+(hasTdr?'var(--alertbg)':'rgba(245,158,11,.08)')+';border:1px solid '+(hasTdr?'var(--alertborder)':'rgba(245,158,11,.28)')+'"><span style="color:'+col+'">'+icon(hasTdr?'spark':'search')+'</span><div>'+(hasTdr?'Este agente parte del <b>análisis del TDR</b> (etapa 1) — no necesitas volver a pegar el TDR.':'Aún no se ha analizado el TDR. Ve a la <b>etapa 1</b> y ejecuta el análisis primero; los demás agentes se basan en él.')+'</div></div>';
+      h+='<div class="sp-lbl">Notas adicionales (opcional)</div>';
+      h+='<textarea class="ta" placeholder="Información extra para este agente (opcional)…" oninput="stInput('+si+',this.value)">'+esc(st.input)+'</textarea>';
+      h+='<div style="margin-top:10px"><button class="aibtn" '+((st._loading||!hasTdr)?'disabled':'')+' onclick="aiAnalyze('+si+')">'+(st._loading?'Analizando…':(icon('spark',1.6)+' Analizar con IA'))+'</button></div>';
+    }
     if(st.resumen)h+='<div class="sp-lbl">Resultado IA</div><div class="aires">'+esc(st.resumen)+'</div>';
   } else {
     h+='<div class="sp-lbl">'+esc(meta.lbl)+'</div>';
@@ -615,11 +626,18 @@ function addFile(i,f){var st=CURP.stages[i];st.docs=st.docs||[];st.docs.push({na
   if(/pdf|image/.test(f.type||'')){var rd=new FileReader();rd.onload=function(){_pendingFile={type:f.type,b64:(''+rd.result).split(',')[1]};toast('Documento listo para análisis IA')};rd.readAsDataURL(f)}
   renderProyDetail()}
 function aiAnalyze(si){
-  var st=CURP.stages[si],meta=STAGES[si];
-  var input=st.input||st.notas||'';
-  if(!input.trim()&&!_pendingFile){toast('Pega el contenido o arrastra un PDF primero');return}
-  var body={prompt:AIPROMPTS[meta.k]+'\n'+(input||'(ver documento adjunto)')};
-  if(_pendingFile){body.imageBase64=_pendingFile.b64;body.mimeType=_pendingFile.type}
+  var st=CURP.stages[si],meta=STAGES[si],body;
+  if(si===0){
+    var input=st.input||'';
+    if(!input.trim()&&!_pendingFile){toast('Pega el TDR o arrastra un PDF primero');return}
+    body={prompt:AIPROMPTS.tdr+'\n'+(input||'(analiza el documento adjunto)')};
+    if(_pendingFile){body.imageBase64=_pendingFile.b64;body.mimeType=_pendingFile.type}
+  } else {
+    var base=(CURP.stages[0].resumen||'').trim();
+    if(!base){toast('Primero ejecuta el análisis del TDR en la etapa 1');return}
+    var extra=(st.input||'').trim()?('\n\nNOTAS ADICIONALES DEL USUARIO:\n'+st.input):'';
+    body={prompt:AIPROMPTS[meta.k]+'\n\nANÁLISIS DEL TDR (fuente provista por el Ag. TDR, úsala como base; no pidas más datos):\n'+base+extra};
+  }
   st._loading=true;renderProyDetail();
   fetch('/api/gemini',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
    .then(function(r){return r.json()}).then(function(d){
