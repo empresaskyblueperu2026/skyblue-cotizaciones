@@ -5,6 +5,23 @@ const fs=require('fs');
 const app=express();
 app.use(express.json({limit:'25mb'}));
 
+// ---- Supabase (base de datos en la nube, multi-empresa) ----
+const SB_URL=process.env.SUPABASE_URL||'https://xlwndbqflbodgszjalzp.supabase.co';
+const SB_KEY=process.env.SUPABASE_SERVICE_KEY||'';
+function sbReady(){return !!(SB_URL&&SB_KEY);}
+async function sbFetch(pathq,opts){
+  opts=opts||{};
+  const r=await fetch(SB_URL+'/rest/v1/'+pathq,{
+    method:opts.method||'GET',
+    headers:Object.assign({'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json','Prefer':opts.prefer||'return=representation'},opts.headers||{}),
+    body:opts.body?JSON.stringify(opts.body):undefined
+  });
+  const txt=await r.text();
+  let data;try{data=txt?JSON.parse(txt):null;}catch(e){data=txt;}
+  if(!r.ok)throw new Error((data&&data.message)||('Supabase '+r.status));
+  return data;
+}
+
 const DATA_FILE=path.join(__dirname,'skyblue_data.json');
 function readData(){try{return JSON.parse(fs.readFileSync(DATA_FILE,'utf8'));}catch(e){return {};}}
 function writeData(d){try{fs.writeFileSync(DATA_FILE,JSON.stringify(d,null,2),'utf8');}catch(e){console.error('Write:',e.message);}}
@@ -111,6 +128,11 @@ app.post('/api/gemini',async function(req,res){
   }catch(e){res.status(502).json({error:e.message});}
 });
 
+app.get('/api/empresas',async function(req,res){
+  if(!sbReady())return res.status(503).json({error:'Falta SUPABASE_SERVICE_KEY en las variables del servidor (Railway > Variables).'});
+  try{var d=await sbFetch('empresas?select=*&order=nombre');res.json(d);}
+  catch(e){res.status(502).json({error:e.message});}
+});
 app.get('*',function(req,res){res.setHeader('Content-Type','text/html; charset=utf-8');res.send(APP_HTML);});
 var PORT=process.env.PORT||3000;
 app.listen(PORT,'0.0.0.0',function(){
