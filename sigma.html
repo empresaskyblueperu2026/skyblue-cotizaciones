@@ -322,6 +322,13 @@ aside.rpanel{width:284px;flex-shrink:0;background:linear-gradient(180deg,var(--c
   .stage-panel{padding:15px}
   .sp-head{flex-direction:column;align-items:stretch;gap:10px}
   .compat-grid{grid-template-columns:1fr}
+  .rblock{overflow-x:auto}
+  .rtab{font-size:11px;min-width:340px}
+  .rtab th,.rtab td{padding:6px 6px}
+  .docboard{grid-template-columns:repeat(2,1fr)!important}
+  .prov-actions{flex-wrap:wrap}
+  .seg{width:100%}.seg button{flex:1;justify-content:center}
+  .pgrid{grid-template-columns:1fr}
 }
 .docchip .dx{cursor:pointer;color:var(--tmuted);font-size:12px;margin-left:2px}
 .sp-foot{display:flex;justify-content:space-between;align-items:center;margin-top:20px;flex-wrap:wrap;gap:10px}
@@ -582,9 +589,8 @@ function renderActivity(){
 var UIT=5350; /* S/ referencial (configurable) */
 var PROY=[], CURP=null, _pendingFile=null, _fileStage=-1, _fileMode='docs', _dbSrc=-1;
 var STAGES=[
- {k:'tdr',    t:'Análisis · Viabilidad · Presupuesto', ag:'Ag. Maestro TDR',   ic:'clipboard', lbl:'Datos, ítems, requisitos, viabilidad, compatibilidad y presupuesto'},
- {k:'cot',    t:'Cotización (proveedores)',            ag:'Ag. Cotizador',      ic:'chat',      lbl:'Extracción y comparación de cotizaciones de proveedores'},
- {k:'prop',   t:'Generación de Propuesta',             ag:'Ag. Documentos',     ic:'doc',       lbl:'Anexos, declaraciones juradas y documentos de la oferta'},
+ {k:'tdr',    t:'Análisis · Viabilidad · Presupuesto', ag:'Ag. Analista Maestro', ic:'clipboard', lbl:'Datos, ítems, requisitos, viabilidad, compatibilidad, precios y proveedores'},
+ {k:'prop',   t:'Propuesta / Oferta Técnica',          ag:'Ag. Documentos',     ic:'doc',       lbl:'Anexos, declaraciones juradas y documentos de la oferta'},
  {k:'oc',     t:'Orden de Compra',                     ag:'Ag. Contratos',      ic:'card',      lbl:'Recepción y registro de la orden de compra'},
  {k:'compra', t:'Compra a Proveedores',                ag:'Ag. Compras',        ic:'box',       lbl:'Adquisición de los bienes/servicios a proveedores'},
  {k:'entrega',t:'Entrega a Cliente',                   ag:'Ag. Logística',      ic:'truck',     lbl:'Entrega del bien/servicio a la entidad'},
@@ -602,7 +608,11 @@ var AIPROMPTS={
  pago:'Eres el Ag. de Tesorería. Con base en los DATOS MAESTRO, indica cómo registrar y conciliar el pago recibido de la entidad y el cierre financiero del proyecto (margen real vs estimado).'
 };
 function proyKey(){return 'sigma_proy_'+(EMP?EMP.id:'x')}
-function migrateProj(p){if(!p)return p;var old=p.stages||[],byk={};old.forEach(function(s){if(s&&s.k)byk[s.k]=s});p.stages=STAGES.map(function(s){var ex=byk[s.k];return ex?{k:s.k,mode:ex.mode||'manual',done:!!ex.done,notas:ex.notas||'',input:ex.input||'',resumen:ex.resumen||'',data:ex.data||null,docs:ex.docs||[],checklist:ex.checklist||[],docboard:ex.docboard||[],proveedores:ex.proveedores||[]}:{k:s.k,mode:'manual',done:false,notas:'',input:'',resumen:'',data:null,docs:[],checklist:[],docboard:[],proveedores:[]}});if(p._sel!=null&&p._sel>=p.stages.length)p._sel=0;return p}
+function migrateProj(p){if(!p)return p;var old=p.stages||[],byk={};old.forEach(function(s){if(s&&s.k)byk[s.k]=s});
+  var legacyProv=(byk['cot']&&byk['cot'].proveedores)||[]; /* la etapa Cotización se fusionó en Análisis */
+  p.stages=STAGES.map(function(s){var ex=byk[s.k];return ex?{k:s.k,mode:ex.mode||'manual',done:!!ex.done,notas:ex.notas||'',input:ex.input||'',resumen:ex.resumen||'',data:ex.data||null,docs:ex.docs||[],checklist:ex.checklist||[],docboard:ex.docboard||[],proveedores:ex.proveedores||[]}:{k:s.k,mode:'manual',done:false,notas:'',input:'',resumen:'',data:null,docs:[],checklist:[],docboard:[],proveedores:[]}});
+  if(legacyProv.length&&p.stages[0]&&!(p.stages[0].proveedores&&p.stages[0].proveedores.length))p.stages[0].proveedores=legacyProv;
+  if(p._sel!=null&&p._sel>=p.stages.length)p._sel=0;return p}
 function loadProy(){try{PROY=JSON.parse(localStorage.getItem(proyKey())||'[]')}catch(e){PROY=[]}PROY=PROY.map(migrateProj)}
 function saveProy(){try{localStorage.setItem(proyKey(),JSON.stringify(PROY))}catch(e){}}
 function fmtMonto(m){return 'S/ '+(m||0).toLocaleString('es-PE')}
@@ -684,7 +694,7 @@ function renderProyectos(){
     '<button class="btn-new" onclick="openNewProy()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" style="width:13px;height:13px"><path d="M12 5v14M5 12h14"/></svg>Nuevo proyecto</button></div>';
   if(!PROY.length){
     h+='<div class="empty fade"><div class="ei">'+icon('clipboard',1.5)+'</div><div style="font-size:15px;font-weight:600;color:var(--tprimary);margin-bottom:6px">Aún no tienes proyectos</div>'+
-      '<div style="font-size:13px;max-width:400px;margin:0 auto;line-height:1.6">Crea tu primer proyecto de contratación pública. SIGMA te guía por cada etapa: TDR, viabilidad, cotización, propuesta, entregas y facturación — automático con IA o manual.</div></div>';
+      '<div style="font-size:13px;max-width:400px;margin:0 auto;line-height:1.6">Crea tu primer proyecto de contratación pública. SIGMA te guía por cada etapa: análisis del TDR con viabilidad y precios, propuesta, orden de compra, compra, entrega, conformidad, facturación y pago — automático con IA o manual.</div></div>';
   } else {
     h+='<div class="pgrid">';
     PROY.forEach(function(p){
@@ -718,15 +728,13 @@ function renderProyDetail(){
   });
   h+='</div>';
   h+='<div class="stage-panel fade"><div class="sp-head"><div><div class="sp-title">'+esc(meta.t)+'</div><div class="sp-ag">'+icon('robot')+' '+meta.ag+'</div></div>';
-  if(meta.k!=='prop'&&meta.k!=='cot'){
+  if(meta.k!=='prop'){
     h+='<div class="seg"><button class="'+(st.mode==='auto'?'on':'')+'" onclick="setMode('+si+',\'auto\')">'+icon('spark',1.6)+' Automático IA</button>'+
     '<button class="'+(st.mode!=='auto'?'on':'')+'" onclick="setMode('+si+',\'manual\')">✍ Manual</button></div>';
   }
   h+='</div>';
   if(meta.k==='prop'){
     h+=stageProp(p,si,st);
-  } else if(meta.k==='cot'){
-    h+=stageCot(p,si,st);
   } else if(st.mode==='auto'){
     if(si===0){
       h+='<div class="sp-lbl">Contenido a analizar (pega el TDR o arrastra un PDF abajo)</div>';
@@ -741,7 +749,7 @@ function renderProyDetail(){
       h+='<div style="margin-top:10px"><button class="aibtn" '+((st._loading||!hasTdr)?'disabled':'')+' onclick="aiAnalyze('+si+')">'+(st._loading?'Analizando…':(icon('spark',1.6)+' Analizar con IA'))+'</button></div>';
     }
     if(si===0){
-      if(st.data){h+='<div class="sp-lbl">✓ Resultado del análisis maestro</div>'+renderMaster(st.data);}
+      if(st.data){h+='<div class="sp-lbl">✓ Resultado del análisis maestro</div>'+renderMaster(st.data);h+=renderProvSection(p,si,st);}
       else if(st.resumen){
         h+='<div class="sp-lbl">⚠ Respuesta IA (no se pudo parsear JSON)</div>';
         h+='<div style="background:var(--alertbg);border:1px solid var(--alertborder);border-radius:10px;padding:11px;font-size:11.5px;margin:8px 0;color:var(--tmuted)">La IA devolvió texto pero no un JSON válido. Revisa la consola (F12).</div>';
@@ -872,10 +880,11 @@ function provKey(){return 'sigma_prov_'+(EMP?EMP.id:'x')}
 function loadProvDB(){try{return JSON.parse(localStorage.getItem(provKey())||'[]')}catch(e){return []}}
 function parsePrice(s){var n=parseFloat((''+(s||'')).replace(/[^0-9.,]/g,'').replace(/,/g,''));return isNaN(n)?null:n}
 function cumpleBadge(v){var t=(''+(v||'')).toLowerCase();var c=t.indexOf('no')===0?'#ef4444':(t.indexOf('parc')>=0?'#f59e0b':'#16a34a');return '<span class="cumple" style="color:'+c+';background:'+bg(c,.13)+'">'+esc(v||'—')+'</span>'}
-function stageCot(p,si,st){
+function renderProvSection(p,si,st){
   st.proveedores=st.proveedores||[];
-  var m0=p.stages[0],hasM=!!(m0.data||m0.resumen),col=hasM?'var(--accent)':'#f59e0b';
-  var h='<div class="aibase" style="padding:11px 13px;border-radius:10px;margin-top:4px;font-size:11.5px;line-height:1.5;background:'+(hasM?'var(--alertbg)':'rgba(245,158,11,.08)')+';border:1px solid '+(hasM?'var(--alertborder)':'rgba(245,158,11,.28)')+'"><span style="color:'+col+'">'+icon(hasM?'spark':'search')+'</span><div>'+(hasM?'Sube las cotizaciones o fichas técnicas de cada proveedor: el agente extrae RUC, datos, ítems y precios y los <b>compara contra el TDR</b> del análisis maestro (cumple / no cumple por ítem).':'Primero ejecuta el <b>análisis del TDR</b> (etapa 1) para poder comparar.')+'</div></div>';
+  var hasM=!!(st.data||st.resumen);
+  var h='<div class="sp-lbl" style="margin-top:22px;border-top:1px solid var(--border);padding-top:16px">Precios reales · comparación de proveedores</div>';
+  h+='<div style="font-size:11.5px;color:var(--tmuted);line-height:1.5;margin-bottom:10px">Sube las cotizaciones o fichas técnicas de cada proveedor: el agente extrae RUC, datos, ítems y precios, y los <b>compara contra el TDR</b> de este análisis (cumple / no cumple por ítem). Complementa la estimación de la IA con precios reales del mercado.</div>';
   h+='<div style="margin:11px 0;display:flex;gap:8px;flex-wrap:wrap"><button class="aibtn" '+((st._loading||!hasM)?'disabled':'')+' onclick="pickFileCot('+si+')">'+(st._loading?'Extrayendo…':(icon('spark',1.6)+' Subir cotización y extraer con IA'))+'</button><button class="minib" onclick="addProvManual('+si+')">+ Proveedor manual</button></div>';
   if(st.proveedores.length>=2){
     var min=null;st.proveedores.forEach(function(pr){var t=parsePrice(pr.total);if(t!=null&&(min==null||t<min))min=t});
@@ -897,7 +906,6 @@ function stageCot(p,si,st){
   });
   var db=loadProvDB();
   h+='<div style="font-size:11px;color:var(--tmuted);margin-top:12px">Base de proveedores confiables: <b>'+db.length+'</b> registrados para '+(EMP?esc(EMP.nombre):'')+'.</div>';
-  h+='<div class="sp-lbl" style="margin-top:14px">Notas (opcional)</div><textarea class="ta" placeholder="Notas de la cotización…" oninput="stNotas('+si+',this.value)">'+esc(st.notas)+'</textarea>';
   return h;
 }
 function pickFileCot(i){_fileStage=i;_fileMode='cot';var inp=document.getElementById('pfile');inp.value='';inp.click()}
