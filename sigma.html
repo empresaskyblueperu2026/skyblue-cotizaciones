@@ -614,8 +614,38 @@ function ddlBadge(f){var d=daysLeft(f);if(d===null)return '<span class="ddl" sty
  var c=d<0?'#ef4444':d<=3?'#ef4444':d<=7?'#f59e0b':'#16a34a';var t=d<0?'Vencido':(d+' días');
  return '<span class="ddl" style="background:'+bg(c,.14)+';color:'+c+'">'+t+'</span>'}
 function esc(s){return (''+(s||'')).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
-function parseJSON(txt){var s=(''+txt).trim();s=s.replace(/^```[a-z]*/i,'').replace(/```$/,'').trim();s=s.replace(/^json\s*/i,'').trim();var a=s.indexOf('{'),b=s.lastIndexOf('}');if(a>=0&&b>a)s=s.slice(a,b+1);try{var obj=JSON.parse(s);console.log('JSON parseado OK:',obj);return obj}catch(e){console.error('JSON parse fail:',e,s.substring(0,200));return null}}
-function parseJSONArr(txt){var s=(''+txt).trim();s=s.replace(/^```[a-z]*/i,'').replace(/```$/,'').trim();s=s.replace(/^json\s*/i,'').trim();var a=s.indexOf('['),b=s.lastIndexOf(']');if(a>=0&&b>a)s=s.slice(a,b+1);try{return JSON.parse(s)}catch(e){console.error('JSON array parse fail:',e,s.substring(0,200));return null}}
+function jsonRepair(s){
+  s=(''+s).replace(/^```[a-z]*/i,'').replace(/```$/,'').trim().replace(/^json\s*/i,'').trim();
+  var a=s.indexOf('{');if(a>0)s=s.slice(a);
+  s=s.replace(/}\s*{/g,'},{').replace(/]\s*\[/g,'],[');           /* coma faltante entre objetos/arrays */
+  /* recorrer para detectar string/brackets abiertos (JSON cortado) */
+  var inStr=false,esc=false,stack=[];
+  for(var i=0;i<s.length;i++){var c=s[i];
+    if(esc){esc=false;continue} if(c==='\\'){esc=true;continue}
+    if(c==='"'){inStr=!inStr;continue} if(inStr)continue;
+    if(c==='{'||c==='[')stack.push(c); else if(c==='}'||c===']')stack.pop();
+  }
+  if(inStr)s+='"';
+  s=s.replace(/,\s*$/,'');                                         /* coma colgante al final (truncado) */
+  for(var j=stack.length-1;j>=0;j--)s+=(stack[j]==='{'?'}':']');   /* cerrar lo que quedó abierto */
+  s=s.replace(/,(\s*[}\]])/g,'$1');                                /* comas finales antes de cierre */
+  return s;
+}
+function parseJSON(txt){
+  var s=(''+txt).trim().replace(/^```[a-z]*/i,'').replace(/```$/,'').trim().replace(/^json\s*/i,'').trim();
+  var a=s.indexOf('{'),b=s.lastIndexOf('}'),cut=(a>=0&&b>a)?s.slice(a,b+1):s;
+  try{var o1=JSON.parse(cut);console.log('JSON OK:',o1);return o1}catch(e){}
+  try{var o2=JSON.parse(jsonRepair(txt));console.log('JSON reparado OK:',o2);return o2}catch(e2){console.error('JSON parse fail (tras reparar):',e2.message,jsonRepair(txt).substring(0,300));return null}
+}
+function parseJSONArr(txt){
+  var s=(''+txt).trim().replace(/^```[a-z]*/i,'').replace(/```$/,'').trim().replace(/^json\s*/i,'').trim();
+  var a=s.indexOf('['),b=s.lastIndexOf(']'),cut=(a>=0&&b>a)?s.slice(a,b+1):s;
+  try{return JSON.parse(cut)}catch(e){}
+  var r=s.replace(/}\s*{/g,'},{');var aa=r.indexOf('[');if(aa>0)r=r.slice(aa);
+  var inStr=false,esc=false,stack=[];for(var i=0;i<r.length;i++){var c=r[i];if(esc){esc=false;continue}if(c==='\\'){esc=true;continue}if(c==='"'){inStr=!inStr;continue}if(inStr)continue;if(c==='{'||c==='[')stack.push(c);else if(c==='}'||c===']')stack.pop()}
+  if(inStr)r+='"';r=r.replace(/,\s*$/,'');for(var j=stack.length-1;j>=0;j--)r+=(stack[j]==='{'?'}':']');r=r.replace(/,(\s*[}\]])/g,'$1');
+  try{var o=JSON.parse(r);console.log('JSON array reparado OK');return o}catch(e2){console.error('JSON array parse fail:',e2.message);return null}
+}
 function rblock(title,ic,inner){return '<div class="rblock"><div class="rb-t">'+icon(ic)+title+'</div>'+inner+'</div>'}
 function compatColor(p){p=+p||0;return p>=90?'#16a34a':p>=70?'#0d9488':p>=50?'#f59e0b':'#ef4444'}
 function renderMaster(d){
