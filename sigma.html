@@ -308,6 +308,13 @@ aside.rpanel{width:284px;flex-shrink:0;background:linear-gradient(180deg,var(--c
 .dbest{font-size:9px;font-weight:600;color:var(--tmuted);cursor:pointer;padding:2px 6px;border-radius:5px;background:var(--input)}
 .dbest.on{color:#16a34a;background:rgba(22,163,74,.12)}
 .dbx{font-size:11px;color:var(--tmuted);cursor:pointer}
+.prov-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:15px;margin-bottom:12px}
+.prov-top{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap;margin-bottom:11px}
+.prov-nm{font-size:14px;font-weight:700;line-height:1.3}
+.prov-sub{font-size:11px;color:var(--tmuted);margin-top:4px;line-height:1.5}
+.prov-tot{font-size:16px;font-weight:700;font-family:'DM Mono',monospace;text-align:right;white-space:nowrap}
+.prov-actions{display:flex;gap:7px;flex-wrap:wrap;margin-top:11px}
+.cumple{font-size:9px;font-weight:700;padding:2px 7px;border-radius:6px;white-space:nowrap}
 @media(max-width:640px){
   .pdet-head{flex-direction:column;align-items:stretch}
   .pdet-meta{justify-content:space-between;gap:10px}
@@ -576,7 +583,8 @@ var UIT=5350; /* S/ referencial (configurable) */
 var PROY=[], CURP=null, _pendingFile=null, _fileStage=-1, _fileMode='docs', _dbSrc=-1;
 var STAGES=[
  {k:'tdr',    t:'Análisis · Viabilidad · Presupuesto', ag:'Ag. Maestro TDR',   ic:'clipboard', lbl:'Datos, ítems, requisitos, viabilidad, compatibilidad y presupuesto'},
- {k:'prop',   t:'Propuesta Técnica',                   ag:'Ag. Documentos',     ic:'doc',       lbl:'Anexos, declaraciones juradas y documentos de la oferta'},
+ {k:'cot',    t:'Cotización (proveedores)',            ag:'Ag. Cotizador',      ic:'chat',      lbl:'Extracción y comparación de cotizaciones de proveedores'},
+ {k:'prop',   t:'Generación de Propuesta',             ag:'Ag. Documentos',     ic:'doc',       lbl:'Anexos, declaraciones juradas y documentos de la oferta'},
  {k:'oc',     t:'Orden de Compra',                     ag:'Ag. Contratos',      ic:'card',      lbl:'Recepción y registro de la orden de compra'},
  {k:'compra', t:'Compra a Proveedores',                ag:'Ag. Compras',        ic:'box',       lbl:'Adquisición de los bienes/servicios a proveedores'},
  {k:'entrega',t:'Entrega a Cliente',                   ag:'Ag. Logística',      ic:'truck',     lbl:'Entrega del bien/servicio a la entidad'},
@@ -594,7 +602,7 @@ var AIPROMPTS={
  pago:'Eres el Ag. de Tesorería. Con base en los DATOS MAESTRO, indica cómo registrar y conciliar el pago recibido de la entidad y el cierre financiero del proyecto (margen real vs estimado).'
 };
 function proyKey(){return 'sigma_proy_'+(EMP?EMP.id:'x')}
-function migrateProj(p){if(!p)return p;var old=p.stages||[],byk={};old.forEach(function(s){if(s&&s.k)byk[s.k]=s});p.stages=STAGES.map(function(s){var ex=byk[s.k];return ex?{k:s.k,mode:ex.mode||'manual',done:!!ex.done,notas:ex.notas||'',input:ex.input||'',resumen:ex.resumen||'',data:ex.data||null,docs:ex.docs||[],checklist:ex.checklist||[],docboard:ex.docboard||[]}:{k:s.k,mode:'manual',done:false,notas:'',input:'',resumen:'',data:null,docs:[],checklist:[],docboard:[]}});if(p._sel!=null&&p._sel>=p.stages.length)p._sel=0;return p}
+function migrateProj(p){if(!p)return p;var old=p.stages||[],byk={};old.forEach(function(s){if(s&&s.k)byk[s.k]=s});p.stages=STAGES.map(function(s){var ex=byk[s.k];return ex?{k:s.k,mode:ex.mode||'manual',done:!!ex.done,notas:ex.notas||'',input:ex.input||'',resumen:ex.resumen||'',data:ex.data||null,docs:ex.docs||[],checklist:ex.checklist||[],docboard:ex.docboard||[],proveedores:ex.proveedores||[]}:{k:s.k,mode:'manual',done:false,notas:'',input:'',resumen:'',data:null,docs:[],checklist:[],docboard:[],proveedores:[]}});if(p._sel!=null&&p._sel>=p.stages.length)p._sel=0;return p}
 function loadProy(){try{PROY=JSON.parse(localStorage.getItem(proyKey())||'[]')}catch(e){PROY=[]}PROY=PROY.map(migrateProj)}
 function saveProy(){try{localStorage.setItem(proyKey(),JSON.stringify(PROY))}catch(e){}}
 function fmtMonto(m){return 'S/ '+(m||0).toLocaleString('es-PE')}
@@ -680,13 +688,15 @@ function renderProyDetail(){
   });
   h+='</div>';
   h+='<div class="stage-panel fade"><div class="sp-head"><div><div class="sp-title">'+esc(meta.t)+'</div><div class="sp-ag">'+icon('robot')+' '+meta.ag+'</div></div>';
-  if(meta.k!=='prop'){
+  if(meta.k!=='prop'&&meta.k!=='cot'){
     h+='<div class="seg"><button class="'+(st.mode==='auto'?'on':'')+'" onclick="setMode('+si+',\'auto\')">'+icon('spark',1.6)+' Automático IA</button>'+
     '<button class="'+(st.mode!=='auto'?'on':'')+'" onclick="setMode('+si+',\'manual\')">✍ Manual</button></div>';
   }
   h+='</div>';
   if(meta.k==='prop'){
     h+=stageProp(p,si,st);
+  } else if(meta.k==='cot'){
+    h+=stageCot(p,si,st);
   } else if(st.mode==='auto'){
     if(si===0){
       h+='<div class="sp-lbl">Contenido a analizar (pega el TDR o arrastra un PDF abajo)</div>';
@@ -712,7 +722,7 @@ function renderProyDetail(){
     h+='<div class="sp-lbl">'+esc(meta.lbl)+'</div>';
     h+='<textarea class="ta" placeholder="Escribe aquí…" oninput="stNotas('+si+',this.value)">'+esc(st.notas)+'</textarea>';
   }
-  if(meta.k!=='prop'){
+  if(meta.k!=='prop'&&meta.k!=='cot'){
     h+='<div class="sp-lbl">Documentos</div>';
     h+='<div class="dropz" id="dz_'+si+'" onclick="pickFile('+si+')" ondragover="dzOver(event,'+si+',1)" ondragleave="dzOver(event,'+si+',0)" ondrop="dzDrop(event,'+si+')">Arrastra archivos aquí o haz clic para seleccionar<br><span style="font-size:10.5px;opacity:.7">PDF, imágenes, Word, Excel · se vincularán a Google Drive próximamente</span></div>';
     if(st.docs&&st.docs.length){h+='<div>';st.docs.forEach(function(d,di){h+='<span class="docchip">'+icon('doc')+esc(d.name)+' <span style="color:var(--tmuted)">'+(d.size||0)+'KB</span><span class="dx" onclick="rmDoc('+si+','+di+')">✕</span></span>'});h+='</div>'}
@@ -826,6 +836,78 @@ function dbReorder(si,di){if(_dbSrc<0||_dbSrc===di){_dbSrc=-1;return}var arr=CUR
 function dbToggle(si,di){var d=CURP.stages[si].docboard[di];d.estado=(d.estado==='listo'?'pendiente':'listo');saveProy();renderProyDetail()}
 function dbRemove(si,di){CURP.stages[si].docboard.splice(di,1);saveProy();renderProyDetail()}
 
+/* ===== Etapa Cotización: extracción y comparación de proveedores ===== */
+var COT_EXTRACT_PROMPT='ROLE: Experto en análisis de cotizaciones y fichas técnicas de proveedores para contrataciones públicas peruanas, trabajando para la empresa OFERTANTE. TASK: Del DOCUMENTO ADJUNTO (cotización o ficha técnica de un proveedor) extrae los datos del proveedor y sus ítems, y COMPARA cada ítem contra los REQUISITOS DEL TDR que te paso abajo. OUTPUT: SOLO JSON válido (sin texto/markdown/backticks). ESTRUCTURA:\n{"nombre":"[razón social]","ruc":"[RUC]","telefono":"[tel]","ubicacion":"[dirección/ciudad]","email":"[correo]","items":[{"descripcion":"[producto ofertado]","cantidad":"[cant]","unidad":"[unidad]","precio_unitario":"S/ 0.00","precio_total":"S/ 0.00","entrega":"[plazo]","caracteristicas":"[specs ofertadas]","cumple":"Sí","observacion":"[por qué cumple/no vs TDR]"}],"entrega_global":"[plazo global]","total":"S/ 0.00","validez":"[validez de la oferta]"}\nREGLAS: cumple = "Sí" si la prestación ofertada es igual o SUPERIOR a la requerida en el TDR, "Parcial" si cumple parcialmente, "No" si no cumple. Extrae RUC, teléfono, dirección y correo si aparecen. Precios en soles. Si un dato falta = "". RESPONDE SOLO JSON.';
+function provKey(){return 'sigma_prov_'+(EMP?EMP.id:'x')}
+function loadProvDB(){try{return JSON.parse(localStorage.getItem(provKey())||'[]')}catch(e){return []}}
+function parsePrice(s){var n=parseFloat((''+(s||'')).replace(/[^0-9.,]/g,'').replace(/,/g,''));return isNaN(n)?null:n}
+function cumpleBadge(v){var t=(''+(v||'')).toLowerCase();var c=t.indexOf('no')===0?'#ef4444':(t.indexOf('parc')>=0?'#f59e0b':'#16a34a');return '<span class="cumple" style="color:'+c+';background:'+bg(c,.13)+'">'+esc(v||'—')+'</span>'}
+function stageCot(p,si,st){
+  st.proveedores=st.proveedores||[];
+  var m0=p.stages[0],hasM=!!(m0.data||m0.resumen),col=hasM?'var(--accent)':'#f59e0b';
+  var h='<div class="aibase" style="padding:11px 13px;border-radius:10px;margin-top:4px;font-size:11.5px;line-height:1.5;background:'+(hasM?'var(--alertbg)':'rgba(245,158,11,.08)')+';border:1px solid '+(hasM?'var(--alertborder)':'rgba(245,158,11,.28)')+'"><span style="color:'+col+'">'+icon(hasM?'spark':'search')+'</span><div>'+(hasM?'Sube las cotizaciones o fichas técnicas de cada proveedor: el agente extrae RUC, datos, ítems y precios y los <b>compara contra el TDR</b> del análisis maestro (cumple / no cumple por ítem).':'Primero ejecuta el <b>análisis del TDR</b> (etapa 1) para poder comparar.')+'</div></div>';
+  h+='<div style="margin:11px 0;display:flex;gap:8px;flex-wrap:wrap"><button class="aibtn" '+((st._loading||!hasM)?'disabled':'')+' onclick="pickFileCot('+si+')">'+(st._loading?'Extrayendo…':(icon('spark',1.6)+' Subir cotización y extraer con IA'))+'</button><button class="minib" onclick="addProvManual('+si+')">+ Proveedor manual</button></div>';
+  if(st.proveedores.length>=2){
+    var min=null;st.proveedores.forEach(function(pr){var t=parsePrice(pr.total);if(t!=null&&(min==null||t<min))min=t});
+    var ct='<table class="rtab"><thead><tr><th>Proveedor</th><th>Total</th><th>Entrega</th><th>Cumple</th></tr></thead><tbody>';
+    st.proveedores.forEach(function(pr){var tot=parsePrice(pr.total),best=(tot!=null&&tot===min);var ok=(pr.items||[]).filter(function(x){return (''+(x.cumple||'')).toLowerCase().indexOf('s')===0}).length,tt=(pr.items||[]).length;
+      ct+='<tr'+(best?' style="background:'+bg('#16a34a',.06)+'"':'')+'><td>'+esc(pr.nombre||'(sin nombre)')+(best?'<span class="recb">★ mejor precio</span>':'')+'</td><td>'+esc(pr.total||'—')+'</td><td>'+esc(pr.entrega_global||'—')+'</td><td>'+(tt?ok+'/'+tt+' ítems':'—')+'</td></tr>';
+    });
+    ct+='</tbody></table>';h+=rblock('Comparativa de proveedores','search',ct);
+  }
+  st.proveedores.forEach(function(pr,pi){
+    h+='<div class="prov-card"><div class="prov-top"><div><div class="prov-nm">'+esc(pr.nombre||'(proveedor)')+'</div><div class="prov-sub">'+[pr.ruc?'RUC '+esc(pr.ruc):'',pr.telefono?'Tel '+esc(pr.telefono):'',pr.ubicacion?esc(pr.ubicacion):'',pr.email?esc(pr.email):''].filter(Boolean).join(' · ')+'</div></div><div class="prov-tot">'+esc(pr.total||'')+(pr.entrega_global?'<div style="font-size:9px;color:var(--tmuted);font-family:DM Sans">'+esc(pr.entrega_global)+'</div>':'')+'</div></div>';
+    if(pr.items&&pr.items.length){
+      h+='<table class="rtab"><thead><tr><th>Ítem ofertado</th><th>P.Unit</th><th>Total</th><th>Entrega</th><th>Cumple</th></tr></thead><tbody>';
+      pr.items.forEach(function(it){h+='<tr><td>'+esc(it.descripcion||'')+(it.caracteristicas?'<div style="font-size:10px;color:var(--tmuted)">'+esc(it.caracteristicas)+'</div>':'')+(it.observacion?'<div style="font-size:10px;color:var(--tmuted)">'+esc(it.observacion)+'</div>':'')+'</td><td>'+esc(it.precio_unitario||'')+'</td><td>'+esc(it.precio_total||'')+'</td><td>'+esc(it.entrega||'')+'</td><td>'+cumpleBadge(it.cumple)+'</td></tr>'});
+      h+='</tbody></table>';
+    }
+    if(pr.fichas&&pr.fichas.length){h+='<div style="margin-top:8px">';pr.fichas.forEach(function(f,fi){h+='<span class="docchip">'+icon('doc')+esc(f.name)+'<span class="dx" onclick="rmFicha('+si+','+pi+','+fi+')">✕</span></span>'});h+='</div>'}
+    h+='<div class="prov-actions"><button class="minib" onclick="pickFicha('+si+','+pi+')">+ Ficha técnica</button><button class="minib" onclick="saveProvDB('+si+','+pi+')">★ Guardar en proveedores confiables</button><button class="minib" onclick="rmProv('+si+','+pi+')">Eliminar</button></div></div>';
+  });
+  var db=loadProvDB();
+  h+='<div style="font-size:11px;color:var(--tmuted);margin-top:12px">Base de proveedores confiables: <b>'+db.length+'</b> registrados para '+(EMP?esc(EMP.nombre):'')+'.</div>';
+  h+='<div class="sp-lbl" style="margin-top:14px">Notas (opcional)</div><textarea class="ta" placeholder="Notas de la cotización…" oninput="stNotas('+si+',this.value)">'+esc(st.notas)+'</textarea>';
+  return h;
+}
+function pickFileCot(i){_fileStage=i;_fileMode='cot';var inp=document.getElementById('pfile');inp.value='';inp.click()}
+function aiCotExtract(si){
+  var st=CURP.stages[si],m0=CURP.stages[0];
+  if(!_pendingFile){toast('No se pudo leer el archivo');return}
+  var ctx='';if(m0.data){ctx='TDR requerido (ítems y especificaciones):\n'+JSON.stringify({items:m0.data.items||[],especificaciones:m0.data.especificaciones||[],requisitos:m0.data.requisitos_calificacion||[]},null,2)}else if(m0.resumen){ctx='TDR:\n'+m0.resumen}
+  st._loading=true;renderProyDetail();
+  fetch('/api/gemini',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt:COT_EXTRACT_PROMPT+'\n\n'+ctx,imageBase64:_pendingFile.b64,mimeType:_pendingFile.type})})
+   .then(function(r){return r.json()}).then(function(d){
+     var txt='';try{txt=d.candidates[0].content.parts[0].text}catch(e){txt=''}
+     var obj=parseJSON(txt);st._loading=false;_pendingFile=null;
+     if(obj){obj.id='pr'+Date.now();obj.fichas=obj.fichas||[];st.proveedores=st.proveedores||[];st.proveedores.push(obj);toast('Cotización extraída: '+(obj.nombre||'proveedor'))}else{toast('No se pudo extraer (revisa consola F12)')}
+     saveProy();renderProyDetail();
+   }).catch(function(e){st._loading=false;toast('Error IA: '+e.message);renderProyDetail()});
+}
+function addProvManual(si){
+  var m=document.getElementById('pmodal');
+  m.innerHTML='<div class="pmbox"><h3>Agregar proveedor</h3><div class="fld"><label>Razón social</label><input id="pv_n"></div><div class="fld"><label>RUC</label><input id="pv_r"></div><div class="fld"><label>Teléfono</label><input id="pv_t"></div><div class="fld"><label>Ubicación</label><input id="pv_u"></div><div class="fld"><label>Total cotizado (S/)</label><input id="pv_tot"></div><div class="pmrow"><button class="cancel" onclick="closeNewProy()">Cancelar</button><button class="save" onclick="saveProvManual('+si+')">Agregar</button></div></div>';
+  m.classList.add('show');
+}
+function saveProvManual(si){
+  var n=(document.getElementById('pv_n').value||'').trim();if(!n){toast('Pon la razón social');return}
+  var tot=(document.getElementById('pv_tot').value||'').trim();if(tot&&!/S\//.test(tot))tot='S/ '+tot;
+  var pr={id:'pr'+Date.now(),nombre:n,ruc:(document.getElementById('pv_r').value||'').trim(),telefono:(document.getElementById('pv_t').value||'').trim(),ubicacion:(document.getElementById('pv_u').value||'').trim(),email:'',total:tot,entrega_global:'',items:[],fichas:[]};
+  CURP.stages[si].proveedores=CURP.stages[si].proveedores||[];CURP.stages[si].proveedores.push(pr);saveProy();closeNewProy();renderProyDetail();
+}
+function rmProv(si,pi){CURP.stages[si].proveedores.splice(pi,1);saveProy();renderProyDetail()}
+function pickFicha(si,pi){_fileStage=si;_fileMode='ficha:'+pi;var inp=document.getElementById('pfile');inp.value='';inp.click()}
+function rmFicha(si,pi,fi){CURP.stages[si].proveedores[pi].fichas.splice(fi,1);saveProy();renderProyDetail()}
+function saveProvDB(si,pi){
+  var pr=CURP.stages[si].proveedores[pi],db=loadProvDB(),key=(pr.ruc||pr.nombre||'').toLowerCase();
+  var ex=db.filter(function(x){return (x.ruc||x.nombre||'').toLowerCase()===key})[0];
+  var prods=(pr.items||[]).map(function(it){return {descripcion:it.descripcion,precio:it.precio_unitario,fecha:new Date().toISOString().slice(0,10)}});
+  if(ex){ex.telefono=pr.telefono||ex.telefono;ex.ubicacion=pr.ubicacion||ex.ubicacion;ex.email=pr.email||ex.email;ex.productos=(ex.productos||[]).concat(prods)}
+  else{db.push({nombre:pr.nombre,ruc:pr.ruc,telefono:pr.telefono,ubicacion:pr.ubicacion,email:pr.email,productos:prods})}
+  try{localStorage.setItem(provKey(),JSON.stringify(db));toast('Proveedor guardado en tu base confiable')}catch(e){toast('No se pudo guardar')}
+  renderProyDetail();
+}
+
 function openNewProy(){
   var m=document.getElementById('pmodal');
   m.innerHTML='<div class="pmbox"><h3>Nuevo proyecto · contratación &lt; 8 UIT</h3>'+
@@ -859,7 +941,13 @@ function confirmDelProy(){
   if(pwd!=='7777'){toast('Contraseña incorrecta');return}
   var id=CURP.id;loadProy();PROY=PROY.filter(function(x){return x.id!==id});saveProy();closeDelProy();toast('Proyecto eliminado');renderProyectos();
 }
-(function(){var pf=document.getElementById('pfile');if(pf)pf.onchange=function(){if(this.files&&this.files[0]&&_fileStage>=0){if(_fileMode==='board'){for(var i=0;i<this.files.length;i++)addDocboard(_fileStage,this.files[i])}else{addFile(_fileStage,this.files[0])}}}})();
+(function(){var pf=document.getElementById('pfile');if(!pf)return;pf.onchange=function(){
+  if(!(this.files&&this.files[0]&&_fileStage>=0))return;var f=this.files[0];
+  if(_fileMode==='board'){for(var i=0;i<this.files.length;i++)addDocboard(_fileStage,this.files[i])}
+  else if(_fileMode==='cot'){var rd=new FileReader();rd.onload=function(){_pendingFile={type:f.type,b64:(''+rd.result).split(',')[1]};aiCotExtract(_fileStage)};rd.readAsDataURL(f)}
+  else if(_fileMode&&_fileMode.indexOf('ficha:')===0){var pi=+_fileMode.split(':')[1];var pr=CURP.stages[_fileStage].proveedores[pi];pr.fichas=pr.fichas||[];pr.fichas.push({name:f.name,type:f.type||''});saveProy();renderProyDetail()}
+  else{addFile(_fileStage,f)}
+}})();
 
 function quickNew(){window.location.href='/cotizador?tab=cot'}
 function toggleMenu(open){var s=$('sidebar'),o=$('ovl');if(!s)return;if(open){s.classList.add('open');o&&o.classList.add('show')}else{s.classList.remove('open');o&&o.classList.remove('show')}}
