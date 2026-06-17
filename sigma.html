@@ -293,6 +293,28 @@ aside.rpanel{width:284px;flex-shrink:0;background:linear-gradient(180deg,var(--c
 .chk-d{font-size:11px;color:var(--tmuted);margin-top:3px;line-height:1.45}
 .chk-borr{font-size:11.5px;line-height:1.55;white-space:pre-wrap;background:var(--card);border:1px solid var(--border);border-radius:8px;padding:10px;margin-top:8px;max-height:240px;overflow:auto}
 .chk-act{flex-shrink:0}
+/* Bóveda */
+.proy-wrap{padding:22px 26px;max-width:900px}
+.proy-hdr{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;margin-bottom:22px}
+.proy-htitle{font-size:19px;font-weight:700;letter-spacing:-.4px;display:flex;align-items:center;gap:8px}
+.vault-cat{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;color:var(--tmuted);margin:18px 0 10px;padding-bottom:6px;border-bottom:1px solid var(--border)}
+.vault-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:13px}
+.vault-card{background:var(--card);border:1.5px solid var(--border);border-radius:13px;padding:14px;display:flex;flex-direction:column;gap:8px;transition:border-color .15s,box-shadow .15s}
+.vault-card:hover{border-color:var(--pillborder);box-shadow:0 6px 20px rgba(13,59,110,.09)}
+.vault-has{border-color:rgba(20,184,166,.25)}
+.vault-card-top{display:flex;align-items:center;justify-content:space-between}
+.vault-ic{width:34px;height:34px;border-radius:9px;background:var(--pillbg);border:1px solid var(--pillborder);display:flex;align-items:center;justify-content:center;color:var(--accent);flex-shrink:0}
+.vault-ic svg{width:16px;height:16px}
+.vault-status{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;padding:3px 7px;border-radius:6px}
+.vs-ok{color:#16a34a;background:rgba(22,163,74,.1);border:1px solid rgba(22,163,74,.2)}
+.vs-falta{color:var(--tmuted);background:var(--input);border:1px solid var(--border)}
+.vault-name{font-size:12.5px;font-weight:600;line-height:1.3}
+.vault-desc{font-size:10.5px;color:var(--tmuted);line-height:1.4}
+.vault-meta{font-size:9.5px;color:var(--accent);line-height:1.5;background:var(--pillbg);border-radius:6px;padding:4px 7px}
+.vault-acts{display:flex;gap:5px;flex-wrap:wrap;margin-top:2px}
+.vault-acts .minib{display:flex;align-items:center;gap:3px;padding:4px 7px;font-size:10px}
+.vault-acts .minib svg{width:11px;height:11px}
+/* fin bóveda */
 .minib{font-size:10.5px;font-weight:600;color:var(--accent);background:var(--card);border:1px solid var(--pillborder);padding:5px 9px;border-radius:7px;cursor:pointer;font-family:inherit;white-space:nowrap}
 .minib:disabled{opacity:.5;cursor:default}
 .docboard-drop{border:1.5px dashed var(--pillborder);border-radius:11px;padding:14px;text-align:center;color:var(--tmuted);font-size:11.5px;cursor:pointer;background:var(--input);margin-bottom:12px;line-height:1.5}
@@ -471,6 +493,7 @@ var NAV=[
   {id:'facturacion',ic:'card',lb:'Facturación',soon:true},
   {id:'cobranza',ic:'wallet',lb:'Cobranza',soon:true},
   {cat:'Gestión'},
+  {id:'boveda',ic:'layers',lb:'Bóveda de Empresa'},
   {id:'historial',ic:'clock',lb:'Historial',tab:'hist'},
   {id:'reportes',ic:'trending',lb:'Reportes',soon:true},
   {id:'config',ic:'gear',lb:'Configuración',soon:true}
@@ -488,7 +511,7 @@ function navClick(it){
   toggleMenu(false);
   if(it.tab){window.location.href='/cotizador?tab='+it.tab;return}
   ACTIVE=it.id;renderNav();
-  if(it.id==='dashboard')renderDashboard();else if(it.id==='proyectos')renderProyectos();else renderSoon(it);
+  if(it.id==='dashboard')renderDashboard();else if(it.id==='proyectos')renderProyectos();else if(it.id==='boveda')renderBoveda();else renderSoon(it);
 }
 
 function selectEmpresa(e){
@@ -564,6 +587,64 @@ function renderSoon(it){
     '<p>Este módulo es parte de la hoja de ruta de SIGMA. Lo construiremos por fases, conectado a tus datos en la nube y con asistencia de IA.</p>'+
     '<button class="sbtn" onclick="ACTIVE=\'dashboard\';renderNav();renderDashboard()">← Volver al Dashboard</button></div>';
 }
+
+/* ===== BÓVEDA DE EMPRESA ===== */
+function renderBoveda(){
+  var docs=loadEmpDocs();
+  var cats=[...new Set(EMP_DOC_TYPES.map(function(t){return t.cat}))];
+  var empNombre=EMP?esc(EMP.nombre):'Empresa';
+  var h='<div class="proy-wrap fade"><div class="proy-hdr"><div><div class="proy-htitle">'+icon('layers',1.2)+'Bóveda de '+empNombre+'</div><div style="font-size:11.5px;color:var(--tmuted);margin-top:3px">Documentos internos de la empresa · se usan automáticamente en propuestas</div></div></div>';
+  cats.forEach(function(cat){
+    var tipos=EMP_DOC_TYPES.filter(function(t){return t.cat===cat});
+    h+='<div class="vault-cat">'+cat+'</div><div class="vault-grid">';
+    tipos.forEach(function(t){
+      var meta=docs.filter(function(d){return d.k===t.k})[0];
+      var has=!!meta;
+      h+='<div class="vault-card'+(has?' vault-has':'')+'">'+
+        '<div class="vault-card-top">'+
+          '<div class="vault-ic">'+icon(t.ic,1.1)+'</div>'+
+          '<div class="vault-status '+(has?'vs-ok':'vs-falta')+'">'+(has?'Cargado':'Falta')+'</div>'+
+        '</div>'+
+        '<div class="vault-name">'+esc(t.n)+'</div>'+
+        '<div class="vault-desc">'+esc(t.d)+'</div>'+
+        (has?'<div class="vault-meta">'+esc(meta.name||'')+'<br>'+esc(meta.fecha||'')+(meta.size?' · '+meta.size+' KB':'')+'</div>':'')+
+        '<div class="vault-acts">'+
+          '<button class="minib" onclick="pickEmpDoc(\''+t.k+'\')">'+icon('send')+''+(has?'Actualizar':'Subir')+'</button>'+
+          (has?'<button class="minib" onclick="previewVaultDoc(\''+t.k+'\',\''+esc(meta.name||t.n)+'\')">'+icon('doc')+'Ver</button>':'')+
+          (has?'<button class="minib" style="color:var(--red)" onclick="delEmpDoc(\''+t.k+'\')">'+icon('trash')+'Eliminar</button>':'')+
+        '</div>'+
+      '</div>';
+    });
+    h+='</div>';
+  });
+  var cargados=docs.length,total=EMP_DOC_TYPES.length;
+  h+='<div style="margin-top:18px;padding:14px 18px;background:var(--alertbg);border:1px solid var(--alertborder);border-radius:12px;font-size:12px;color:var(--tmuted)">'+
+    icon('check')+' <b>'+cargados+' de '+total+'</b> documentos cargados · Los documentos marcados <b>Cargado</b> se ofrecen automáticamente al armar una propuesta técnica.</div>';
+  h+='</div>';
+  $('content').innerHTML=h;
+}
+function previewVaultDoc(k,name){
+  vaultGet(vaultKey(k),function(v){
+    if(!v||!v.b64){toast('No se encontró el archivo en la bóveda');return}
+    var mime=v.mimeType||'application/octet-stream';
+    var url='data:'+mime+';base64,'+v.b64;
+    var w=window.open('','_blank','width=900,height=700');
+    if(w){
+      if(mime.startsWith('image/')){
+        w.document.write('<html><body style="margin:0;background:#111;display:flex;align-items:center;justify-content:center;min-height:100vh"><img src="'+url+'" style="max-width:100%;max-height:100vh"></body></html>');
+      } else {
+        w.document.write('<html><body style="margin:0"><embed src="'+url+'" type="'+mime+'" width="100%" height="100%" style="height:100vh"></body></html>');
+      }
+      w.document.title=name||k;
+    }
+  });
+}
+function getVaultDocForProp(k,cb){
+  var meta=loadEmpDocs().filter(function(d){return d.k===k})[0];
+  if(!meta){return cb(null)}
+  vaultGet(vaultKey(k),function(v){cb(v?{meta:meta,b64:v.b64,mimeType:v.mimeType,name:v.name||meta.name}:null)});
+}
+
 function renderAgents(){
   var ag=[
     {ic:'bolt',n:'Ag. Licitaciones',s:'Analizando SEACE…',d:'#34d399',p:'pulse 2s infinite'},
@@ -892,15 +973,34 @@ function aiAnalyze(si){
 var PROP_CHK_PROMPT='ROLE: Eres experto en documentación para contrataciones con el Estado peruano (<8UIT, OSCE/SEACE). TASK: Con base en los DATOS MAESTRO, los anexos enviados por la entidad y los documentos internos disponibles de la empresa, genera la LISTA DE DOCUMENTOS que la empresa PROVEEDORA debe presentar en su OFERTA TÉCNICA. OUTPUT: SOLO un JSON array válido (sin texto, markdown ni backticks). ESTRUCTURA: [{"nombre":"[nombre del documento]","tipo":"Anexo","obligatorio":true,"descripcion":"[qué debe contener]","origen":"Entidad|Empresa|Generar|Ficha técnica","requiere_firma":true,"estado":"Falta"}]\nIncluye anexos de la entidad, declaraciones juradas típicas (no estar impedido/inhabilitado, cumplimiento TDR, plazo, veracidad), oferta económica si aplica, ficha RUC, DNI/representante, RNP/RNP o constancia equivalente si el TDR lo pide, REMYPE si aplica, CCI/cuenta bancaria si aplica, fichas técnicas por producto, certificados y cualquier documento específico. tipo debe ser uno de: Anexo, Declaración Jurada, Ficha Técnica, Certificado, Cotización, Empresa, Otro. RESPONDE SOLO EL JSON ARRAY.';
 var PROP_REVIEW_PROMPT='ROLE: Auditor documental senior para ofertas técnicas al Estado peruano. TASK: Revisa si la oferta técnica está completa contra el TDR, anexos de entidad, documentos internos de empresa, fichas técnicas, firmas y tablero final. OUTPUT: SOLO JSON válido. ESTRUCTURA: {"veredicto":"LISTA|OBSERVADA|INCOMPLETA","faltantes":["..."],"observaciones":["..."],"firmas_pendientes":["..."],"documentos_ok":["..."],"acciones":["..."]}. Sé estricto: si falta firma, anexo, ficha técnica o documento obligatorio, marca OBSERVADA o INCOMPLETA.';
 var EMP_DOC_TYPES=[
- {k:'ficha_ruc',n:'Ficha RUC',d:'Constancia RUC actualizada de la empresa'},
- {k:'dni',n:'DNI representante',d:'DNI del representante o firmante'},
- {k:'rnp',n:'RNP / habilitación',d:'Registro Nacional de Proveedores o habilitación requerida'},
- {k:'remype',n:'REMYPE',d:'Constancia REMYPE si aplica'},
- {k:'firma',n:'Firma / sello',d:'Firma escaneada o recurso para firmar documentos'},
- {k:'cci',n:'CCI / banco',d:'Cuenta bancaria y CCI para anexos de pago'},
- {k:'poder',n:'Vigencia de poder',d:'Poder o documento de representación si aplica'},
- {k:'fichas',n:'Fichas técnicas base',d:'Fichas técnicas recurrentes de productos'}
+ {k:'ficha_ruc',  n:'Ficha RUC',          ic:'doc',    d:'Constancia de RUC actualizada de la empresa',      cat:'Empresa'},
+ {k:'dni',        n:'DNI representante',   ic:'user',   d:'DNI vigente del representante legal o firmante',   cat:'Empresa'},
+ {k:'rnp',        n:'RNP / Habilitación',  ic:'check',  d:'Registro Nacional de Proveedores (o equiv.)',      cat:'Empresa'},
+ {k:'remype',     n:'REMYPE',              ic:'building',d:'Constancia REMYPE vigente si aplica',             cat:'Empresa'},
+ {k:'poder',      n:'Vigencia de poder',   ic:'clipboard',d:'Poder notarial o carta de representación',      cat:'Empresa'},
+ {k:'logo',       n:'Logo empresa',        ic:'layers', d:'Logo en PNG/SVG para encabezados de documentos',   cat:'Empresa'},
+ {k:'firma',      n:'Firma / sello',       ic:'spark',  d:'Firma escaneada (PNG transparente) para estampar en docs',cat:'Firma'},
+ {k:'firma_dig',  n:'Sello firma digital', ic:'spark',  d:'Imagen del sello de firma digital tipo RENIEC',   cat:'Firma'},
+ {k:'cci',        n:'Carta autorización CCI',ic:'card', d:'Carta de autorización de CCI/cuenta bancaria',    cat:'Pago'},
+ {k:'carta_rep',  n:'Carta de representación',ic:'send',d:'Carta de presentación de la empresa',             cat:'Empresa'},
+ {k:'iso',        n:'Certificados / ISO',  ic:'check',  d:'Certificados de calidad, ISO u otros requeridos', cat:'Calidad'},
+ {k:'fichas',     n:'Fichas técnicas base',ic:'box',    d:'Fichas técnicas recurrentes de productos/servicios',cat:'Técnico'}
 ];
+
+/* ===== BÓVEDA: IndexedDB para almacenar contenido real de documentos ===== */
+var _vaultDB=null;
+function openVaultDB(cb){
+  if(_vaultDB)return cb(_vaultDB);
+  var req=indexedDB.open('sigma_vault',1);
+  req.onupgradeneeded=function(e){e.target.result.createObjectStore('docs',{keyPath:'key'})};
+  req.onsuccess=function(e){_vaultDB=e.target.result;cb(_vaultDB)};
+  req.onerror=function(){cb(null)};
+}
+function vaultPut(key,val,cb){openVaultDB(function(db){if(!db)return cb&&cb();var tx=db.transaction('docs','readwrite');tx.objectStore('docs').put({key:key,val:val});tx.oncomplete=function(){cb&&cb()}})}
+function vaultGet(key,cb){openVaultDB(function(db){if(!db)return cb(null);var req=db.transaction('docs','readonly').objectStore('docs').get(key);req.onsuccess=function(){cb(req.result?req.result.val:null)};req.onerror=function(){cb(null)}})}
+function vaultDel(key,cb){openVaultDB(function(db){if(!db)return cb&&cb();var tx=db.transaction('docs','readwrite');tx.objectStore('docs').delete(key);tx.oncomplete=function(){cb&&cb()}})}
+function vaultKey(k){return (EMP?EMP.id:'x')+'__'+k}
+
 function empDocsKey(){return 'sigma_emp_docs_'+(EMP?EMP.id:'x')}
 function loadEmpDocs(){try{return JSON.parse(localStorage.getItem(empDocsKey())||'[]')}catch(e){return []}}
 function saveEmpDocs(a){try{localStorage.setItem(empDocsKey(),JSON.stringify(a||[]))}catch(e){}}
@@ -973,8 +1073,20 @@ function addEntidadDoc(si,f){
 function saveEmpDoc(k,f){
   var docs=loadEmpDocs(),meta=EMP_DOC_TYPES.filter(function(x){return x.k===k})[0]||{k:k,n:k};
   docs=docs.filter(function(d){return d.k!==k});
-  docs.push({k:k,n:meta.n,name:f.name,type:f.type||'',size:Math.round(f.size/1024),fecha:new Date().toISOString().slice(0,10)});
-  saveEmpDocs(docs);toast(meta.n+' guardado en matriz documental');renderProyDetail();
+  var entry={k:k,n:meta.n,name:f.name,type:f.type||'',size:Math.round(f.size/1024),fecha:new Date().toISOString().slice(0,10)};
+  docs.push(entry);saveEmpDocs(docs);
+  var rd=new FileReader();
+  rd.onload=function(){
+    vaultPut(vaultKey(k),{b64:(''+rd.result).split(',')[1],mimeType:f.type||'application/octet-stream',name:f.name},function(){
+      toast(meta.n+' guardado en bóveda');
+      if(ACTIVE==='boveda')renderBoveda();else renderProyDetail();
+    });
+  };rd.readAsDataURL(f);
+}
+function delEmpDoc(k){
+  var docs=loadEmpDocs().filter(function(d){return d.k!==k});
+  saveEmpDocs(docs);vaultDel(vaultKey(k));
+  if(ACTIVE==='boveda')renderBoveda();else renderProyDetail();
 }
 function aiAnalyzeEntidadDoc(si,d,b64,mime){
   var st=CURP.stages[si],m0=CURP.stages[0],base=m0.data?JSON.stringify(m0.data,null,2):(m0.resumen||'');
