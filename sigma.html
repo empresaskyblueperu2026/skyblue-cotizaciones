@@ -1079,7 +1079,7 @@ function aiCotExtract(si){
   if(m0.data){ctx='TDR requerido (items y especificaciones):\n'+JSON.stringify({items:m0.data.items||[],especificaciones:m0.data.especificaciones||[],especificaciones_por_item:m0.data.especificaciones_por_item||[],requisitos:m0.data.requisitos_calificacion||[]},null,2)}
   else if(m0.resumen){ctx='TDR:\n'+m0.resumen}
   st.cotError='';st._loading=true;renderProyDetail();
-  fetch('/api/gemini',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt:COT_EXTRACT_PROMPT+'\n\n'+ctx,imageBase64:_pendingFile.b64,mimeType:_pendingFile.type})})
+  fetch('/api/gemini',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt:COT_EXTRACT_PROMPT+'\n\n'+ctx,imageBase64:_pendingFile.b64,mimeType:_pendingFile.type,model:'gemini-2.0-flash'})})
    .then(function(r){return r.json()}).then(function(d){
      var gt=geminiText(d),txt=gt.text,obj=null,arr=null;
      if(gt.error){st.cotError=gt.error;st._loading=false;_pendingFile=null;toast('IA: '+gt.error.slice(0,90));saveProy();renderProyDetail();return}

@@ -121,9 +121,18 @@ app.post('/api/gemini',async function(req,res){
   try{
     var parts=[{text:req.body.prompt}];
     if(req.body.imageBase64)parts.push({inline_data:{mime_type:req.body.mimeType||'application/pdf',data:req.body.imageBase64}});
+    /* cotizaciones usan gemini-2.0-flash (mayor quota gratuita); TDR usa 2.5-flash */
+    var model=req.body.model||'gemini-2.5-flash';
     var body={contents:[{parts:parts}],generationConfig:{temperature:0.1,maxOutputTokens:16384,thinkingConfig:{thinkingBudget:0}}};
-    var r=await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key='+k,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
-    var d=await r.json();
+    var url='https://generativelanguage.googleapis.com/v1beta/models/'+model+':generateContent?key='+k;
+    /* retry con backoff exponencial ante 429 */
+    var d,attempts=[0,3000,8000];
+    for(var i=0;i<attempts.length;i++){
+      if(i>0)await new Promise(function(resolve){setTimeout(resolve,attempts[i])});
+      var r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+      d=await r.json();
+      if(r.status!==429)break;
+    }
     res.status(r.status).json(d);
   }catch(e){res.status(502).json({error:e.message});}
 });
