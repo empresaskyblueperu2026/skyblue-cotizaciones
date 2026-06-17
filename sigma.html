@@ -599,7 +599,7 @@ var STAGES=[
  {k:'pago',   t:'Pago',                                ag:'Ag. Tesorería',      ic:'card',      lbl:'Registro y conciliación del pago recibido'}
 ];
 var AIPROMPTS={
- tdr:'ROLE: Eres DOBLE experto: (1) especialista MÁXIMO en contrataciones con el Estado peruano (Ley 32069, OSCE, SEACE) para compras <8UIT; (2) experto en sourcing/abastecimiento del LADO DEL PROVEEDOR — somos la empresa que VENDE al Estado y queremos ganar ofreciendo productos de prestaciones IGUALES O SUPERIORES a las solicitadas, al mejor precio. TASK: Analiza el TDR/Especificaciones. Esto es el MAESTRO que todos los agentes usan. OUTPUT: SOLO JSON válido (NADA de texto, markdown, explicaciones, backticks, comillas triples). ESTRUCTURA EXACTA: {\n"objeto":"[objeto]",\n"entidad":"[entidad]",\n"items":[{"descripcion":"[desc]","cantidad":"[número]","unidad":"[unidad]"}],\n"requisitos_calificacion":["[experiencia]","[RNP/habilitacion]","[certificados]","[personal]"],\n"especificaciones":["[esp 1]","[esp 2]"],\n"plazo_entrega":"[plazo]",\n"lugar_entrega":"[lugar]",\n"forma_pago":"[forma]",\n"garantias":"[garantías o vacío]",\n"penalidades":"[penalidades o vacío]",\n"criterios_evaluacion":["[criterio]"],\n"comparativa_items":[{"item":"[ítem solicitado]","ofrecemos":"[producto/marca que ofrecemos, igual o superior]","compatibilidad":95,"observacion":"[por qué cumple o supera]"}],\n"comparativa_proveedores":[{"proveedor":"[proveedor/canal sugerido]","precio_total":"S/ XXX","entrega":"[días]","calificacion":"Alta","recomendado":true}],\n"viabilidad":{"veredicto":"VIABLE","razones":["[razón 1]","[razón 2]"]},\n"presupuesto":{"costo_estimado":"S/ XXXXX","desglose":[{"item":"[item]","costo":"S/ XXX"}],"margen_estimado":"[%]","observaciones":"[obs]"},\n"riesgos":["[riesgo]"],\n"recomendacion":"[recomendación breve]"\n}\nREGLAS:\n1) veredicto: exactamente VIABLE|RIESGOSO|NO VIABLE\n2) items: extrae TODOS con cantidad y unidad (críticos)\n3) requisitos: experiencia, RNP, habilitaciones, certificados, personal (¡NO OMITAS!)\n4) comparativa_items: por CADA ítem solicitado indica qué ofrecemos con prestación igual/superior y compatibilidad 0-100\n5) comparativa_proveedores: 2-4 opciones comparadas (precio, entrega, calificación); marca recomendado:true a la mejor\n6) presupuesto: estima costos Perú reales por ítem en soles y calcula margen\n7) dato faltante = ""\n8) RESPONDE PURO JSON.\nTDR:\n',
+ tdr:'ROLE: Eres DOBLE experto: (1) especialista MAXIMO en contrataciones con el Estado peruano para compras <8UIT; (2) comprador/cotizador senior del LADO DEL PROVEEDOR. Somos la empresa que VENDE al Estado. TASK: Analiza el TDR/Especificaciones y entrega una decision comercial accionable, con presupuesto conservador y comparativa por item/proveedor. OUTPUT: SOLO JSON valido (NADA de texto, markdown, explicaciones, backticks, comillas triples). ESTRUCTURA EXACTA: {\n"objeto":"[objeto]",\n"entidad":"[entidad]",\n"valor_referencial":"S/ [monto si aparece, si no vacio]",\n"limite_8uit":"S/ 42800",\n"items": [{"descripcion":"[desc]","cantidad":"[numero]","unidad":"[unidad]"}],\n"especificaciones_por_item": [{"item":"[producto/item]","especificacion":"[detalle tecnico completo]"}],\n"requisitos_calificacion": ["[experiencia]","[RNP/habilitacion]","[certificados]","[personal]"],\n"especificaciones": ["[esp general si aplica]"],\n"plazo_entrega":"[plazo]",\n"lugar_entrega":"[lugar]",\n"forma_pago":"[forma]",\n"garantias":"[garantias o vacio]",\n"penalidades":"[penalidades o vacio]",\n"criterios_evaluacion": ["[criterio]"],\n"investigacion_referencial": [{"item":"[item]","proveedor":"[Sodimac/Maestro/Promart/MercadoLibre/proveedor local/etc.]","producto":"[producto exacto o equivalente]","precio_unitario":"S/ XXX","precio_total":"S/ XXX","compatibilidad":95,"observacion":"[por que es equivalente/superior]"}],\n"comparativa_items": [{"item":"[item solicitado]","proveedor":"[proveedor]","producto":"[producto/marca exacta o equivalente]","precio_unitario":"S/ XXX","precio_total":"S/ XXX","compatibilidad":95,"observacion":"[por que cumple o supera]"}],\n"comparativa_por_item": [{"item":"[item solicitado]","proveedor_recomendado":"[proveedor]","mejor_precio":"S/ XXX","alternativas": [{"proveedor":"[proveedor]","precio":"S/ XXX","compatibilidad":90}],"observacion":"[conviene comprar aqui por precio/entrega/compatibilidad]"}],\n"comparativa_proveedores": [{"proveedor":"[proveedor/canal sugerido]","precio_total":"S/ XXX","entrega":"[dias]","calificacion":"Alta","recomendado":true,"items": [{"item":"[item]","precio":"S/ XXX","compatibilidad":95}]}],\n"viabilidad":{"veredicto":"VIABLE","razones": ["[razon 1]","[razon 2]"]},\n"decision":{"puntaje":85,"go_no_go":"GO","motivo":"[decision ejecutiva]","acciones_inmediatas": ["[accion 1]","[accion 2]"],"informacion_faltante": ["[dato que falta o vacio]"]},\n"presupuesto":{"costo_estimado":"S/ XXXXX","precio_oferta_sugerido":"S/ XXXXX","utilidad_estimada":"S/ XXXXX","margen_estimado":"22% referencial","desglose": [{"item":"[item]","cantidad":"[cant]","costo_unitario":"S/ XXX","costo_total":"S/ XXX","precio_sugerido":"S/ XXX"}],"observaciones":"[obs]"},\n"riesgos": ["[riesgo]"],\n"recomendacion":"[recomendacion breve]"\n}\nREGLAS:\n1) veredicto: exactamente VIABLE|RIESGOSO|NO VIABLE\n2) decision.go_no_go: exactamente GO|GO CON CONDICIONES|NO GO\n3) puntaje: 0-100 ponderando requisitos, plazo, riesgo, margen, disponibilidad y documentacion\n4) items: extrae TODOS con cantidad y unidad (criticos)\n5) especificaciones_por_item: detalla requisitos tecnicos por producto, no solo una lista general\n6) presupuesto: NO uses precios bajos optimistas. Usa precios conservadores de mercado peruano, con colchón por flete, IGV, variacion y disponibilidad. Si no puedes verificar precio exacto, marca observacion referencial y sube el costo, no lo bajes.\n7) margen_estimado: usa 22% como base referencial. Puede variar, pero explica si recomiendas mas o menos.\n8) comparativa_items: por CADA item indica proveedor, producto, precio y compatibilidad\n9) comparativa_por_item: recomienda donde comprar CADA item, permitiendo mezclar proveedores si conviene\n10) comparativa_proveedores: muestra totales por proveedor y detalle de items\n11) informacion_faltante: incluye todo dato que GEA deba confirmar antes de ofertar\n12) dato faltante = ""\n13) RESPONDE PURO JSON.\nTDR:\n',
  oc:'Eres el Ag. de Orden de Compra para contrataciones públicas peruanas. Con base en los DATOS MAESTRO del análisis, indica los pasos para recibir y registrar la orden de compra: datos que debe contener la OC, verificación contra el TDR, plazos que activa y un checklist de validación. Responde en texto claro y ordenado.',
  compra:'Eres el Ag. de Compras. Con base en los DATOS MAESTRO (ítems y comparativa de proveedores), arma el plan de compra a proveedores: a quién comprar cada ítem, costos, tiempos y un cronograma que cumpla el plazo de entrega al Estado. Responde en texto claro.',
  entrega:'Eres el Ag. de Logística. Con base en los DATOS MAESTRO (lugar y plazo de entrega), genera el plan de entrega a la entidad: preparación, guía de remisión, embalaje, transporte y checklist de entrega conforme al TDR.',
@@ -610,7 +610,7 @@ var AIPROMPTS={
 function proyKey(){return 'sigma_proy_'+(EMP?EMP.id:'x')}
 function migrateProj(p){if(!p)return p;var old=p.stages||[],byk={};old.forEach(function(s){if(s&&s.k)byk[s.k]=s});
   var legacyProv=(byk['cot']&&byk['cot'].proveedores)||[]; /* la etapa Cotización se fusionó en Análisis */
-  p.stages=STAGES.map(function(s){var ex=byk[s.k];return ex?{k:s.k,mode:ex.mode||'manual',done:!!ex.done,notas:ex.notas||'',input:ex.input||'',resumen:ex.resumen||'',data:ex.data||null,docs:ex.docs||[],checklist:ex.checklist||[],docboard:ex.docboard||[],proveedores:ex.proveedores||[]}:{k:s.k,mode:'manual',done:false,notas:'',input:'',resumen:'',data:null,docs:[],checklist:[],docboard:[],proveedores:[]}});
+  p.stages=STAGES.map(function(s){var ex=byk[s.k];return ex?{k:s.k,mode:ex.mode||'manual',done:!!ex.done,notas:ex.notas||'',input:ex.input||'',resumen:ex.resumen||'',data:ex.data||null,docs:ex.docs||[],checklist:ex.checklist||[],docboard:ex.docboard||[],entidadDocs:ex.entidadDocs||[],revision:ex.revision||null,proveedores:ex.proveedores||[]}:{k:s.k,mode:'manual',done:false,notas:'',input:'',resumen:'',data:null,docs:[],checklist:[],docboard:[],entidadDocs:[],revision:null,proveedores:[]}});
   if(legacyProv.length&&p.stages[0]&&!(p.stages[0].proveedores&&p.stages[0].proveedores.length))p.stages[0].proveedores=legacyProv;
   if(p._sel!=null&&p._sel>=p.stages.length)p._sel=0;return p}
 function loadProy(){try{PROY=JSON.parse(localStorage.getItem(proyKey())||'[]')}catch(e){PROY=[]}PROY=PROY.map(migrateProj)}
@@ -656,9 +656,72 @@ function parseJSONArr(txt){
   if(inStr)r+='"';r=r.replace(/,\s*$/,'');for(var j=stack.length-1;j>=0;j--)r+=(stack[j]==='{'?'}':']');r=r.replace(/,(\s*[}\]])/g,'$1');
   try{var o=JSON.parse(r);console.log('JSON array reparado OK');return o}catch(e2){console.error('JSON array parse fail:',e2.message);return null}
 }
+function geminiText(d){
+  if(d&&d.error)return {text:'',error:(d.error.message||JSON.stringify(d.error))};
+  var txt='';try{(d.candidates[0].content.parts||[]).forEach(function(p){if(p.text)txt+=p.text})}catch(e){}
+  return {text:txt,error:txt?'':'La IA no devolvió texto utilizable.'};
+}
+function normalizeCotObj(obj,raw){
+  if(!obj&&Array.isArray(raw))obj={documento_tipo:'Cotización',es_cotizacion:true,nombre:'',items:raw,total:''};
+  if(!obj)return null;
+  obj.items=Array.isArray(obj.items)?obj.items:[];
+  if(obj.es_cotizacion==null){
+    var hasPrice=!!(parsePrice(obj.total)!=null||obj.items.some(function(x){return parsePrice(x.precio_total||x.precio_unitario)!=null}));
+    obj.es_cotizacion=hasPrice;
+  }
+  if(!obj.nombre&&obj.proveedor)obj.nombre=obj.proveedor;
+  if(!obj.documento_tipo)obj.documento_tipo=obj.es_cotizacion?'Cotización':'Documento técnico';
+  if(!obj.es_cotizacion&&!obj.advertencia)obj.advertencia='El documento no contiene precios de proveedor.';
+  return obj;
+}
 function rblock(title,ic,inner){return '<div class="rblock"><div class="rb-t">'+icon(ic)+title+'</div>'+inner+'</div>'}
 function compatColor(p){p=+p||0;return p>=90?'#16a34a':p>=70?'#0d9488':p>=50?'#f59e0b':'#ef4444'}
-function renderMaster(d){
+function decisionColor(t){t=(''+(t||'')).toUpperCase();return t.indexOf('NO')===0?'#ef4444':(t.indexOf('COND')>=0?'#f59e0b':'#16a34a')}
+function listMini(arr){if(!arr||!arr.length)return '';var h='<ul class="ulist">';arr.forEach(function(x){if(x)h+='<li>'+esc(x)+'</li>'});return h+'</ul>'}
+function providerItemTable(arr,title,ic){
+  if(!arr||!arr.length)return '';
+  var t='<table class="rtab"><thead><tr><th>Ítem</th><th>Proveedor / producto</th><th>Precio</th><th>Compat.</th></tr></thead><tbody>';
+  arr.forEach(function(it){
+    var pc=Math.max(0,Math.min(100,+it.compatibilidad||0)),cc=compatColor(pc);
+    var prov=it.proveedor||it.fuente||'',prod=it.producto||it.ofrecemos||it.descripcion||'';
+    var price=it.precio_total||it.total||it.precio_unitario||it.precio||'';
+    t+='<tr><td>'+esc(it.item||it.item_solicitado||'')+'</td><td>'+esc(prov)+(prod?'<div style="font-size:10px;color:var(--tmuted)">'+esc(prod)+'</div>':'')+(it.observacion?'<div style="font-size:10px;color:var(--tmuted)">'+esc(it.observacion)+'</div>':'')+'</td><td>'+esc(price)+'</td><td><span class="compat-p" style="color:'+cc+'">'+pc+'%</span></td></tr>';
+  });
+  return rblock(title,ic,t+'</tbody></table>');
+}
+function itemProviderMatrix(arr){
+  if(!arr||!arr.length)return '';
+  var t='<table class="rtab"><thead><tr><th>Ítem</th><th>Proveedor recomendado</th><th>Mejor precio</th><th>Alternativas</th></tr></thead><tbody>';
+  arr.forEach(function(it){
+    var alts=it.alternativas||it.proveedores||[];
+    var altTxt=Array.isArray(alts)?alts.map(function(a){return (a.proveedor||'')+(a.precio?': '+a.precio:(a.precio_total?': '+a.precio_total:''))}).filter(Boolean).join(' · '):'';
+    t+='<tr><td>'+esc(it.item||it.descripcion||'')+'</td><td>'+esc(it.proveedor_recomendado||it.recomendado||it.proveedor||'')+'</td><td>'+esc(it.mejor_precio||it.precio||it.precio_total||'')+'</td><td>'+esc(altTxt||it.observacion||'')+'</td></tr>';
+  });
+  return rblock('Comparativa por ítem · mejor compra','search',t+'</tbody></table>');
+}
+function renderRealBudget(st,p){
+  var prs=(st&&st.proveedores)||[];if(!prs.length)return '';
+  var best=null,valid=0,rows='';
+  prs.forEach(function(pr){
+    var total=parsePrice(pr.total);if(total!=null){valid++;if(!best||total<best.total)best={pr:pr,total:total}}
+    var ok=(pr.items||[]).filter(function(x){return (''+(x.cumple||'')).toLowerCase().indexOf('s')===0}).length,tt=(pr.items||[]).length;
+    rows+='<tr><td>'+esc(pr.nombre||'(sin nombre)')+'</td><td>'+esc(pr.total||'—')+'</td><td>'+esc(pr.entrega_global||'—')+'</td><td>'+(tt?ok+'/'+tt:'—')+'</td></tr>';
+  });
+  var monto=+(p&&p.monto)||0,lim=UIT*8,inner='',est=(st&&st.data&&st.data.presupuesto)?parsePrice(st.data.presupuesto.costo_estimado):null;
+  if(best){
+    var util=monto?monto-best.total:null,mg=(monto&&util!=null)?(util/monto*100):null,sug=best.total*1.22,delta=(est!=null)?best.total-est:null;
+    inner+='<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-bottom:10px">';
+    inner+='<div><div style="font-size:19px;font-weight:700;font-family:DM Mono,monospace">S/ '+best.total.toLocaleString('es-PE')+'</div><div style="font-size:9.5px;color:var(--tmuted);text-transform:uppercase">Mejor costo real</div></div>';
+    inner+='<div><div style="font-size:19px;font-weight:700;font-family:DM Mono,monospace">S/ '+sug.toLocaleString('es-PE',{maximumFractionDigits:0})+'</div><div style="font-size:9.5px;color:var(--tmuted);text-transform:uppercase">Venta sugerida +22%</div></div>';
+    inner+='<div><div style="font-size:19px;font-weight:700;font-family:DM Mono,monospace">'+(mg==null?'—':mg.toFixed(1)+'%')+'</div><div style="font-size:9.5px;color:var(--tmuted);text-transform:uppercase">Margen vs monto</div></div></div>';
+    inner+='<div style="font-size:11.5px;color:var(--tmuted);margin-bottom:10px">Proveedor base: <b>'+esc(best.pr.nombre||'(sin nombre)')+'</b>. Límite 8 UIT: S/ '+lim.toLocaleString('es-PE')+'. '+(delta==null?'':'La cotización real está '+(delta>=0?'S/ '+delta.toLocaleString('es-PE')+' sobre':'S/ '+Math.abs(delta).toLocaleString('es-PE')+' bajo')+' el estimado IA.')+'</div>';
+  }else{
+    inner+='<div style="font-size:11.5px;color:var(--tmuted);margin-bottom:10px">Hay proveedores registrados, pero falta total cotizado para calcular margen real.</div>';
+  }
+  if(rows)inner+='<table class="rtab"><thead><tr><th>Proveedor</th><th>Total</th><th>Entrega</th><th>Cumple</th></tr></thead><tbody>'+rows+'</tbody></table>';
+  return rblock('Presupuesto real con proveedores','wallet',inner);
+}
+function renderMaster(d,st,p){
   var h='<div class="rblocks">';
   /* 1) Veredicto destacado */
   if(d.viabilidad){var ver=(''+(d.viabilidad.veredicto||'')).toUpperCase();var c=ver.indexOf('NO')===0?'#ef4444':(ver.indexOf('RIESG')>=0?'#f59e0b':'#16a34a');
@@ -666,22 +729,31 @@ function renderMaster(d){
     if(d.viabilidad.razones&&d.viabilidad.razones.length){h+='<ul class="ulist" style="margin-top:9px">';d.viabilidad.razones.forEach(function(r){h+='<li>'+esc(r)+'</li>'});h+='</ul>'}
     if(d.recomendacion)h+='<div style="margin-top:10px;font-size:12px;padding-top:9px;border-top:1px solid '+bg(c,.2)+'"><b>Recomendación: </b>'+esc(d.recomendacion)+'</div>';
     h+='</div>'}
+  if(d.decision){var dc=decisionColor(d.decision.go_no_go),pt=Math.max(0,Math.min(100,+d.decision.puntaje||0));
+    var di='<div class="compat"><div class="compat-h"><span class="compat-n">'+esc(d.decision.go_no_go||'Decisión')+'</span><span class="compat-p" style="color:'+dc+'">'+pt+'/100</span></div><div class="compat-bar"><i style="width:'+pt+'%;background:'+dc+'"></i></div>'+(d.decision.motivo?'<div class="compat-ob">'+esc(d.decision.motivo)+'</div>':'')+'</div>';
+    if(d.decision.acciones_inmediatas&&d.decision.acciones_inmediatas.length)di+='<div style="margin-top:10px;font-size:11.5px;color:var(--tmuted);font-weight:700">Acciones inmediatas</div>'+listMini(d.decision.acciones_inmediatas);
+    if(d.decision.informacion_faltante&&d.decision.informacion_faltante.length)di+='<div style="margin-top:10px;font-size:11.5px;color:var(--tmuted);font-weight:700">Información faltante</div>'+listMini(d.decision.informacion_faltante);
+    h+=rblock('Decisión comercial','check',di)}
   /* 2) Presupuesto */
-  if(d.presupuesto){var p=d.presupuesto,pi='';if(p.costo_estimado)pi+='<div style="font-size:21px;font-weight:700;font-family:DM Mono,monospace">'+esc(p.costo_estimado)+'</div><div style="font-size:9.5px;color:var(--tmuted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">Costo estimado</div>';if(p.desglose&&p.desglose.length){pi+='<table class="rtab"><thead><tr><th>Concepto</th><th>Costo</th></tr></thead><tbody>';p.desglose.forEach(function(x){pi+='<tr><td>'+esc(x.item||x.concepto||'')+'</td><td>'+esc(x.costo||'')+'</td></tr>'});pi+='</tbody></table>'}if(p.margen_estimado)pi+='<div style="margin-top:9px;font-size:12px"><span style="color:var(--tmuted)">Margen estimado: </span><b>'+esc(p.margen_estimado)+'</b></div>';if(p.observaciones)pi+='<div style="margin-top:6px;font-size:11.5px;color:var(--tmuted)">'+esc(p.observaciones)+'</div>';h+=rblock('Presupuesto y costo estimado','wallet',pi)}
+  if(d.presupuesto){var bp=d.presupuesto,pi='';if(bp.costo_estimado)pi+='<div style="font-size:21px;font-weight:700;font-family:DM Mono,monospace">'+esc(bp.costo_estimado)+'</div><div style="font-size:9.5px;color:var(--tmuted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">Costo estimado</div>';if(bp.precio_oferta_sugerido||bp.utilidad_estimada||bp.margen_estimado){pi+='<div class="kv" style="margin-bottom:10px">';if(bp.precio_oferta_sugerido)pi+='<div class="k">Precio oferta sugerido</div><div>'+esc(bp.precio_oferta_sugerido)+'</div>';if(bp.utilidad_estimada)pi+='<div class="k">Utilidad estimada</div><div>'+esc(bp.utilidad_estimada)+'</div>';if(bp.margen_estimado)pi+='<div class="k">Margen estimado</div><div><b>'+esc(bp.margen_estimado)+'</b></div>';pi+='</div>'}if(bp.desglose&&bp.desglose.length){pi+='<table class="rtab"><thead><tr><th>Concepto</th><th>C.Unit</th><th>C.Total</th><th>P.Sugerido</th></tr></thead><tbody>';bp.desglose.forEach(function(x){pi+='<tr><td>'+esc(x.item||x.concepto||'')+(x.cantidad?'<div style="font-size:10px;color:var(--tmuted)">Cant. '+esc(x.cantidad)+'</div>':'')+'</td><td>'+esc(x.costo_unitario||'')+'</td><td>'+esc(x.costo_total||x.costo||'')+'</td><td>'+esc(x.precio_sugerido||'')+'</td></tr>'});pi+='</tbody></table>'}if(bp.observaciones)pi+='<div style="margin-top:6px;font-size:11.5px;color:var(--tmuted)">'+esc(bp.observaciones)+'</div>';h+=rblock('Presupuesto estimado IA','wallet',pi)}
+  if(d.investigacion_referencial&&d.investigacion_referencial.length)h+=providerItemTable(d.investigacion_referencial,'Precios referenciales investigados','search');
+  h+=renderRealBudget(st,p);
   /* 3) Dashboard de compatibilidad por ítem */
-  if(d.comparativa_items&&d.comparativa_items.length){var ci='';d.comparativa_items.forEach(function(it){var pc=Math.max(0,Math.min(100,+it.compatibilidad||0)),cc=compatColor(pc);ci+='<div class="compat"><div class="compat-h"><span class="compat-n">'+esc(it.item||'')+'</span><span class="compat-p" style="color:'+cc+'">'+pc+'%</span></div><div class="compat-bar"><i style="width:'+pc+'%;background:'+cc+'"></i></div>'+(it.ofrecemos?'<div class="compat-of"><b>Ofrecemos:</b> '+esc(it.ofrecemos)+'</div>':'')+(it.observacion?'<div class="compat-ob">'+esc(it.observacion)+'</div>':'')+'</div>'});h+=rblock('Compatibilidad por ítem · qué ofrecemos','box','<div class="compat-grid">'+ci+'</div>')}
+  if(d.comparativa_items&&d.comparativa_items.length){var ci='';d.comparativa_items.forEach(function(it){var pc=Math.max(0,Math.min(100,+it.compatibilidad||0)),cc=compatColor(pc),prov=it.proveedor||it.fuente||'',prod=it.producto||it.ofrecemos||'',price=it.precio_total||it.total||it.precio_unitario||it.precio||'';ci+='<div class="compat"><div class="compat-h"><span class="compat-n">'+esc(it.item||it.item_solicitado||'')+'</span><span class="compat-p" style="color:'+cc+'">'+pc+'%</span></div><div class="compat-bar"><i style="width:'+pc+'%;background:'+cc+'"></i></div>'+(prov?'<div class="compat-of"><b>Proveedor:</b> '+esc(prov)+'</div>':'')+(prod?'<div class="compat-of"><b>Producto:</b> '+esc(prod)+'</div>':'')+(price?'<div class="compat-of"><b>Precio:</b> '+esc(price)+'</div>':'')+(it.observacion?'<div class="compat-ob">'+esc(it.observacion)+'</div>':'')+'</div>'});h+=rblock('Compatibilidad por ítem · proveedor, producto y precio','box','<div class="compat-grid">'+ci+'</div>')}
   /* 4) Comparativa de proveedores */
-  if(d.comparativa_proveedores&&d.comparativa_proveedores.length){var t='<table class="rtab"><thead><tr><th>Proveedor</th><th>Precio</th><th>Entrega</th><th>Calif.</th></tr></thead><tbody>';d.comparativa_proveedores.forEach(function(x){t+='<tr'+(x.recomendado?' style="background:'+bg('#16a34a',.06)+'"':'')+'><td>'+esc(x.proveedor||'')+(x.recomendado?'<span class="recb">★ recomendado</span>':'')+'</td><td>'+esc(x.precio_total||'')+'</td><td>'+esc(x.entrega||'')+'</td><td>'+esc(x.calificacion||'')+'</td></tr>'});t+='</tbody></table>';h+=rblock('Comparativa de proveedores','chat',t)}
+  if(d.comparativa_por_item&&d.comparativa_por_item.length)h+=itemProviderMatrix(d.comparativa_por_item);
+  if(d.comparativa_proveedores&&d.comparativa_proveedores.length){var t='<table class="rtab"><thead><tr><th>Proveedor</th><th>Total</th><th>Entrega</th><th>Detalle</th></tr></thead><tbody>';d.comparativa_proveedores.forEach(function(x){var det='';if(x.items&&x.items.length)det=x.items.map(function(i){return (i.item||i.descripcion||'')+(i.precio?': '+i.precio:(i.precio_total?': '+i.precio_total:''))}).join(' · ');t+='<tr'+(x.recomendado?' style="background:'+bg('#16a34a',.06)+'"':'')+'><td>'+esc(x.proveedor||'')+(x.recomendado?'<span class="recb">★ recomendado</span>':'')+'</td><td>'+esc(x.precio_total||x.total||'')+'</td><td>'+esc(x.entrega||'')+'</td><td>'+esc(det||x.calificacion||'')+'</td></tr>'});t+='</tbody></table>';h+=rblock('Comparativa de proveedores','chat',t)}
   /* 5) Datos del proceso */
   var kv='';function row(k,v){if(v)kv+='<div class="k">'+esc(k)+'</div><div>'+esc(v)+'</div>'}
-  row('Objeto',d.objeto);row('Entidad',d.entidad);row('Plazo de entrega',d.plazo_entrega);row('Lugar de entrega',d.lugar_entrega);row('Forma de pago',d.forma_pago);row('Garantías',d.garantias);row('Penalidades',d.penalidades);
+  row('Objeto',d.objeto);row('Entidad',d.entidad);row('Valor referencial',d.valor_referencial);row('Límite 8 UIT',d.limite_8uit);row('Plazo de entrega',d.plazo_entrega);row('Lugar de entrega',d.lugar_entrega);row('Forma de pago',d.forma_pago);row('Garantías',d.garantias);row('Penalidades',d.penalidades);
   if(kv)h+=rblock('Datos del proceso','clipboard','<div class="kv">'+kv+'</div>');
   /* 6) Ítems */
   if(d.items&&d.items.length){var ti='<table class="rtab"><thead><tr><th>Ítem</th><th>Cant.</th><th>Unidad</th></tr></thead><tbody>';d.items.forEach(function(it){ti+='<tr><td>'+esc(it.descripcion||it.desc||it.item||'')+'</td><td>'+esc(it.cantidad||it.qty||'')+'</td><td>'+esc(it.unidad||it.unit||'')+'</td></tr>'});ti+='</tbody></table>';h+=rblock('Ítems requeridos','box',ti)}
   /* 7) Requisitos */
   if(d.requisitos_calificacion&&d.requisitos_calificacion.length){var u='<ul class="ulist">';d.requisitos_calificacion.forEach(function(r){u+='<li>'+esc(r)+'</li>'});u+='</ul>';h+=rblock('Requisitos de calificación','check',u)}
   /* 8) Especificaciones */
-  if(d.especificaciones&&d.especificaciones.length){var e2='<ul class="ulist">';d.especificaciones.forEach(function(r){e2+='<li>'+esc(r)+'</li>'});e2+='</ul>';h+=rblock('Especificaciones técnicas','doc',e2)}
+  if(d.especificaciones_por_item&&d.especificaciones_por_item.length){var ep='<table class="rtab"><thead><tr><th>Producto</th><th>Especificación</th></tr></thead><tbody>';d.especificaciones_por_item.forEach(function(x){ep+='<tr><td>'+esc(x.item||x.producto||'')+'</td><td>'+esc(x.especificacion||x.detalle||'')+'</td></tr>'});ep+='</tbody></table>';h+=rblock('Especificaciones técnicas por producto','doc',ep)}
+  else if(d.especificaciones&&d.especificaciones.length){var e2='<ul class="ulist">';d.especificaciones.forEach(function(r){e2+='<li>'+esc(r)+'</li>'});e2+='</ul>';h+=rblock('Especificaciones técnicas','doc',e2)}
   /* 9) Riesgos */
   if(d.riesgos&&d.riesgos.length){var rr='<ul class="ulist">';d.riesgos.forEach(function(r){rr+='<li>'+esc(r)+'</li>'});rr+='</ul>';h+=rblock('Riesgos','search',rr)}
   h+='</div>';return h;
@@ -737,23 +809,32 @@ function renderProyDetail(){
     h+=stageProp(p,si,st);
   } else if(st.mode==='auto'){
     if(si===0){
-      h+='<div class="sp-lbl">Contenido a analizar (pega el TDR o arrastra un PDF abajo)</div>';
-      h+='<textarea class="ta" placeholder="Pega aquí el texto completo del TDR / especificaciones técnicas…" oninput="stInput('+si+',this.value)">'+esc(st.input)+'</textarea>';
-      h+='<div style="margin-top:10px"><button class="aibtn" '+(st._loading?'disabled':'')+' onclick="aiAnalyze('+si+')">'+(st._loading?'Analizando…':(icon('spark',1.6)+' Analizar TDR con IA'))+'</button></div>';
+      if(st.data||st.resumen){
+        h+='<div class="aibase" style="padding:11px 13px;border-radius:10px;margin-top:4px;font-size:11.5px;line-height:1.5;background:var(--alertbg);border:1px solid var(--alertborder)"><span style="color:var(--accent)">'+icon('spark')+'</span><div>Resultado generado. Puedes revisar el TDR fuente y volver a analizar al final de esta etapa.</div></div>';
+      }else{
+        h+='<div class="sp-lbl">Contenido a analizar</div>';
+        h+='<textarea class="ta" placeholder="Pega aqui el texto completo del TDR / especificaciones tecnicas..." oninput="stInput('+si+',this.value)">'+esc(st.input)+'</textarea>';
+        h+='<div style="margin-top:10px"><button class="aibtn" '+(st._loading?'disabled':'')+' onclick="aiAnalyze('+si+')">'+(st._loading?'Analizando...':(icon('spark',1.6)+' Analizar TDR con IA'))+'</button></div>';
+      }
     } else {
       var hasTdr=!!(CURP.stages[0].data||(CURP.stages[0].resumen||'').trim());
       var col=hasTdr?'var(--accent)':'#f59e0b';
-      h+='<div class="aibase" style="padding:11px 13px;border-radius:10px;margin-top:4px;font-size:11.5px;line-height:1.5;background:'+(hasTdr?'var(--alertbg)':'rgba(245,158,11,.08)')+';border:1px solid '+(hasTdr?'var(--alertborder)':'rgba(245,158,11,.28)')+'"><span style="color:'+col+'">'+icon(hasTdr?'spark':'search')+'</span><div>'+(hasTdr?'Este agente parte del <b>análisis maestro</b> (etapa 1) — usa sus datos automáticamente.':'Aún no se ha analizado el TDR. Ve a la <b>etapa 1</b> y ejecútalo primero; los demás agentes se basan en él.')+'</div></div>';
+      h+='<div class="aibase" style="padding:11px 13px;border-radius:10px;margin-top:4px;font-size:11.5px;line-height:1.5;background:'+(hasTdr?'var(--alertbg)':'rgba(245,158,11,.08)')+';border:1px solid '+(hasTdr?'var(--alertborder)':'rgba(245,158,11,.28)')+'"><span style="color:'+col+'">'+icon(hasTdr?'spark':'search')+'</span><div>'+(hasTdr?'Este agente parte del <b>analisis maestro</b> (etapa 1) y usa sus datos automaticamente.':'Aun no se ha analizado el TDR. Ve a la <b>etapa 1</b> y ejecutalo primero; los demas agentes se basan en el.')+'</div></div>';
       h+='<div class="sp-lbl">Notas adicionales (opcional)</div>';
-      h+='<textarea class="ta" placeholder="Información extra para este agente (opcional)…" oninput="stInput('+si+',this.value)">'+esc(st.input)+'</textarea>';
-      h+='<div style="margin-top:10px"><button class="aibtn" '+((st._loading||!hasTdr)?'disabled':'')+' onclick="aiAnalyze('+si+')">'+(st._loading?'Analizando…':(icon('spark',1.6)+' Analizar con IA'))+'</button></div>';
+      h+='<textarea class="ta" placeholder="Informacion extra para este agente (opcional)..." oninput="stInput('+si+',this.value)">'+esc(st.input)+'</textarea>';
+      h+='<div style="margin-top:10px"><button class="aibtn" '+((st._loading||!hasTdr)?'disabled':'')+' onclick="aiAnalyze('+si+')">'+(st._loading?'Analizando...':(icon('spark',1.6)+' Analizar con IA'))+'</button></div>';
     }
     if(si===0){
-      if(st.data){h+='<div class="sp-lbl">✓ Resultado del análisis maestro</div>'+renderMaster(st.data);h+=renderProvSection(p,si,st);}
+      if(st.data){h+='<div class="sp-lbl">Resultado del analisis maestro</div>'+renderMaster(st.data,st,p);h+=renderProvSection(p,si,st);}
       else if(st.resumen){
-        h+='<div class="sp-lbl">⚠ Respuesta IA (no se pudo parsear JSON)</div>';
-        h+='<div style="background:var(--alertbg);border:1px solid var(--alertborder);border-radius:10px;padding:11px;font-size:11.5px;margin:8px 0;color:var(--tmuted)">La IA devolvió texto pero no un JSON válido. Revisa la consola (F12).</div>';
+        h+='<div class="sp-lbl">Respuesta IA (no se pudo parsear JSON)</div>';
+        h+='<div style="background:var(--alertbg);border:1px solid var(--alertborder);border-radius:10px;padding:11px;font-size:11.5px;margin:8px 0;color:var(--tmuted)">La IA devolvio texto pero no un JSON valido. Revisa la consola (F12).</div>';
         h+='<div class="aires">'+esc(st.resumen)+'</div>';
+      }
+      if(st.data||st.resumen){
+        h+='<div class="sp-lbl" style="margin-top:22px;border-top:1px solid var(--border);padding-top:16px">Fuente del analisis / TDR</div>';
+        h+='<textarea class="ta" placeholder="TDR o especificaciones tecnicas usadas para este analisis..." oninput="stInput('+si+',this.value)">'+esc(st.input)+'</textarea>';
+        h+='<div style="margin-top:10px"><button class="aibtn" '+(st._loading?'disabled':'')+' onclick="aiAnalyze('+si+')">'+(st._loading?'Analizando...':(icon('spark',1.6)+' Reanalizar con IA'))+'</button></div>';
       }
     } else if(st.resumen){h+='<div class="sp-lbl">Resultado IA</div><div class="aires">'+esc(st.resumen)+'</div>';}
   } else {
@@ -808,23 +889,47 @@ function aiAnalyze(si){
    }).catch(function(e){st._loading=false;toast('Error IA: '+e.message);renderProyDetail()});
 }
 /* ===== Etapa Propuesta: tablero de documentos tipo Adobe + agente documental ===== */
-var PROP_CHK_PROMPT='ROLE: Eres experto en documentación para contrataciones con el Estado peruano (<8UIT, OSCE/SEACE). TASK: Con base en los DATOS MAESTRO (objeto y requisitos de calificación), genera la LISTA DE DOCUMENTOS que la empresa PROVEEDORA debe presentar en su OFERTA TÉCNICA (anexos, declaraciones juradas, fichas técnicas, certificados, cotización, etc.). OUTPUT: SOLO un JSON array válido (sin texto, markdown ni backticks). ESTRUCTURA: [{"nombre":"[nombre del documento]","tipo":"Declaración Jurada","obligatorio":true,"descripcion":"[qué debe contener]"}]\nIncluye las declaraciones juradas típicas de OSCE (DJ de no estar inhabilitado/impedido, DJ de cumplimiento del TDR, DJ de plazo de entrega, DJ de veracidad de información) más los anexos y documentos específicos según los requisitos. tipo debe ser uno de: Anexo, Declaración Jurada, Ficha Técnica, Certificado, Cotización, Otro. RESPONDE SOLO EL JSON ARRAY.';
+var PROP_CHK_PROMPT='ROLE: Eres experto en documentación para contrataciones con el Estado peruano (<8UIT, OSCE/SEACE). TASK: Con base en los DATOS MAESTRO, los anexos enviados por la entidad y los documentos internos disponibles de la empresa, genera la LISTA DE DOCUMENTOS que la empresa PROVEEDORA debe presentar en su OFERTA TÉCNICA. OUTPUT: SOLO un JSON array válido (sin texto, markdown ni backticks). ESTRUCTURA: [{"nombre":"[nombre del documento]","tipo":"Anexo","obligatorio":true,"descripcion":"[qué debe contener]","origen":"Entidad|Empresa|Generar|Ficha técnica","requiere_firma":true,"estado":"Falta"}]\nIncluye anexos de la entidad, declaraciones juradas típicas (no estar impedido/inhabilitado, cumplimiento TDR, plazo, veracidad), oferta económica si aplica, ficha RUC, DNI/representante, RNP/RNP o constancia equivalente si el TDR lo pide, REMYPE si aplica, CCI/cuenta bancaria si aplica, fichas técnicas por producto, certificados y cualquier documento específico. tipo debe ser uno de: Anexo, Declaración Jurada, Ficha Técnica, Certificado, Cotización, Empresa, Otro. RESPONDE SOLO EL JSON ARRAY.';
+var PROP_REVIEW_PROMPT='ROLE: Auditor documental senior para ofertas técnicas al Estado peruano. TASK: Revisa si la oferta técnica está completa contra el TDR, anexos de entidad, documentos internos de empresa, fichas técnicas, firmas y tablero final. OUTPUT: SOLO JSON válido. ESTRUCTURA: {"veredicto":"LISTA|OBSERVADA|INCOMPLETA","faltantes":["..."],"observaciones":["..."],"firmas_pendientes":["..."],"documentos_ok":["..."],"acciones":["..."]}. Sé estricto: si falta firma, anexo, ficha técnica o documento obligatorio, marca OBSERVADA o INCOMPLETA.';
+var EMP_DOC_TYPES=[
+ {k:'ficha_ruc',n:'Ficha RUC',d:'Constancia RUC actualizada de la empresa'},
+ {k:'dni',n:'DNI representante',d:'DNI del representante o firmante'},
+ {k:'rnp',n:'RNP / habilitación',d:'Registro Nacional de Proveedores o habilitación requerida'},
+ {k:'remype',n:'REMYPE',d:'Constancia REMYPE si aplica'},
+ {k:'firma',n:'Firma / sello',d:'Firma escaneada o recurso para firmar documentos'},
+ {k:'cci',n:'CCI / banco',d:'Cuenta bancaria y CCI para anexos de pago'},
+ {k:'poder',n:'Vigencia de poder',d:'Poder o documento de representación si aplica'},
+ {k:'fichas',n:'Fichas técnicas base',d:'Fichas técnicas recurrentes de productos'}
+];
+function empDocsKey(){return 'sigma_emp_docs_'+(EMP?EMP.id:'x')}
+function loadEmpDocs(){try{return JSON.parse(localStorage.getItem(empDocsKey())||'[]')}catch(e){return []}}
+function saveEmpDocs(a){try{localStorage.setItem(empDocsKey(),JSON.stringify(a||[]))}catch(e){}}
+function empDocHas(k){return loadEmpDocs().filter(function(d){return d.k===k}).length>0}
 function stageProp(p,si,st){
-  st.checklist=st.checklist||[];st.docboard=st.docboard||[];
+  st.checklist=st.checklist||[];st.docboard=st.docboard||[];st.entidadDocs=st.entidadDocs||[];
   var m0=p.stages[0],hasM=!!(m0.data||m0.resumen);
   var col=hasM?'var(--accent)':'#f59e0b';
   var h='<div class="aibase" style="padding:11px 13px;border-radius:10px;margin-top:4px;font-size:11.5px;line-height:1.5;background:'+(hasM?'var(--alertbg)':'rgba(245,158,11,.08)')+';border:1px solid '+(hasM?'var(--alertborder)':'rgba(245,158,11,.28)')+'"><span style="color:'+col+'">'+icon(hasM?'spark':'search')+'</span><div>'+(hasM?'Este agente documental usa los <b>requisitos del análisis maestro</b> para armar la lista de anexos y declaraciones juradas, y puede redactarlas con tus datos.':'Primero ejecuta el <b>análisis del TDR</b> (etapa 1); de ahí saco los requisitos.')+'</div></div>';
-  h+='<div style="margin:11px 0"><button class="aibtn" '+((st._loading||!hasM)?'disabled':'')+' onclick="aiPropChecklist('+si+')">'+(st._loading?'Generando…':(icon('spark',1.6)+' Generar lista de documentos con IA'))+'</button></div>';
+  h+='<div class="sp-lbl" style="margin-top:16px">1. Anexos y documentos enviados por la entidad</div>';
+  h+='<div class="docboard-drop" onclick="pickEntidadDocs('+si+')">Sube aquí bases, anexos, formatos, cartas, DJ o archivos que envió la entidad<br><span style="font-size:10px;opacity:.7">La IA intentará leer cada PDF/imagen y convertirlo en guía de llenado</span></div>';
+  if(st.entidadDocs.length){h+='<div class="chk-list">';st.entidadDocs.forEach(function(d,di){h+='<div class="chk"><div class="chk-tp">Entidad</div><div class="chk-main"><div class="chk-n">'+esc(d.name)+'</div>'+(d.analisis?'<div class="chk-d">'+esc(d.analisis)+'</div>':'<div class="chk-d">Pendiente de análisis automático.</div>')+'</div><div class="chk-act"><button class="minib" onclick="rmEntidadDoc('+si+','+di+')">Eliminar</button></div></div>'});h+='</div>'}
+  var ed=loadEmpDocs();
+  h+='<div class="sp-lbl" style="margin-top:18px">2. Matriz documental de '+(EMP?esc(EMP.nombre):'empresa')+'</div>';
+  h+='<div class="chk-list">';
+  EMP_DOC_TYPES.forEach(function(t){var ok=empDocHas(t.k);h+='<div class="chk"><div class="chk-tp">'+(ok?'OK':'Falta')+'</div><div class="chk-main"><div class="chk-n">'+esc(t.n)+(ok?'<span class="oblig">cargado</span>':'')+'</div><div class="chk-d">'+esc(t.d)+'</div></div><div class="chk-act"><button class="minib" onclick="pickEmpDoc(\''+t.k+'\')">'+(ok?'Actualizar':'Subir')+'</button></div></div>'});
+  h+='</div>';
+  h+='<div style="margin:11px 0;display:flex;gap:8px;flex-wrap:wrap"><button class="aibtn" '+((st._loading||!hasM)?'disabled':'')+' onclick="aiPropChecklist('+si+')">'+(st._loading?'Generando…':(icon('spark',1.6)+' Analizar anexos y generar dashboard'))+'</button><button class="minib" onclick="aiReviewOffer('+si+')">Revisar oferta final</button></div>';
   if(st.checklist.length){
-    h+='<div class="sp-lbl">Documentos requeridos por la entidad</div><div class="chk-list">';
+    h+='<div class="sp-lbl">3. Dashboard de documentos requeridos</div><div class="chk-list">';
     st.checklist.forEach(function(it,idx){
       var canDraft=/declaraci|anexo|jurad/i.test((it.tipo||'')+' '+(it.nombre||''));
+      var present=propDocPresent(st,it), firm=it.requiere_firma?' · firma':'';
       h+='<div class="chk"><div class="chk-tp">'+esc(it.tipo||'Doc')+'</div><div class="chk-main"><div class="chk-n">'+esc(it.nombre||'')+(it.obligatorio?'<span class="oblig">obligatorio</span>':'')+'</div>'+(it.descripcion?'<div class="chk-d">'+esc(it.descripcion)+'</div>':'')+(it.borrador?'<div class="chk-borr">'+esc(it.borrador)+'</div>':'')+'</div>'+
-      '<div class="chk-act">'+(canDraft?'<button class="minib" '+(it._dl?'disabled':'')+' onclick="aiDraftDoc('+si+','+idx+')">'+(it._dl?'…':(it.borrador?'Rehacer':'Redactar IA'))+'</button>':'')+'</div></div>';
+      '<div class="chk-act"><div style="font-size:10px;color:'+(present?'#16a34a':'#f59e0b')+';margin-bottom:6px">'+(present?'Cubierto':'Falta')+firm+'</div>'+(canDraft?'<button class="minib" '+(it._dl?'disabled':'')+' onclick="aiDraftDoc('+si+','+idx+')">'+(it._dl?'…':(it.borrador?'Rehacer':'Guía / llenar'))+'</button>':'')+'</div></div>';
     });
     h+='</div>';
   }
-  h+='<div class="sp-lbl" style="margin-top:18px">Tablero de documentos de la oferta técnica</div>';
+  h+='<div class="sp-lbl" style="margin-top:18px">4. Tablero de armado de oferta técnica</div>';
   h+='<div class="docboard-drop" id="dbdz_'+si+'" onclick="pickFileBoard('+si+')" ondragover="dzOver2(event,'+si+',1)" ondragleave="dzOver2(event,'+si+',0)" ondrop="dbDrop(event,'+si+')">Arrastra aquí PDF, imágenes o documentos · o haz clic para agregar<br><span style="font-size:10px;opacity:.7">Arrastra las tarjetas para reordenar · marca cada documento como listo</span></div>';
   if(st.docboard.length){
     h+='<div class="docboard">';
@@ -839,14 +944,52 @@ function stageProp(p,si,st){
   }
   h+='<div class="sp-lbl" style="margin-top:16px">Notas de la propuesta (opcional)</div>';
   h+='<textarea class="ta" placeholder="Notas internas de la propuesta…" oninput="stNotas('+si+',this.value)">'+esc(st.notas)+'</textarea>';
+  if(st.revision){h+='<div class="sp-lbl" style="margin-top:16px">5. Revisión final IA</div>'+renderOfferReview(st.revision)}
   return h;
+}
+function propDocPresent(st,it){
+  var nm=(''+(it.nombre||'')).toLowerCase(),tp=(''+(it.tipo||'')).toLowerCase(),src=(''+(it.origen||'')).toLowerCase();
+  if(it.borrador)return true;
+  if(src.indexOf('empresa')>=0){
+    var docs=loadEmpDocs();return docs.some(function(d){return nm.indexOf((d.n||d.name||'').toLowerCase())>=0||tp.indexOf((d.n||'').toLowerCase())>=0});
+  }
+  return (st.docboard||[]).concat(st.entidadDocs||[]).some(function(d){var dn=(''+d.name).toLowerCase();return dn.indexOf(nm.slice(0,12))>=0||nm.indexOf(dn.slice(0,12))>=0});
+}
+function renderOfferReview(r){
+  var c=(r.veredicto==='LISTA')?'#16a34a':(r.veredicto==='INCOMPLETA'?'#ef4444':'#f59e0b');
+  var h='<div class="verdict" style="border-color:'+bg(c,.45)+';background:'+bg(c,.07)+'"><div class="vbig" style="color:'+c+'">'+icon('check',1.8)+esc(r.veredicto||'OBSERVADA')+'</div>';
+  function sec(t,a){if(a&&a.length)h+='<div style="margin-top:10px;font-size:11.5px;color:var(--tmuted);font-weight:700">'+t+'</div>'+listMini(a)}
+  sec('Faltantes',r.faltantes);sec('Firmas pendientes',r.firmas_pendientes);sec('Observaciones',r.observaciones);sec('Documentos OK',r.documentos_ok);sec('Acciones',r.acciones);
+  return h+'</div>';
+}
+function pickEntidadDocs(si){_fileStage=si;_fileMode='propentity';var inp=document.getElementById('pfile');inp.value='';inp.multiple=true;inp.click()}
+function pickEmpDoc(k){_fileStage=-1;_fileMode='empdoc:'+k;var inp=document.getElementById('pfile');inp.value='';inp.multiple=false;inp.click()}
+function rmEntidadDoc(si,di){CURP.stages[si].entidadDocs.splice(di,1);saveProy();renderProyDetail()}
+function addEntidadDoc(si,f){
+  var st=CURP.stages[si];st.entidadDocs=st.entidadDocs||[];
+  var d={name:f.name,type:f.type||'',size:Math.round(f.size/1024),analisis:''};st.entidadDocs.push(d);saveProy();renderProyDetail();
+  if(/pdf|image/.test(f.type||'')){var rd=new FileReader();rd.onload=function(){aiAnalyzeEntidadDoc(si,d,(''+rd.result).split(',')[1],f.type)};rd.readAsDataURL(f)}
+}
+function saveEmpDoc(k,f){
+  var docs=loadEmpDocs(),meta=EMP_DOC_TYPES.filter(function(x){return x.k===k})[0]||{k:k,n:k};
+  docs=docs.filter(function(d){return d.k!==k});
+  docs.push({k:k,n:meta.n,name:f.name,type:f.type||'',size:Math.round(f.size/1024),fecha:new Date().toISOString().slice(0,10)});
+  saveEmpDocs(docs);toast(meta.n+' guardado en matriz documental');renderProyDetail();
+}
+function aiAnalyzeEntidadDoc(si,d,b64,mime){
+  var st=CURP.stages[si],m0=CURP.stages[0],base=m0.data?JSON.stringify(m0.data,null,2):(m0.resumen||'');
+  var prompt='Analiza este anexo/documento de una entidad pública peruana para una oferta técnica. Identifica: nombre del formato, campos que se deben llenar, firmas/sellos requeridos, documentos relacionados y alertas. Compáralo con el análisis del TDR. Responde en un resumen breve y accionable, máximo 700 caracteres. DATOS MAESTRO:\\n'+base;
+  fetch('/api/gemini',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt:prompt,imageBase64:b64,mimeType:mime})})
+   .then(function(r){return r.json()}).then(function(x){try{d.analisis=x.candidates[0].content.parts[0].text}catch(e){d.analisis='No se pudo analizar automáticamente.'}saveProy();renderProyDetail()})
+   .catch(function(){d.analisis='No se pudo analizar automáticamente.';saveProy();renderProyDetail()});
 }
 function aiPropChecklist(si){
   var st=CURP.stages[si],m0=CURP.stages[0];
   if(!m0.data&&!m0.resumen){toast('Primero ejecuta el análisis del TDR (etapa 1)');return}
   var base=m0.data?JSON.stringify(m0.data,null,2):(m0.resumen||'');
+  var ctx='\n\nANEXOS/DOCUMENTOS DE ENTIDAD:\n'+JSON.stringify(st.entidadDocs||[],null,2)+'\n\nMATRIZ DOCUMENTAL EMPRESA:\n'+JSON.stringify(loadEmpDocs(),null,2);
   st._loading=true;renderProyDetail();
-  fetch('/api/gemini',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt:PROP_CHK_PROMPT+'\n\nDATOS MAESTRO:\n'+base})})
+  fetch('/api/gemini',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt:PROP_CHK_PROMPT+'\n\nDATOS MAESTRO:\n'+base+ctx})})
    .then(function(r){return r.json()}).then(function(d){
      var txt='';try{txt=d.candidates[0].content.parts[0].text}catch(e){txt=''}
      var arr=parseJSONArr(txt);st._loading=false;
@@ -857,14 +1000,26 @@ function aiPropChecklist(si){
 function aiDraftDoc(si,idx){
   var st=CURP.stages[si],it=st.checklist[idx],m0=CURP.stages[0];
   var base=m0.data?JSON.stringify(m0.data):(m0.resumen||'');
-  var emp=EMP?('Empresa proveedora: '+EMP.nombre+(EMP.ruc?', RUC '+EMP.ruc:'')+(EMP.direccion?', '+EMP.direccion:'')):'';
-  var prompt='Eres experto en redacción de documentos para contrataciones con el Estado peruano. Redacta el siguiente documento COMPLETO, listo para imprimir y firmar, con formato formal peruano (encabezado, ciudad y fecha, cuerpo formal, cierre y línea de firma con nombre/DNI/cargo). Documento: "'+(it.nombre||'')+'" (tipo: '+(it.tipo||'')+'). '+(it.descripcion?'Debe contener: '+it.descripcion+'. ':'')+emp+'. Usa los datos del análisis cuando apliquen. Responde SOLO el texto del documento, sin comentarios.';
+  var emp=EMP?('Empresa proveedora: '+EMP.nombre+(EMP.ruc?', RUC '+EMP.ruc:'')+(EMP.direccion?', '+EMP.direccion:'')+(EMP.telefono?', tel '+EMP.telefono:'')+(EMP.email?', email '+EMP.email:'')):'';
+  var prompt='Eres experto en redacción y llenado de anexos para contrataciones con el Estado peruano. Si el documento viene de un anexo/formato de la entidad, debes conservar su sentido, orden, campos y texto base; solo llena los espacios requeridos con datos de la empresa y del proceso. Si no tienes el anexo exacto, genera una guía y un borrador equivalente sin inventar requisitos. Incluye advertencias si falta DNI, firma, RNP, REMYPE, CCI u otro dato. Documento: "'+(it.nombre||'')+'" (tipo: '+(it.tipo||'')+'). '+(it.descripcion?'Debe contener: '+it.descripcion+'. ':'')+emp+'. MATRIZ EMPRESA: '+JSON.stringify(loadEmpDocs())+'. ANEXOS ENTIDAD: '+JSON.stringify(st.entidadDocs||[])+'. Responde SOLO con: GUIA DE LLENADO + BORRADOR LISTO PARA REVISAR, sin comentarios externos.';
   it._dl=true;renderProyDetail();
   fetch('/api/gemini',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt:prompt+'\n\nDATOS DEL PROCESO:\n'+base})})
    .then(function(r){return r.json()}).then(function(d){
      var txt='';try{txt=d.candidates[0].content.parts[0].text}catch(e){txt='No se pudo redactar.'}
      it.borrador=txt;it._dl=false;saveProy();renderProyDetail();
    }).catch(function(e){it._dl=false;toast('Error IA: '+e.message);renderProyDetail()});
+}
+function aiReviewOffer(si){
+  var st=CURP.stages[si],m0=CURP.stages[0];
+  if(!m0.data&&!m0.resumen){toast('Primero ejecuta el análisis del TDR');return}
+  var pack={maestro:m0.data||m0.resumen,checklist:st.checklist||[],anexos_entidad:st.entidadDocs||[],matriz_empresa:loadEmpDocs(),tablero:st.docboard||[],notas:st.notas||'',empresa:EMP||{}};
+  st._loading=true;renderProyDetail();
+  fetch('/api/gemini',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt:PROP_REVIEW_PROMPT+'\n\nPAQUETE A REVISAR:\n'+JSON.stringify(pack,null,2)})})
+   .then(function(r){return r.json()}).then(function(d){
+     var txt='';try{txt=d.candidates[0].content.parts[0].text}catch(e){txt=''}
+     st.revision=parseJSON(txt)||{veredicto:'OBSERVADA',faltantes:['No se pudo parsear la revisión IA'],observaciones:[txt||'Sin respuesta'],firmas_pendientes:[],documentos_ok:[],acciones:['Reintentar revisión']};
+     st._loading=false;saveProy();renderProyDetail();
+   }).catch(function(e){st._loading=false;toast('Error IA: '+e.message);renderProyDetail()});
 }
 function dzOver2(e,si,on){e.preventDefault();var z=document.getElementById('dbdz_'+si);if(z)z.classList.toggle('drag',!!on)}
 function dbDrop(e,si){e.preventDefault();var z=document.getElementById('dbdz_'+si);if(z)z.classList.remove('drag');var fs=e.dataTransfer.files;if(fs)for(var i=0;i<fs.length;i++)addDocboard(si,fs[i])}
@@ -875,8 +1030,15 @@ function dbToggle(si,di){var d=CURP.stages[si].docboard[di];d.estado=(d.estado==
 function dbRemove(si,di){CURP.stages[si].docboard.splice(di,1);saveProy();renderProyDetail()}
 
 /* ===== Etapa Cotización: extracción y comparación de proveedores ===== */
-var COT_EXTRACT_PROMPT='ROLE: Experto en análisis de cotizaciones y fichas técnicas de proveedores para contrataciones públicas peruanas, trabajando para la empresa OFERTANTE. TASK: Del DOCUMENTO ADJUNTO (cotización o ficha técnica de un proveedor) extrae los datos del proveedor y sus ítems, y COMPARA cada ítem contra los REQUISITOS DEL TDR que te paso abajo. OUTPUT: SOLO JSON válido (sin texto/markdown/backticks). ESTRUCTURA:\n{"nombre":"[razón social]","ruc":"[RUC]","telefono":"[tel]","ubicacion":"[dirección/ciudad]","email":"[correo]","items":[{"descripcion":"[producto ofertado]","cantidad":"[cant]","unidad":"[unidad]","precio_unitario":"S/ 0.00","precio_total":"S/ 0.00","entrega":"[plazo]","caracteristicas":"[specs ofertadas]","cumple":"Sí","observacion":"[por qué cumple/no vs TDR]"}],"entrega_global":"[plazo global]","total":"S/ 0.00","validez":"[validez de la oferta]"}\nREGLAS: cumple = "Sí" si la prestación ofertada es igual o SUPERIOR a la requerida en el TDR, "Parcial" si cumple parcialmente, "No" si no cumple. Extrae RUC, teléfono, dirección y correo si aparecen. Precios en soles. Si un dato falta = "". RESPONDE SOLO JSON.';
-function provKey(){return 'sigma_prov_'+(EMP?EMP.id:'x')}
+var COT_EXTRACT_PROMPT=`ROLE: Experto en análisis de cotizaciones, fichas técnicas y especificaciones para contrataciones públicas peruanas, trabajando para la empresa OFERTANTE. TASK: Del DOCUMENTO ADJUNTO extrae datos de proveedor, ítems, precios y compatibilidad contra el TDR. OUTPUT: SIEMPRE SOLO JSON válido (sin texto/markdown/backticks), incluso si el documento NO es cotización. ESTRUCTURA EXACTA:
+{"documento_tipo":"Cotización|Ficha técnica|Especificaciones técnicas|Otro","es_cotizacion":true,"advertencia":"","nombre":"[razón social/proveedor si aparece]","ruc":"[RUC]","telefono":"[tel]","ubicacion":"[dirección/ciudad]","email":"[correo]","items":[{"descripcion":"[producto ofertado o requerido]","cantidad":"[cant]","unidad":"[unidad]","precio_unitario":"S/ 0.00","precio_total":"S/ 0.00","entrega":"[plazo]","caracteristicas":"[specs ofertadas]","cumple":"Sí","observacion":"[por qué cumple/no vs TDR o qué falta]"}],"entrega_global":"[plazo global]","total":"S/ 0.00","validez":"[validez de la oferta]"}
+REGLAS:
+1) Si el documento es una cotización con precios, es_cotizacion=true.
+2) Si es especificación técnica/TDR/ficha sin precios, es_cotizacion=false, advertencia="El documento no contiene precios de proveedor", extrae items y deja precios vacíos.
+3) cumple = "Sí" si la prestación ofertada es igual o superior al TDR, "Parcial" si falta validar, "No" si no cumple.
+4) Extrae RUC, teléfono, dirección y correo si aparecen.
+5) Si falta un dato = "".
+6) RESPONDE SOLO JSON.`;function provKey(){return 'sigma_prov_'+(EMP?EMP.id:'x')}
 function loadProvDB(){try{return JSON.parse(localStorage.getItem(provKey())||'[]')}catch(e){return []}}
 function parsePrice(s){var n=parseFloat((''+(s||'')).replace(/[^0-9.,]/g,'').replace(/,/g,''));return isNaN(n)?null:n}
 function cumpleBadge(v){var t=(''+(v||'')).toLowerCase();var c=t.indexOf('no')===0?'#ef4444':(t.indexOf('parc')>=0?'#f59e0b':'#16a34a');return '<span class="cumple" style="color:'+c+';background:'+bg(c,.13)+'">'+esc(v||'—')+'</span>'}
@@ -886,6 +1048,7 @@ function renderProvSection(p,si,st){
   var h='<div class="sp-lbl" style="margin-top:22px;border-top:1px solid var(--border);padding-top:16px">Precios reales · comparación de proveedores</div>';
   h+='<div style="font-size:11.5px;color:var(--tmuted);line-height:1.5;margin-bottom:10px">Sube las cotizaciones o fichas técnicas de cada proveedor: el agente extrae RUC, datos, ítems y precios, y los <b>compara contra el TDR</b> de este análisis (cumple / no cumple por ítem). Complementa la estimación de la IA con precios reales del mercado.</div>';
   h+='<div style="margin:11px 0;display:flex;gap:8px;flex-wrap:wrap"><button class="aibtn" '+((st._loading||!hasM)?'disabled':'')+' onclick="pickFileCot('+si+')">'+(st._loading?'Extrayendo…':(icon('spark',1.6)+' Subir cotización y extraer con IA'))+'</button><button class="minib" onclick="addProvManual('+si+')">+ Proveedor manual</button></div>';
+  if(st.cotError)h+='<div style="background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.28);border-radius:10px;padding:10px 12px;margin:8px 0 12px;font-size:11.5px;color:var(--tmuted)"><b style="color:#f59e0b">Último aviso:</b> '+esc(st.cotError)+'</div>';
   if(st.proveedores.length>=2){
     var min=null;st.proveedores.forEach(function(pr){var t=parsePrice(pr.total);if(t!=null&&(min==null||t<min))min=t});
     var ct='<table class="rtab"><thead><tr><th>Proveedor</th><th>Total</th><th>Entrega</th><th>Cumple</th></tr></thead><tbody>';
@@ -912,17 +1075,29 @@ function pickFileCot(i){_fileStage=i;_fileMode='cot';var inp=document.getElement
 function aiCotExtract(si){
   var st=CURP.stages[si],m0=CURP.stages[0];
   if(!_pendingFile){toast('No se pudo leer el archivo');return}
-  var ctx='';if(m0.data){ctx='TDR requerido (ítems y especificaciones):\n'+JSON.stringify({items:m0.data.items||[],especificaciones:m0.data.especificaciones||[],requisitos:m0.data.requisitos_calificacion||[]},null,2)}else if(m0.resumen){ctx='TDR:\n'+m0.resumen}
-  st._loading=true;renderProyDetail();
+  var ctx='';
+  if(m0.data){ctx='TDR requerido (items y especificaciones):\n'+JSON.stringify({items:m0.data.items||[],especificaciones:m0.data.especificaciones||[],especificaciones_por_item:m0.data.especificaciones_por_item||[],requisitos:m0.data.requisitos_calificacion||[]},null,2)}
+  else if(m0.resumen){ctx='TDR:\n'+m0.resumen}
+  st.cotError='';st._loading=true;renderProyDetail();
   fetch('/api/gemini',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt:COT_EXTRACT_PROMPT+'\n\n'+ctx,imageBase64:_pendingFile.b64,mimeType:_pendingFile.type})})
    .then(function(r){return r.json()}).then(function(d){
-     var txt='';try{txt=d.candidates[0].content.parts[0].text}catch(e){txt=''}
-     var obj=parseJSON(txt);st._loading=false;_pendingFile=null;
-     if(obj){obj.id='pr'+Date.now();obj.fichas=obj.fichas||[];st.proveedores=st.proveedores||[];st.proveedores.push(obj);toast('Cotización extraída: '+(obj.nombre||'proveedor'))}else{toast('No se pudo extraer (revisa consola F12)')}
+     var gt=geminiText(d),txt=gt.text,obj=null,arr=null;
+     if(gt.error){st.cotError=gt.error;st._loading=false;_pendingFile=null;toast('IA: '+gt.error.slice(0,90));saveProy();renderProyDetail();return}
+     obj=parseJSON(txt);
+     if(!obj){arr=parseJSONArr(txt);obj=normalizeCotObj(null,arr)}else obj=normalizeCotObj(obj);
+     st._loading=false;_pendingFile=null;
+     if(obj){
+       obj.id='pr'+Date.now();obj.fichas=obj.fichas||[];st.proveedores=st.proveedores||[];st.proveedores.push(obj);
+       if(obj.es_cotizacion)upsertProvDB(obj);
+       st.cotError=obj.es_cotizacion?'':(obj.advertencia||'El archivo se leyó, pero no parece una cotización con precios.');
+       toast(obj.es_cotizacion?('Cotización extraída: '+(obj.nombre||'proveedor')):'Documento leído, pero no contiene precios de proveedor');
+     }else{
+       st.cotError='La IA respondió, pero no devolvió JSON. Inicio de respuesta: '+txt.slice(0,180);
+       toast('No se pudo interpretar la respuesta IA');
+     }
      saveProy();renderProyDetail();
-   }).catch(function(e){st._loading=false;toast('Error IA: '+e.message);renderProyDetail()});
-}
-function addProvManual(si){
+   }).catch(function(e){st._loading=false;st.cotError=e.message;toast('Error IA: '+e.message);saveProy();renderProyDetail()});
+}function addProvManual(si){
   var m=document.getElementById('pmodal');
   m.innerHTML='<div class="pmbox"><h3>Agregar proveedor</h3><div class="fld"><label>Razón social</label><input id="pv_n"></div><div class="fld"><label>RUC</label><input id="pv_r"></div><div class="fld"><label>Teléfono</label><input id="pv_t"></div><div class="fld"><label>Ubicación</label><input id="pv_u"></div><div class="fld"><label>Total cotizado (S/)</label><input id="pv_tot"></div><div class="pmrow"><button class="cancel" onclick="closeNewProy()">Cancelar</button><button class="save" onclick="saveProvManual('+si+')">Agregar</button></div></div>';
   m.classList.add('show');
@@ -931,18 +1106,23 @@ function saveProvManual(si){
   var n=(document.getElementById('pv_n').value||'').trim();if(!n){toast('Pon la razón social');return}
   var tot=(document.getElementById('pv_tot').value||'').trim();if(tot&&!/S\//.test(tot))tot='S/ '+tot;
   var pr={id:'pr'+Date.now(),nombre:n,ruc:(document.getElementById('pv_r').value||'').trim(),telefono:(document.getElementById('pv_t').value||'').trim(),ubicacion:(document.getElementById('pv_u').value||'').trim(),email:'',total:tot,entrega_global:'',items:[],fichas:[]};
-  CURP.stages[si].proveedores=CURP.stages[si].proveedores||[];CURP.stages[si].proveedores.push(pr);saveProy();closeNewProy();renderProyDetail();
+  CURP.stages[si].proveedores=CURP.stages[si].proveedores||[];CURP.stages[si].proveedores.push(pr);upsertProvDB(pr);saveProy();closeNewProy();renderProyDetail();
 }
 function rmProv(si,pi){CURP.stages[si].proveedores.splice(pi,1);saveProy();renderProyDetail()}
 function pickFicha(si,pi){_fileStage=si;_fileMode='ficha:'+pi;var inp=document.getElementById('pfile');inp.value='';inp.click()}
 function rmFicha(si,pi,fi){CURP.stages[si].proveedores[pi].fichas.splice(fi,1);saveProy();renderProyDetail()}
-function saveProvDB(si,pi){
-  var pr=CURP.stages[si].proveedores[pi],db=loadProvDB(),key=(pr.ruc||pr.nombre||'').toLowerCase();
+function upsertProvDB(pr){
+  if(!pr||!(pr.nombre||pr.ruc))return false;
+  var db=loadProvDB(),key=(pr.ruc||pr.nombre||'').toLowerCase();
   var ex=db.filter(function(x){return (x.ruc||x.nombre||'').toLowerCase()===key})[0];
-  var prods=(pr.items||[]).map(function(it){return {descripcion:it.descripcion,precio:it.precio_unitario,fecha:new Date().toISOString().slice(0,10)}});
+  var prods=(pr.items||[]).map(function(it){return {descripcion:it.descripcion,precio:it.precio_unitario||it.precio_total||'',fecha:new Date().toISOString().slice(0,10)}});
   if(ex){ex.telefono=pr.telefono||ex.telefono;ex.ubicacion=pr.ubicacion||ex.ubicacion;ex.email=pr.email||ex.email;ex.productos=(ex.productos||[]).concat(prods)}
   else{db.push({nombre:pr.nombre,ruc:pr.ruc,telefono:pr.telefono,ubicacion:pr.ubicacion,email:pr.email,productos:prods})}
-  try{localStorage.setItem(provKey(),JSON.stringify(db));toast('Proveedor guardado en tu base confiable')}catch(e){toast('No se pudo guardar')}
+  try{localStorage.setItem(provKey(),JSON.stringify(db));return true}catch(e){return false}
+}
+function saveProvDB(si,pi){
+  var pr=CURP.stages[si].proveedores[pi];
+  toast(upsertProvDB(pr)?'Proveedor guardado en tu base confiable':'No se pudo guardar');
   renderProyDetail();
 }
 
@@ -962,7 +1142,7 @@ function saveNewProy(){
   if(!n){toast('Ponle un nombre al proyecto');return}
   var p={id:'p'+Date.now(),nombre:n,entidad:(document.getElementById('np_e').value||'').trim(),
     monto:parseFloat(document.getElementById('np_m').value)||0,fecha:document.getElementById('np_f').value||'',
-    creado:Date.now(),stages:STAGES.map(function(s){return {k:s.k,mode:'manual',done:false,notas:'',input:'',resumen:'',data:null,docs:[]}})};
+    creado:Date.now(),stages:STAGES.map(function(s){return {k:s.k,mode:'manual',done:false,notas:'',input:'',resumen:'',data:null,docs:[],checklist:[],docboard:[],entidadDocs:[],revision:null,proveedores:[]}})};
   loadProy();PROY.unshift(p);saveProy();closeNewProy();openProy(p.id);
 }
 function openDelProy(){
@@ -980,11 +1160,14 @@ function confirmDelProy(){
   var id=CURP.id;loadProy();PROY=PROY.filter(function(x){return x.id!==id});saveProy();closeDelProy();toast('Proyecto eliminado');renderProyectos();
 }
 (function(){var pf=document.getElementById('pfile');if(!pf)return;pf.onchange=function(){
-  if(!(this.files&&this.files[0]&&_fileStage>=0))return;var f=this.files[0];
+  if(!(this.files&&this.files[0]&&(_fileStage>=0||(_fileMode&&_fileMode.indexOf('empdoc:')===0))))return;var f=this.files[0];
   if(_fileMode==='board'){for(var i=0;i<this.files.length;i++)addDocboard(_fileStage,this.files[i])}
+  else if(_fileMode==='propentity'){for(var ei=0;ei<this.files.length;ei++)addEntidadDoc(_fileStage,this.files[ei])}
+  else if(_fileMode&&_fileMode.indexOf('empdoc:')===0){saveEmpDoc(_fileMode.split(':')[1],f)}
   else if(_fileMode==='cot'){var rd=new FileReader();rd.onload=function(){_pendingFile={type:f.type,b64:(''+rd.result).split(',')[1]};aiCotExtract(_fileStage)};rd.readAsDataURL(f)}
   else if(_fileMode&&_fileMode.indexOf('ficha:')===0){var pi=+_fileMode.split(':')[1];var pr=CURP.stages[_fileStage].proveedores[pi];pr.fichas=pr.fichas||[];pr.fichas.push({name:f.name,type:f.type||''});saveProy();renderProyDetail()}
   else{addFile(_fileStage,f)}
+  this.multiple=false;
 }})();
 
 function quickNew(){window.location.href='/cotizador?tab=cot'}
