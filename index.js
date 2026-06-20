@@ -197,6 +197,12 @@ async function driveEnsure(name,parent,tok){
   var f=await driveFind(name,parent,tok);
   return f||await driveCreate(name,parent,tok);
 }
+// Asegura una ruta de carpetas anidadas desde la raíz compartida; devuelve el id de la última
+async function driveEnsurePath(segs,tok){
+  var parent=DRIVE_ROOT;
+  for(var i=0;i<segs.length;i++){if(!segs[i])continue;var f=await driveEnsure(String(segs[i]),parent,tok);parent=f.id;}
+  return parent;
+}
 // Crea/asegura la ruta: SIGMA / Proyectos / Proyectos menos de 8 UIT / [nombre proyecto]
 app.post('/api/drive/proyecto',async function(req,res){
   if(!driveReady())return res.status(503).json({error:'Falta GOOGLE_SA_KEY o DRIVE_ROOT_FOLDER_ID en Railway > Variables.'});
@@ -215,11 +221,13 @@ app.post('/api/drive/proyecto',async function(req,res){
 app.post('/api/drive/upload',async function(req,res){
   if(!driveReady())return res.status(503).json({error:'Falta GOOGLE_SA_KEY o DRIVE_ROOT_FOLDER_ID en Railway > Variables.'});
   var b=req.body||{};
-  if(!b.folderId||!b.name||!b.base64)return res.status(400).json({error:'Faltan datos (folderId, name, base64)'});
+  if(!b.name||!b.base64)return res.status(400).json({error:'Faltan datos (name, base64)'});
+  if(!b.folderId&&!(b.path&&b.path.length))return res.status(400).json({error:'Falta folderId o path'});
   try{
     var tok=await driveToken();
-    var parent=b.folderId;
-    if(b.subfolder){var sf=await driveEnsure(b.subfolder,parent,tok);parent=sf.id;}
+    var parent;
+    if(b.path&&b.path.length){parent=await driveEnsurePath(b.path,tok);}
+    else{parent=b.folderId;if(b.subfolder){var sf=await driveEnsure(b.subfolder,parent,tok);parent=sf.id;}}
     var meta={name:b.name,parents:[parent]};
     var mime=b.mimeType||'application/octet-stream';
     var fileBuf=Buffer.from(b.base64,'base64');
@@ -236,6 +244,20 @@ app.post('/api/drive/upload',async function(req,res){
     if(!r.ok)throw new Error('Subir archivo: '+(d.error&&d.error.message||JSON.stringify(d)));
     res.json({ok:true,id:d.id,name:d.name,url:d.webViewLink});
   }catch(e){console.error('Drive upload:',e.message);res.status(502).json({error:e.message});}
+});
+// Renombra una carpeta/archivo en Drive (usado al editar el nombre del proyecto)
+app.post('/api/drive/rename',async function(req,res){
+  if(!driveReady())return res.status(503).json({error:'Falta GOOGLE_SA_KEY o DRIVE_ROOT_FOLDER_ID en Railway > Variables.'});
+  var b=req.body||{};
+  if(!b.id||!b.name)return res.status(400).json({error:'Faltan datos (id, name)'});
+  try{
+    var tok=await driveToken();
+    var r=await fetch('https://www.googleapis.com/drive/v3/files/'+encodeURIComponent(b.id)+'?fields=id,name,webViewLink&supportsAllDrives=true',{
+      method:'PATCH',headers:{Authorization:'Bearer '+tok,'Content-Type':'application/json'},body:JSON.stringify({name:b.name})});
+    var d=await r.json();
+    if(!r.ok)throw new Error('Renombrar: '+(d.error&&d.error.message||JSON.stringify(d)));
+    res.json({ok:true,id:d.id,name:d.name,url:d.webViewLink});
+  }catch(e){console.error('Drive rename:',e.message);res.status(502).json({error:e.message});}
 });
 app.get('/api/drive/status',async function(req,res){
   if(!driveReady())return res.json({ready:false,motivo:(driveSA()?'':'Falta GOOGLE_SA_KEY')+(DRIVE_ROOT?'':' Falta DRIVE_ROOT_FOLDER_ID')});

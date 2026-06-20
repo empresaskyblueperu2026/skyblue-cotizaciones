@@ -665,7 +665,7 @@ function renderBoveda(){
   var docs=loadEmpDocs();
   var cats=[...new Set(EMP_DOC_TYPES.map(function(t){return t.cat}))];
   var empNombre=EMP?esc(EMP.nombre):'Empresa';
-  var h='<div class="proy-wrap fade"><div class="proy-hdr"><div><div class="proy-htitle">'+icon('layers',1.2)+'Bóveda de '+empNombre+'</div><div style="font-size:11.5px;color:var(--tmuted);margin-top:3px">Documentos internos de la empresa · se usan automáticamente en propuestas</div></div></div>';
+  var h='<div class="proy-wrap fade"><div class="proy-hdr"><div><div class="proy-htitle">'+icon('layers',1.2)+'Bóveda de '+empNombre+'</div><div style="font-size:11.5px;color:var(--tmuted);margin-top:3px">Documentos internos de la empresa · se usan automáticamente en propuestas</div></div><button class="aibtn" onclick="subirBovedaDrive()" title="Subir todos los documentos de la bóveda a Google Drive">'+icon('layers')+'Subir todo a Drive</button></div>';
   cats.forEach(function(cat){
     var tipos=EMP_DOC_TYPES.filter(function(t){return t.cat===cat});
     h+='<div class="vault-cat">'+cat+'</div><div class="vault-grid">';
@@ -1141,6 +1141,7 @@ function renderProyDetail(){
   }
   h+='<div class="sp-foot"><div style="font-size:11px;color:var(--tmuted)">Etapa '+(si+1)+' de '+p.stages.length+'</div><div style="display:flex;gap:8px">'+
     (st.done?'<button class="doneb re" onclick="toggleDone('+si+')">Reabrir etapa</button>':'<button class="doneb go" onclick="toggleDone('+si+')">'+icon('check',2.4)+' Marcar completada</button>')+
+    '<button class="doneb re" onclick="openEditProy()" title="Editar proyecto">'+icon('gear',2)+' Editar</button>'+
     '<button class="doneb re" onclick="openDelProy()" title="Eliminar proyecto"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:14px;height:14px"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg></button></div></div>';
   h+='</div>';
   $('content').innerHTML=h;
@@ -1289,8 +1290,10 @@ function saveEmpDoc(k,f){
   docs.push(entry);saveEmpDocs(docs);
   var rd=new FileReader();
   rd.onload=function(){
-    vaultPut(vaultKey(k),{b64:(''+rd.result).split(',')[1],mimeType:f.type||'application/octet-stream',name:f.name},function(){
+    var b64=(''+rd.result).split(',')[1];
+    vaultPut(vaultKey(k),{b64:b64,mimeType:f.type||'application/octet-stream',name:f.name},function(){
       toast(meta.n+' guardado en bóveda');
+      subirDrivePath(['SIGMA','Bóveda de Empresa',(EMP?EMP.nombre:'Empresa')],f.name,f.type||'',b64,function(ok){if(ok)toast('Bóveda → Drive ✓')});
       if(ACTIVE==='boveda')renderBoveda();else renderProyDetail();
     });
   };rd.readAsDataURL(f);
@@ -1488,6 +1491,38 @@ function crearCarpetaDrive(p){
     })
     .catch(function(e){toast('Drive sin conexión: '+e.message)});
 }
+/* Editar nombre/datos del proyecto · renombra la carpeta en Drive si cambia el nombre */
+function openEditProy(){
+  if(!CURP)return;
+  var m=document.getElementById('pmodal');
+  m.innerHTML='<div class="pmbox"><h3>Editar proyecto</h3>'+
+   '<div class="fld"><label>Nombre / objeto</label><input id="ep_n" value="'+esc(CURP.nombre||'')+'"></div>'+
+   '<div class="fld"><label>Entidad convocante</label><input id="ep_e" value="'+esc(CURP.entidad||'')+'"></div>'+
+   '<div class="fld"><label>Monto referencial (S/)</label><input id="ep_m" type="number" value="'+(CURP.monto||0)+'"></div>'+
+   '<div class="fld"><label>Fecha límite</label><input id="ep_f" type="date" value="'+esc(CURP.fecha||'')+'"></div>'+
+   '<div class="pmrow"><button class="cancel" onclick="closeNewProy()">Cancelar</button><button class="save" onclick="saveEditProy()">Guardar cambios</button></div></div>';
+  m.classList.add('show');
+}
+function saveEditProy(){
+  var n=(document.getElementById('ep_n').value||'').trim();
+  if(!n){toast('Ponle un nombre al proyecto');return}
+  var oldName=CURP.nombre;
+  CURP.nombre=n;
+  CURP.entidad=(document.getElementById('ep_e').value||'').trim();
+  CURP.monto=parseFloat(document.getElementById('ep_m').value)||0;
+  CURP.fecha=document.getElementById('ep_f').value||'';
+  saveProy();closeNewProy();renderProyDetail();
+  if(CURP.driveId&&n!==oldName){
+    toast('Renombrando carpeta en Drive…');
+    fetch('/api/drive/rename',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:CURP.driveId,name:n})})
+      .then(function(r){return r.json()})
+      .then(function(d){
+        if(d&&d.ok){if(d.url){CURP.driveUrl=d.url;saveProy()}toast('Carpeta Drive renombrada ✓')}
+        else{toast('Drive: '+((d&&d.error)||'no se renombró la carpeta'))}
+      })
+      .catch(function(e){toast('Drive: '+e.message)});
+  }
+}
 function openDelProy(){
   var m=document.getElementById('delpmodal');
   m.innerHTML='<div class="pmbox"><h3>Eliminar proyecto</h3><div style="font-size:12px;color:var(--tmuted);margin-bottom:16px;">Ingresa la contraseña para eliminar este proyecto. Esta acción no se puede deshacer.</div>'+
@@ -1519,6 +1554,31 @@ function subirArchivoDrive(file,subfolder){
       .catch(function(e){toast('Drive: '+e.message)});
   };
   rd.readAsDataURL(file);
+}
+/* Subida por ruta de carpetas desde la raíz (ej. Bóveda de Empresa) */
+function subirDrivePath(path,name,mime,b64,cb){
+  if(!b64){return cb&&cb(false)}
+  fetch('/api/drive/upload',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({path:path,name:name,mimeType:mime||'',base64:b64})})
+    .then(function(r){return r.json()})
+    .then(function(d){cb&&cb(!!(d&&d.ok),d)})
+    .catch(function(e){cb&&cb(false,{error:e.message})});
+}
+/* Sube toda la Bóveda de Empresa a Drive (SIGMA/Bóveda de Empresa/[empresa]) */
+function subirBovedaDrive(){
+  var docs=loadEmpDocs();
+  if(!docs.length){toast('No hay documentos en la bóveda');return}
+  toast('Subiendo bóveda a Drive…');
+  var path=['SIGMA','Bóveda de Empresa',(EMP?EMP.nombre:'Empresa')];
+  var i=0,ok=0;
+  (function next(){
+    if(i>=docs.length){toast(ok+' de '+docs.length+' documentos subidos a Drive');return}
+    var d=docs[i++];
+    vaultGet(vaultKey(d.k),function(v){
+      if(v&&v.b64){subirDrivePath(path,v.name||d.name||d.k,v.mimeType||'',v.b64,function(s){if(s)ok++;next()})}
+      else next();
+    });
+  })();
 }
 (function(){var pf=document.getElementById('pfile');if(!pf)return;pf.onchange=function(){
   if(!(this.files&&this.files[0]&&(_fileStage>=0||(_fileMode&&_fileMode.indexOf('empdoc:')===0))))return;var f=this.files[0];
