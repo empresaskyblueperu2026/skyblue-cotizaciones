@@ -1502,6 +1502,24 @@ function confirmDelProy(){
   if(pwd!=='7777'){toast('Contraseña incorrecta');return}
   var id=CURP.id;loadProy();PROY=PROY.filter(function(x){return x.id!==id});saveProy();closeDelProy();toast('Proyecto eliminado');renderProyectos();
 }
+/* ===== Subida automática de documentos a Google Drive ===== */
+function driveSubf(si){
+  var names=['1. Analisis y Presupuesto','2. Propuesta Tecnica','3. Orden de Compra','4. Compra a Proveedores','5. Entrega a Cliente','6. Conformidad','7. Facturacion y Cobranza','8. Pago'];
+  return names[si]||'Documentos';
+}
+function subirArchivoDrive(file,subfolder){
+  if(!CURP||!CURP.driveId||!file)return;
+  var rd=new FileReader();
+  rd.onload=function(){
+    var b64=(''+rd.result).split(',')[1];if(!b64)return;
+    fetch('/api/drive/upload',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({folderId:CURP.driveId,subfolder:subfolder||'',name:file.name,mimeType:file.type||'',base64:b64})})
+      .then(function(r){return r.json()})
+      .then(function(d){if(d&&d.ok){toast('Subido a Drive: '+file.name)}else{toast('Drive: '+((d&&d.error)||'no se subió '+file.name))}})
+      .catch(function(e){toast('Drive: '+e.message)});
+  };
+  rd.readAsDataURL(file);
+}
 (function(){var pf=document.getElementById('pfile');if(!pf)return;pf.onchange=function(){
   if(!(this.files&&this.files[0]&&(_fileStage>=0||(_fileMode&&_fileMode.indexOf('empdoc:')===0))))return;var f=this.files[0];
   if(_fileMode==='board'){for(var i=0;i<this.files.length;i++)addDocboard(_fileStage,this.files[i])}
@@ -1510,6 +1528,11 @@ function confirmDelProy(){
   else if(_fileMode==='cot'){var rd=new FileReader();rd.onload=function(){_pendingFile={type:f.type,b64:(''+rd.result).split(',')[1]};aiCotExtract(_fileStage)};rd.readAsDataURL(f)}
   else if(_fileMode&&_fileMode.indexOf('ficha:')===0){var pi=+_fileMode.split(':')[1];var pr=CURP.stages[_fileStage].proveedores[pi];pr.fichas=pr.fichas||[];pr.fichas.push({name:f.name,type:f.type||''});saveProy();renderProyDetail()}
   else{addFile(_fileStage,f)}
+  /* Copia automática a Google Drive (carpeta del proyecto · subcarpeta por etapa) */
+  if(CURP&&CURP.driveId&&_fileStage>=0&&!(_fileMode&&_fileMode.indexOf('empdoc:')===0)){
+    var sub=driveSubf(_fileStage);
+    for(var di=0;di<this.files.length;di++)subirArchivoDrive(this.files[di],sub);
+  }
   this.multiple=false;
 }})();
 

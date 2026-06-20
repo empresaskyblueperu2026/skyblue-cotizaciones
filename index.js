@@ -211,6 +211,32 @@ app.post('/api/drive/proyecto',async function(req,res){
     res.json({ok:true,id:carpeta.id,url:carpeta.webViewLink||('https://drive.google.com/drive/folders/'+carpeta.id),nombre:nombre});
   }catch(e){console.error('Drive proyecto:',e.message);res.status(502).json({error:e.message});}
 });
+// Sube un archivo a la carpeta del proyecto (opcionalmente dentro de una subcarpeta por etapa)
+app.post('/api/drive/upload',async function(req,res){
+  if(!driveReady())return res.status(503).json({error:'Falta GOOGLE_SA_KEY o DRIVE_ROOT_FOLDER_ID en Railway > Variables.'});
+  var b=req.body||{};
+  if(!b.folderId||!b.name||!b.base64)return res.status(400).json({error:'Faltan datos (folderId, name, base64)'});
+  try{
+    var tok=await driveToken();
+    var parent=b.folderId;
+    if(b.subfolder){var sf=await driveEnsure(b.subfolder,parent,tok);parent=sf.id;}
+    var meta={name:b.name,parents:[parent]};
+    var mime=b.mimeType||'application/octet-stream';
+    var fileBuf=Buffer.from(b.base64,'base64');
+    var boundary='sigmabnd'+Date.now();
+    var body=Buffer.concat([
+      Buffer.from('--'+boundary+'\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n'+JSON.stringify(meta)+'\r\n--'+boundary+'\r\nContent-Type: '+mime+'\r\n\r\n'),
+      fileBuf,
+      Buffer.from('\r\n--'+boundary+'--')
+    ]);
+    var r=await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,webViewLink&supportsAllDrives=true',{
+      method:'POST',headers:{Authorization:'Bearer '+tok,'Content-Type':'multipart/related; boundary='+boundary},body:body
+    });
+    var d=await r.json();
+    if(!r.ok)throw new Error('Subir archivo: '+(d.error&&d.error.message||JSON.stringify(d)));
+    res.json({ok:true,id:d.id,name:d.name,url:d.webViewLink});
+  }catch(e){console.error('Drive upload:',e.message);res.status(502).json({error:e.message});}
+});
 app.get('/api/drive/status',async function(req,res){
   if(!driveReady())return res.json({ready:false,motivo:(driveSA()?'':'Falta GOOGLE_SA_KEY')+(DRIVE_ROOT?'':' Falta DRIVE_ROOT_FOLDER_ID')});
   try{var tok=await driveToken();var f=await driveFind('SIGMA',DRIVE_ROOT,tok);res.json({ready:true,sa:driveSA().client_email,root:DRIVE_ROOT,sigmaCreada:!!f});}
