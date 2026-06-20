@@ -149,6 +149,74 @@ app.get('/api/empresas/seed',async function(req,res){
     var d=await sbFetch('empresas?select=*&order=nombre');res.json({ok:true,empresas:d});
   }catch(e){res.status(502).json({error:e.message});}
 });
+// ---- Google Drive (cuenta de servicio) ----
+const crypto=require('crypto');
+const DRIVE_ROOT=process.env.DRIVE_ROOT_FOLDER_ID||'';
+function driveSA(){
+  var raw=process.env.GOOGLE_SA_KEY||'';
+  if(!raw)return null;
+  try{var j=JSON.parse(raw);if(j.private_key&&j.private_key.indexOf('\\n')>=0)j.private_key=j.private_key.replace(/\\n/g,'\n');return j;}catch(e){console.error('GOOGLE_SA_KEY invalida:',e.message);return null;}
+}
+function driveReady(){return !!(driveSA()&&DRIVE_ROOT);}
+var _driveTok=null,_driveTokExp=0;
+async function driveToken(){
+  if(_driveTok&&Date.now()<_driveTokExp-60000)return _driveTok;
+  var sa=driveSA();if(!sa)throw new Error('Falta GOOGLE_SA_KEY');
+  var now=Math.floor(Date.now()/1000);
+  var b64=function(o){return Buffer.from(typeof o==='string'?o:JSON.stringify(o)).toString('base64').replace(/=/g,'').replace(/\+/g,'-').replace(/\//g,'_');};
+  var header=b64({alg:'RS256',typ:'JWT'});
+  var claim=b64({iss:sa.client_email,scope:'https://www.googleapis.com/auth/drive',aud:'https://oauth2.googleapis.com/token',iat:now,exp:now+3600});
+  var unsigned=header+'.'+claim;
+  var signer=crypto.createSign('RSA-SHA256');signer.update(unsigned);
+  var sig=signer.sign(sa.private_key).toString('base64').replace(/=/g,'').replace(/\+/g,'-').replace(/\//g,'_');
+  var jwt=unsigned+'.'+sig;
+  var r=await fetch('https://oauth2.googleapis.com/token',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer&assertion='+jwt});
+  var d=await r.json();
+  if(!r.ok||!d.access_token)throw new Error('Token Drive: '+(d.error_description||d.error||JSON.stringify(d)));
+  _driveTok=d.access_token;_driveTokExp=Date.now()+(d.expires_in||3600)*1000;
+  return _driveTok;
+}
+async function driveFind(name,parent,tok){
+  var q="mimeType='application/vnd.google-apps.folder' and trashed=false and name='"+name.replace(/'/g,"\\'")+"' and '"+parent+"' in parents";
+  var url='https://www.googleapis.com/drive/v3/files?q='+encodeURIComponent(q)+'&fields=files(id,name,webViewLink)&supportsAllDrives=true&includeItemsFromAllDrives=true';
+  var r=await fetch(url,{headers:{Authorization:'Bearer '+tok}});
+  var d=await r.json();
+  if(!r.ok)throw new Error('Buscar carpeta: '+(d.error&&d.error.message||JSON.stringify(d)));
+  return (d.files&&d.files[0])||null;
+}
+async function driveCreate(name,parent,tok){
+  var r=await fetch('https://www.googleapis.com/drive/v3/files?fields=id,name,webViewLink&supportsAllDrives=true',{
+    method:'POST',headers:{Authorization:'Bearer '+tok,'Content-Type':'application/json'},
+    body:JSON.stringify({name:name,mimeType:'application/vnd.google-apps.folder',parents:[parent]})
+  });
+  var d=await r.json();
+  if(!r.ok)throw new Error('Crear carpeta: '+(d.error&&d.error.message||JSON.stringify(d)));
+  return d;
+}
+async function driveEnsure(name,parent,tok){
+  var f=await driveFind(name,parent,tok);
+  return f||await driveCreate(name,parent,tok);
+}
+// Crea/asegura la ruta: SIGMA / Proyectos / Proyectos menos de 8 UIT / [nombre proyecto]
+app.post('/api/drive/proyecto',async function(req,res){
+  if(!driveReady())return res.status(503).json({error:'Falta GOOGLE_SA_KEY o DRIVE_ROOT_FOLDER_ID en Railway > Variables.'});
+  var nombre=((req.body&&req.body.nombre)||'').trim();
+  if(!nombre)return res.status(400).json({error:'Falta el nombre del proyecto'});
+  try{
+    var tok=await driveToken();
+    var sigma=await driveEnsure('SIGMA',DRIVE_ROOT,tok);
+    var proyectos=await driveEnsure('Proyectos',sigma.id,tok);
+    var menos8=await driveEnsure('Proyectos menos de 8 UIT',proyectos.id,tok);
+    var carpeta=await driveEnsure(nombre,menos8.id,tok);
+    res.json({ok:true,id:carpeta.id,url:carpeta.webViewLink||('https://drive.google.com/drive/folders/'+carpeta.id),nombre:nombre});
+  }catch(e){console.error('Drive proyecto:',e.message);res.status(502).json({error:e.message});}
+});
+app.get('/api/drive/status',async function(req,res){
+  if(!driveReady())return res.json({ready:false,motivo:(driveSA()?'':'Falta GOOGLE_SA_KEY')+(DRIVE_ROOT?'':' Falta DRIVE_ROOT_FOLDER_ID')});
+  try{var tok=await driveToken();var f=await driveFind('SIGMA',DRIVE_ROOT,tok);res.json({ready:true,sa:driveSA().client_email,root:DRIVE_ROOT,sigmaCreada:!!f});}
+  catch(e){res.json({ready:false,error:e.message});}
+});
+
 app.get('/',function(req,res){
   var p=path.join(__dirname,'sigma.html');
   fs.access(p,function(e){ if(e){res.setHeader('Content-Type','text/html; charset=utf-8');res.send(APP_HTML);} else {res.sendFile(p);} });

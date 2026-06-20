@@ -1077,7 +1077,11 @@ function renderProyDetail(){
   var p=CURP;if(!p)return renderProyectos();
   var si=(p._sel==null?curStage(p):p._sel), st=p.stages[si], meta=STAGES[si];
   var prog=Math.round(stageDone(p)/p.stages.length*100);
-  var h='<div class="pback fade" onclick="renderProyectos()">← Proyectos</div>';
+  var h='<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px" class="fade"><div class="pback" onclick="renderProyectos()">← Proyectos</div>'+
+    (p.driveUrl
+      ? '<a href="'+esc(p.driveUrl)+'" target="_blank" class="minib" style="text-decoration:none;display:inline-flex;align-items:center;gap:5px">'+icon('layers')+'Abrir carpeta Drive</a>'
+      : '<button class="minib" onclick="crearCarpetaDrive(CURP)" style="display:inline-flex;align-items:center;gap:5px">'+icon('layers')+'Crear carpeta Drive</button>'
+    )+'</div>';
   h+='<div class="pdet-head fade"><div><h1>'+esc(p.nombre||'(sin nombre)')+'</h1><div class="pe">'+esc(p.entidad||'Sin entidad')+'</div></div>'+
     '<div class="pdet-meta"><div><div class="pmeta-v">'+fmtMonto(p.monto)+'</div><div class="pmeta-l">'+uitOf(p.monto)+' UIT</div></div>'+
     '<div><div class="pmeta-v">'+prog+'%</div><div class="pmeta-l">Avance</div></div>'+
@@ -1462,8 +1466,27 @@ function saveNewProy(){
   if(!n){toast('Ponle un nombre al proyecto');return}
   var p={id:'p'+Date.now(),nombre:n,entidad:(document.getElementById('np_e').value||'').trim(),
     monto:parseFloat(document.getElementById('np_m').value)||0,fecha:document.getElementById('np_f').value||'',
-    creado:Date.now(),stages:STAGES.map(function(s){return {k:s.k,mode:'manual',done:false,notas:'',input:'',resumen:'',data:null,docs:[],checklist:[],docboard:[],entidadDocs:[],revision:null,proveedores:[]}})};
+    creado:Date.now(),driveId:'',driveUrl:'',stages:STAGES.map(function(s){return {k:s.k,mode:'manual',done:false,notas:'',input:'',resumen:'',data:null,docs:[],checklist:[],docboard:[],entidadDocs:[],revision:null,proveedores:[]}})};
   loadProy();PROY.unshift(p);saveProy();closeNewProy();openProy(p.id);
+  crearCarpetaDrive(p);
+}
+/* Crea la carpeta del proyecto en Google Drive: SIGMA/Proyectos/Proyectos menos de 8 UIT/[nombre] */
+function crearCarpetaDrive(p){
+  if(!p||!p.nombre)return;
+  toast('Creando carpeta en Drive…');
+  fetch('/api/drive/proyecto',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({nombre:p.nombre})})
+    .then(function(r){return r.json()})
+    .then(function(d){
+      if(d&&d.ok){
+        loadProy();var t=PROY.filter(function(x){return x.id===p.id})[0];
+        if(t){t.driveId=d.id;t.driveUrl=d.url;saveProy()}
+        toast('Carpeta creada en Drive ✓');
+        if(CURP&&CURP.id===p.id){CURP.driveId=d.id;CURP.driveUrl=d.url;if(typeof renderProyDetail==='function')renderProyDetail()}
+      } else {
+        toast('Drive: '+((d&&d.error)||'no se pudo crear la carpeta'));
+      }
+    })
+    .catch(function(e){toast('Drive sin conexión: '+e.message)});
 }
 function openDelProy(){
   var m=document.getElementById('delpmodal');
