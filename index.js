@@ -61,6 +61,51 @@ async function proxyCloud(req,res){
   }catch(e){res.status(502).json({error:'No se pudo conectar a la nube: '+e.message});}
 }
 
+// ---- Configuracion del sistema en Supabase Storage (config.json) ----
+async function sbGetConfig(){
+  try{
+    await sbEnsureBucket();
+    var r=await fetch(SB_URL+'/storage/v1/object/'+SB_BUCKET+'/config.json',{headers:{'Authorization':'Bearer '+SB_KEY,'apikey':SB_KEY}});
+    if(!r.ok)return {};
+    return JSON.parse(await r.text())||{};
+  }catch(e){return {};}
+}
+async function sbPutConfig(obj){
+  await sbEnsureBucket();
+  await fetch(SB_URL+'/storage/v1/object/'+SB_BUCKET+'/config.json',{method:'POST',headers:{'Authorization':'Bearer '+SB_KEY,'apikey':SB_KEY,'Content-Type':'application/json','x-upsert':'true'},body:JSON.stringify(obj)});
+}
+
+// ---- Telegram: alertas y avisos ----
+async function tgSend(text){
+  var cfg=await sbGetConfig();
+  var tok=cfg.tgToken||process.env.TELEGRAM_BOT_TOKEN;
+  var chat=cfg.tgChatId;
+  if(!tok||!chat)throw new Error('Telegram no configurado (falta token o chatId)');
+  var r=await fetch('https://api.telegram.org/bot'+tok+'/sendMessage',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({chat_id:chat,text:text,parse_mode:'HTML',disable_web_page_preview:true})});
+  var d=await r.json();
+  if(!d.ok)throw new Error('Telegram: '+(d.description||r.status));
+  return d;
+}
+app.post('/api/telegram/config',async function(req,res){
+  if(!sbReady())return proxyCloud(req,res);
+  try{
+    var cfg=await sbGetConfig();
+    if(req.body&&req.body.token)cfg.tgToken=String(req.body.token).trim();
+    if(req.body&&req.body.chatId)cfg.tgChatId=String(req.body.chatId).trim();
+    if(!cfg.tgChatId&&cfg.tgToken){
+      try{var u=await (await fetch('https://api.telegram.org/bot'+cfg.tgToken+'/getUpdates')).json();
+        if(u.ok&&u.result&&u.result.length){for(var i=u.result.length-1;i>=0;i--){if(u.result[i].message){cfg.tgChatId=String(u.result[i].message.chat.id);break;}}}}catch(e){}
+    }
+    await sbPutConfig(cfg);
+    res.json({ok:true,configured:!!(cfg.tgToken&&cfg.tgChatId),chatId:cfg.tgChatId||null,tieneToken:!!cfg.tgToken});
+  }catch(e){res.status(500).json({error:e.message});}
+});
+app.get('/api/telegram/test',async function(req,res){
+  if(!sbReady())return proxyCloud(req,res);
+  try{await tgSend('✅ <b>SIGMA</b> conectado a Telegram.\nLas alertas de plazos y fechas llegaran por aqui.');res.json({ok:true});}
+  catch(e){res.status(500).json({error:e.message});}
+});
+
 const DATA_FILE=path.join(__dirname,'skyblue_data.json');
 function readData(){try{return JSON.parse(fs.readFileSync(DATA_FILE,'utf8'));}catch(e){return {};}}
 function writeData(d){try{fs.writeFileSync(DATA_FILE,JSON.stringify(d,null,2),'utf8');}catch(e){console.error('Write:',e.message);}}
