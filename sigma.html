@@ -611,7 +611,7 @@ function navClick(it){
   toggleMenu(false);
   if(it.tab){window.location.href='/cotizador?tab='+it.tab;return}
   ACTIVE=it.id;renderNav();
-  if(it.id==='dashboard')renderDashboard();else if(it.id==='proyectos')renderProyectos();else if(it.id==='boveda')renderBoveda();else if(it.id==='proveedores')renderProveedores();else renderSoon(it);
+  if(it.id==='dashboard')refreshDash();else if(it.id==='proyectos')renderProyectos();else if(it.id==='boveda')renderBoveda();else if(it.id==='proveedores')renderProveedores();else renderSoon(it);
 }
 
 function selectEmpresa(e){
@@ -620,7 +620,7 @@ function selectEmpresa(e){
   var idx=EMPRESAS.indexOf(e),col=e.color_primario&&e.color_primario!=='#0d3b6e'?e.color_primario:accentFor(idx<0?0:idx);
   $('topcav').textContent=initials(e.nombre);$('topcav').style.background=col;$('topcnm').textContent=e.nombre;
   ACTIVE='dashboard';renderNav();renderDashboard();renderAgents();renderActivity();
-  cloudSyncPull(function(){loadProy();if(ACTIVE==='dashboard')renderDashboard();});
+  cloudSyncPull(function(){refreshDash();});
 }
 function goPortal(){$('app').style.display='none';$('portal').style.display='flex'}
 function renderPortal(){
@@ -637,52 +637,82 @@ function renderPortal(){
   });
 }
 
+var DASH={hist:[],ocHist:[],scHist:[]};
+function _pf(f){ if(!f)return null; f=(''+f).trim(); var m; if(/^\d{4}-\d{2}-\d{2}/.test(f))return new Date(f.slice(0,10)+'T12:00:00'); m=f.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/); if(m)return new Date(+m[3],+m[2]-1,+m[1],12); var d=new Date(f); return isNaN(d)?null:d; }
+function _docTot(o){ if(o&&o.tot!=null&&!isNaN(+o.tot))return +o.tot; var s=0; if(o&&o.items&&o.items.length)o.items.forEach(function(i){s+=(+i.qty||+i.cantidad||0)*(+i.precio||+i.price||0)}); return s; }
+function _fmtK(n){ n=+n||0; var s=n<0?'-':''; n=Math.abs(n); if(n>=1000)return 'S/ '+s+(n/1000).toFixed(n>=10000?0:1)+'K'; return 'S/ '+s+Math.round(n); }
+var STSHORT={tdr:['Análisis','#0ea5e9'],prop:['Propuesta','#14b8a6'],oc:['Orden','#22d3ee'],compra:['Compra','#6366f1'],entrega:['Entrega','#2563eb'],conf:['Conformidad','#8b5cf6'],fact:['Facturación','#06b6d4'],pago:['Pago','#16a34a']};
+function _riesgo(p){var dl=daysLeft(p.fecha);if(dl===null)return['Bajo','#16a34a'];if(dl<0)return['Vencido','#ef4444'];if(dl<=3)return['Alto','#ef4444'];if(dl<=7)return['Medio','#f59e0b'];return['Bajo','#16a34a'];}
+function _alertCount(){var n=0;PROY.forEach(function(p){var dl=daysLeft(p.fecha);if(dl!==null&&dl<=7)n++;});return n;}
+function goCot(t){window.location.href='/cotizador?tab='+t;}
+function loadDash(cb){
+  fetch('/api/data').then(function(r){return r.json()}).then(function(d){
+    d=d||{}; DASH.hist=Array.isArray(d.hist)?d.hist:[]; DASH.ocHist=Array.isArray(d.ocHist)?d.ocHist:[]; DASH.scHist=Array.isArray(d.scHist)?d.scHist:[];
+    if(cb)cb();
+  }).catch(function(){if(cb)cb();});
+}
+function refreshDash(){ loadProy(); loadDash(function(){ if(ACTIVE==='dashboard')renderDashboard(); renderAgents(); renderActivity(); }); }
 function renderDashboard(){
+  loadProy();
+  var hist=DASH.hist, oc=DASH.ocHist, sc=DASH.scHist;
+  var now=new Date(), mk=now.getFullYear()*12+now.getMonth();
+  var ventasMes=0, nCotMes=0;
+  hist.forEach(function(c){var f=_pf(c.fecha);var t=_docTot(c);if(f&&f.getFullYear()*12+f.getMonth()===mk){ventasMes+=t;nCotMes++;}});
+  var porCobrar=0;
+  PROY.forEach(function(p){var byk={};p.stages.forEach(function(s){byk[s.k]=s});if(byk.fact&&byk.fact.done&&(!byk.pago||!byk.pago.done))porCobrar+=(+p.monto||0);});
+  var meses=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+  var serie=[];for(var i=5;i>=0;i--){var dd=new Date(now.getFullYear(),now.getMonth()-i,1);serie.push({k:dd.getFullYear()*12+dd.getMonth(),lb:meses[dd.getMonth()],v:0});}
+  hist.forEach(function(c){var f=_pf(c.fecha);if(!f)return;var key=f.getFullYear()*12+f.getMonth();serie.forEach(function(s){if(s.k===key)s.v+=_docTot(c);});});
+  var maxv=Math.max.apply(null,serie.map(function(s){return s.v}).concat([1]));
+  var pcount={};STAGES.forEach(function(s){pcount[s.k]=0;});PROY.forEach(function(p){var cs=curStage(p);var k=p.stages[cs]?p.stages[cs].k:'tdr';pcount[k]=(pcount[k]||0)+1;});
+  var maxp=Math.max.apply(null,Object.keys(pcount).map(function(k){return pcount[k]}).concat([1]));
+  var nAlert=_alertCount();
   var kpis=[
-    {ic:'chat',lb:'Cotizaciones en proceso',v:'37',t:'+7',up:1},
-    {ic:'box',lb:'Órdenes activas',v:'18',t:'-2',up:0},
-    {ic:'trending',lb:'Ventas del mes',v:'S/ 812K',t:'+18%',up:1},
-    {ic:'wallet',lb:'Cobranza pendiente',v:'S/ 248K',t:'⚠ 5',up:0}
+    {ic:'chat',lb:'Cotizaciones',v:String(hist.length),t:'+'+nCotMes+' mes',up:1,onc:"goCot('cot')"},
+    {ic:'box',lb:'Órdenes de compra',v:String(oc.length),t:'total',up:1,onc:"goCot('oc')"},
+    {ic:'trending',lb:'Ventas del mes',v:_fmtK(ventasMes),t:nCotMes+' cot.',up:1,onc:"goCot('cot')"},
+    {ic:'wallet',lb:'Por cobrar',v:_fmtK(porCobrar),t:(nAlert?('⚠ '+nAlert):'ok'),up:porCobrar?0:1,onc:"navClick({id:'proyectos'})"}
   ];
-  var pipe=[
-    {n:'Oportunidad',c:6,col:'#0ea5e9'},{n:'Cotización',c:7,col:'#14b8a6'},
-    {n:'Orden compra',c:3,col:'#22d3ee'},{n:'Logística',c:5,col:'#2563eb'},
-    {n:'Facturación',c:4,col:'#06b6d4'},{n:'Cerrado',c:12,col:'#16a34a'}
-  ];
-  var maxp=12;
-  var proj=[
-    {n:'Adquisición EPP — GORE La Libertad',cl:'GORE LL',m:'S/ 120K',st:'Cotización',stc:'#14b8a6',dl:'18 Jun',pr:45,r:'Medio',rc:'#f59e0b'},
-    {n:'Señalética Vial — MTC',cl:'MTC',m:'S/ 89K',st:'Logística',stc:'#2563eb',dl:'25 Jun',pr:72,r:'Bajo',rc:'#16a34a'},
-    {n:'Insumos Seguridad — EsSalud',cl:'EsSalud',m:'S/ 310K',st:'Orden',stc:'#22d3ee',dl:'30 Jun',pr:31,r:'Alto',rc:'#ef4444'},
-    {n:'Equipos Clínicos — MINSA',cl:'MINSA',m:'S/ 56K',st:'Facturación',stc:'#0ea5e9',dl:'22 Jun',pr:89,r:'Bajo',rc:'#16a34a'}
-  ];
+  var hoy=now.toLocaleDateString('es-PE',{weekday:'long',day:'numeric',month:'long'});
+  var mespill=meses[now.getMonth()]+' '+now.getFullYear();
   var h='';
-  h+='<div class="pagehead fade"><div class="row"><h1>Dashboard</h1><span class="pill">Junio 2026</span></div>'+
-     '<div class="sub">Resumen de <b style="color:var(--tprimary)">'+(EMP?EMP.nombre:'')+'</b> · martes 16 de junio</div></div>';
-  h+='<div class="insight fade" onclick="toast(\'Panel de alertas IA \\u2014 pr\\u00f3ximamente\')"><div class="ix">'+icon('spark',1.4)+'</div>'+
-     '<div class="it">El <b>Agente IA</b> detectó 3 alertas: licitación GORE vence en 48h · factura F001-892 vence hoy</div><div class="ig">Ver →</div></div>';
+  h+='<div class="pagehead fade"><div class="row"><h1>Dashboard</h1><span class="pill">'+mespill+'</span></div>'+
+     '<div class="sub">Resumen de <b style="color:var(--tprimary)">'+(EMP?EMP.nombre:'')+'</b> · '+hoy+'</div></div>';
+  var alertTxt=nAlert?('Tienes <b>'+nAlert+'</b> proyecto'+(nAlert>1?'s':'')+' con plazo en 7 días o vencido.'):'Sin alertas de plazo. Todo en orden.';
+  h+='<div class="insight fade" onclick="navClick({id:\'proyectos\'})"><div class="ix">'+icon('spark',1.4)+'</div>'+
+     '<div class="it">'+alertTxt+'</div><div class="ig">Ver →</div></div>';
   h+='<div class="kpis">';
-  kpis.forEach(function(k){h+='<div class="kpi fade"><div class="top"><div class="kic">'+icon(k.ic)+'</div><span class="trend '+(k.up?'up':'down')+'">'+k.t+'</span></div><div class="val mono">'+k.v+'</div><div class="lab">'+k.lb+'</div></div>'});
+  kpis.forEach(function(k){h+='<div class="kpi fade" style="cursor:pointer" onclick="'+k.onc+'"><div class="top"><div class="kic">'+icon(k.ic)+'</div><span class="trend '+(k.up?'up':'down')+'">'+k.t+'</span></div><div class="val mono">'+k.v+'</div><div class="lab">'+k.lb+'</div></div>'});
   h+='</div>';
+  var step=(330-16)/5, pts=serie.map(function(s,i){var x=16+step*i;var y=100-(s.v/maxv)*84;return [Math.round(x),Math.round(y)];});
+  var line=pts.map(function(p,i){return (i?'L':'M')+p[0]+','+p[1]}).join(' ');
+  var area=line+' L330,110 L16,110 Z';
+  var labels=serie.map(function(s,i){var x=16+step*i;return '<text x="'+Math.round(x)+'" y="120" text-anchor="middle" fill="var(--chartlabel)" style="font-size:8.5px">'+s.lb+'</text>'}).join('');
+  var last=pts[pts.length-1];
   h+='<div class="charts">';
-  h+='<div class="card fade"><div class="chead"><div><div class="ct">Ventas del año</div><div class="cs">Últimos 6 meses · soles</div></div><div class="cbtn">Exportar</div></div>'+
-     '<svg viewBox="0 0 340 120" style="width:100%;height:150px;display:block;overflow:visible"><defs><linearGradient id="af" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#0ea5e9" stop-opacity=".22"/><stop offset="100%" stop-color="#0ea5e9" stop-opacity="0"/></linearGradient></defs>'+
+  h+='<div class="card fade"><div class="chead"><div><div class="ct">Ventas del año</div><div class="cs">Últimos 6 meses · soles</div></div></div>'+
+     '<svg viewBox="0 0 340 130" style="width:100%;height:150px;display:block;overflow:visible"><defs><linearGradient id="af" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#0ea5e9" stop-opacity=".22"/><stop offset="100%" stop-color="#0ea5e9" stop-opacity="0"/></linearGradient></defs>'+
      '<line x1="0" y1="24" x2="340" y2="24" stroke="var(--chartgrid)" stroke-dasharray="3 5"/><line x1="0" y1="62" x2="340" y2="62" stroke="var(--chartgrid)" stroke-dasharray="3 5"/><line x1="0" y1="100" x2="340" y2="100" stroke="var(--chartgrid)" stroke-dasharray="3 5"/>'+
-     '<path d="M16,100 L80,82 L146,88 L212,60 L278,40 L330,16 L330,110 L16,110 Z" fill="url(#af)"/><path d="M16,100 L80,82 L146,88 L212,60 L278,40 L330,16" fill="none" stroke="#0ea5e9" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>'+
-     '<circle cx="330" cy="16" r="4" fill="#0ea5e9" stroke="var(--card)" stroke-width="2"/>'+
-     '<text x="16" y="120" text-anchor="middle" fill="var(--chartlabel)" style="font-size:8.5px">Ene</text><text x="80" y="120" text-anchor="middle" fill="var(--chartlabel)" style="font-size:8.5px">Feb</text><text x="146" y="120" text-anchor="middle" fill="var(--chartlabel)" style="font-size:8.5px">Mar</text><text x="212" y="120" text-anchor="middle" fill="var(--chartlabel)" style="font-size:8.5px">Abr</text><text x="278" y="120" text-anchor="middle" fill="var(--chartlabel)" style="font-size:8.5px">May</text><text x="330" y="120" text-anchor="middle" fill="var(--chartlabel)" style="font-size:8.5px">Jun</text></svg></div>';
-  h+='<div class="card fade"><div class="chead"><div><div class="ct">Pipeline</div><div class="cs">12 proyectos activos</div></div></div><div class="plist">';
-  pipe.forEach(function(p){var pct=Math.round(p.c/maxp*100);h+='<div class="prow"><span class="pn">'+p.n+'</span><span class="pt"><span class="pf" style="width:'+pct+'%;background:'+p.col+'"></span></span><span class="pc">'+p.c+'</span></div>'});
+     '<path d="'+area+'" fill="url(#af)"/><path d="'+line+'" fill="none" stroke="#0ea5e9" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>'+
+     '<circle cx="'+last[0]+'" cy="'+last[1]+'" r="4" fill="#0ea5e9" stroke="var(--card)" stroke-width="2"/>'+labels+'</svg></div>';
+  h+='<div class="card fade"><div class="chead"><div><div class="ct">Pipeline</div><div class="cs">'+PROY.length+' proyectos activos</div></div></div><div class="plist">';
+  STAGES.forEach(function(s){var c=pcount[s.k]||0;var col=(STSHORT[s.k]||['','#0ea5e9'])[1];var pct=Math.round(c/maxp*100);h+='<div class="prow" style="cursor:pointer" onclick="navClick({id:\'proyectos\'})"><span class="pn">'+(STSHORT[s.k]||[s.k])[0]+'</span><span class="pt"><span class="pf" style="width:'+pct+'%;background:'+col+'"></span></span><span class="pc">'+c+'</span></div>'});
   h+='</div></div></div>';
   h+='<div class="sectitle fade">Proyectos activos</div>';
-  h+='<div class="card fade"><div class="ptable-wrap"><table class="ptable"><thead><tr><th>Proyecto</th><th>Cliente</th><th>Monto</th><th>Etapa</th><th>Avance</th><th>Riesgo</th></tr></thead><tbody>';
-  proj.forEach(function(p){h+='<tr><td><div class="pname">'+p.n+'</div><div class="pdl">Vence: '+p.dl+'</div></td><td style="color:var(--tmuted)">'+p.cl+'</td><td class="mono" style="font-weight:600">'+p.m+'</td>'+
-     '<td><span class="badge" style="color:'+p.stc+';background:'+bg(p.stc,.14)+'">'+p.st+'</span></td>'+
-     '<td><div class="prog"><div class="track"><div class="fill" style="width:'+p.pr+'%"></div></div><span class="pct">'+p.pr+'%</span></div></td>'+
-     '<td><span class="badge" style="color:'+p.rc+';background:'+bg(p.rc,.14)+'">'+p.r+'</span></td></tr>'});
-  h+='</tbody></table></div></div>';
+  if(!PROY.length){
+    h+='<div class="card fade" style="text-align:center;color:var(--tmuted);font-size:13px;padding:24px">Aún no hay proyectos. <span style="color:var(--tprimary);cursor:pointer;font-weight:600" onclick="navClick({id:\'proyectos\'})">Crear el primero →</span></div>';
+  } else {
+    h+='<div class="card fade"><div class="ptable-wrap"><table class="ptable"><thead><tr><th>Proyecto</th><th>Cliente</th><th>Monto</th><th>Etapa</th><th>Avance</th><th>Riesgo</th></tr></thead><tbody>';
+    PROY.forEach(function(p){var cs=curStage(p);var sk=p.stages[cs]?p.stages[cs].k:'tdr';var st=STSHORT[sk]||[sk,'#0ea5e9'];var prog=Math.round(stageDone(p)/p.stages.length*100);var rg=_riesgo(p);var dl=daysLeft(p.fecha);
+      h+='<tr style="cursor:pointer" onclick="openProy(\''+p.id+'\')"><td><div class="pname">'+esc(p.nombre||'(sin nombre)')+'</div><div class="pdl">'+(p.fecha?('Vence: '+p.fecha+(dl!==null?(' · '+(dl<0?'vencido':dl+'d')):'')):'sin plazo')+'</div></td><td style="color:var(--tmuted)">'+esc(p.entidad||'—')+'</td><td class="mono" style="font-weight:600">'+fmtMonto(p.monto)+'</td>'+
+      '<td><span class="badge" style="color:'+st[1]+';background:'+bg(st[1],.14)+'">'+st[0]+'</span></td>'+
+      '<td><div class="prog"><div class="track"><div class="fill" style="width:'+prog+'%"></div></div><span class="pct">'+prog+'%</span></div></td>'+
+      '<td><span class="badge" style="color:'+rg[1]+';background:'+bg(rg[1],.14)+'">'+rg[0]+'</span></td></tr>'});
+    h+='</tbody></table></div></div>';
+  }
   $('content').innerHTML=h;
 }
+
 function renderSoon(it){
   $('content').innerHTML='<div class="soonview fade"><div class="si">'+icon(it.ic,1.5)+'</div><h2>'+it.lb+'</h2>'+
     '<p>Este módulo es parte de la hoja de ruta de SIGMA. Lo construiremos por fases, conectado a tus datos en la nube y con asistencia de IA.</p>'+
@@ -883,24 +913,26 @@ function addProvManualGlobal(){
 }
 
 function renderAgents(){
+  var nP=PROY.length, nC=DASH.hist.length, nO=DASH.ocHist.length, nS=DASH.scHist.length, nA=_alertCount();
   var ag=[
-    {ic:'bolt',n:'Ag. Licitaciones',s:'Analizando SEACE…',d:'#34d399',p:'pulse 2s infinite'},
-    {ic:'dollar',n:'Ag. Cotizador',s:'3 cotizaciones listas',d:'#34d399',p:'pulse 2s infinite'},
-    {ic:'cart',n:'Ag. Compras',s:'OC F001-2847 generada',d:'#34d399',p:'pulse 2s infinite'},
-    {ic:'doc',n:'Ag. Facturación',s:'Revisando 3 facturas',d:'#fbbf24',p:'pulse 3s infinite'},
-    {ic:'trending',n:'Ag. Gerencial',s:'Reporte mensual listo',d:'#34d399',p:'pulse 2s infinite'}
+    {ic:'clipboard',n:'Ag. Licitaciones',mod:'Proyectos Públicos',s:nP+' proyecto'+(nP===1?'':'s')+' activo'+(nP===1?'':'s'),on:"navClick({id:'proyectos'})",act:nP>0},
+    {ic:'dollar',n:'Ag. Cotizador',mod:'Cotizaciones',s:nC+' cotizaci'+(nC===1?'ón':'ones'),on:"goCot('cot')",act:nC>0},
+    {ic:'cart',n:'Ag. Compras',mod:'Órdenes de Compra',s:nO+' orden'+(nO===1?'':'es'),on:"goCot('oc')",act:nO>0},
+    {ic:'send',n:'Ag. Solicitudes',mod:'Solicitud Cotiz.',s:nS+' solicitud'+(nS===1?'':'es'),on:"goCot('sc')",act:nS>0},
+    {ic:'bolt',n:'Ag. Alertas',mod:'Plazos y fechas',s:(nA?(nA+' alerta'+(nA===1?'':'s')+' de plazo'):'sin alertas'),on:"navClick({id:'proyectos'})",act:nA>0}
   ];
-  var h='';ag.forEach(function(a){h+='<div class="agent"><div class="ag-ic">'+icon(a.ic)+'</div><div style="flex:1;min-width:0"><div class="ag-n">'+a.n+'</div><div class="ag-s">'+a.s+'</div></div><div class="dot" style="background:'+a.d+';animation:'+a.p+'"></div></div>'});
+  var h='';ag.forEach(function(a){var col=a.act?'#34d399':'#94a3b8';h+='<div class="agent" style="cursor:pointer" onclick="'+a.on+'"><div class="ag-ic">'+icon(a.ic)+'</div><div style="flex:1;min-width:0"><div class="ag-n">'+a.n+'</div><div class="ag-s">'+a.s+' · '+a.mod+'</div></div><div class="dot" style="background:'+col+';animation:'+(a.act?'pulse 2s infinite':'none')+'"></div></div>'});
   $('agents').innerHTML=h;$('agcount').textContent=ag.length;
 }
 function renderActivity(){
-  var ac=[
-    {ic:'bolt',c:'#38bdf8',t:'IA detectó licitación GORE — EPP',tm:'hace 2 min'},
-    {ic:'check',c:'#34d399',t:'OC F001-2847 aprobada',tm:'hace 8 min'},
-    {ic:'box',c:'#fbbf24',t:'Entrega confirmada — EsSalud',tm:'hace 23 min'},
-    {ic:'robot',c:'#5eead4',t:'Agente cotizó 4 proveedores',tm:'hace 2h'}
-  ];
-  var h='';ac.forEach(function(a){h+='<div class="act"><div class="a-ic" style="background:'+bg(a.c,.18)+';color:'+a.c+'">'+icon(a.ic)+'</div><div style="flex:1;min-width:0"><div class="a-tx">'+a.t+'</div><div class="a-tm">'+a.tm+'</div></div></div>'});
+  var ev=[];
+  DASH.hist.slice(0,25).forEach(function(c){ev.push({ic:'dollar',col:'#38bdf8',t:'Cotización COT-'+(c.num||'')+((c.cli&&c.cli.n)?' · '+c.cli.n:''),f:_pf(c.fecha),on:"goCot('cot')"});});
+  DASH.ocHist.slice(0,25).forEach(function(o){ev.push({ic:'cart',col:'#34d399',t:'Orden OC-'+(o.num||o.numOC||''),f:_pf(o.fecha),on:"goCot('oc')"});});
+  PROY.forEach(function(p){var cs=curStage(p);var sk=p.stages[cs]?p.stages[cs].k:'tdr';ev.push({ic:'clipboard',col:'#5eead4',t:'Proyecto: '+(p.nombre||'(sin nombre)'),sub:(STSHORT[sk]||[sk])[0],f:_pf(p.fecha),on:"openProy('"+p.id+"')"});});
+  ev.sort(function(a,b){return (b.f?b.f.getTime():0)-(a.f?a.f.getTime():0)});
+  ev=ev.slice(0,6);
+  if(!ev.length){$('activity').innerHTML='<div style="font-size:12px;color:var(--tmuted);padding:8px">Sin actividad reciente todavía.</div>';return;}
+  var h='';ev.forEach(function(a){var tm=a.f?a.f.toLocaleDateString('es-PE',{day:'numeric',month:'short'}):'';h+='<div class="act" style="cursor:pointer" onclick="'+a.on+'"><div class="a-ic" style="background:'+bg(a.col,.18)+';color:'+a.col+'">'+icon(a.ic)+'</div><div style="flex:1;min-width:0"><div class="a-tx">'+esc(a.t)+(a.sub?' · '+a.sub:'')+'</div><div class="a-tm">'+tm+'</div></div></div>'});
   $('activity').innerHTML=h;
 }
 /* ===== Módulo: Proyectos Públicos < 8 UIT ===== */
