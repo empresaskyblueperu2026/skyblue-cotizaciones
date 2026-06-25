@@ -47,6 +47,20 @@ async function sbPutData(obj){
   if(!r.ok){var t=await r.text();throw new Error('put '+r.status+' '+t);}
 }
 
+// ---- Modo local: si falta una llave, reenvia la llamada a la nube (PC = cliente de la nube) ----
+var PROD_URL=process.env.PROD_URL||'https://skyblue-cotizaciones-production.up.railway.app';
+async function proxyCloud(req,res){
+  try{
+    var opts={method:req.method,headers:{'Content-Type':'application/json'}};
+    if(req.method!=='GET'&&req.method!=='HEAD')opts.body=JSON.stringify(req.body||{});
+    var r=await fetch(PROD_URL+req.originalUrl,opts);
+    var t=await r.text();
+    res.status(r.status);
+    res.set('Content-Type',r.headers.get('content-type')||'application/json');
+    res.send(t);
+  }catch(e){res.status(502).json({error:'No se pudo conectar a la nube: '+e.message});}
+}
+
 const DATA_FILE=path.join(__dirname,'skyblue_data.json');
 function readData(){try{return JSON.parse(fs.readFileSync(DATA_FILE,'utf8'));}catch(e){return {};}}
 function writeData(d){try{fs.writeFileSync(DATA_FILE,JSON.stringify(d,null,2),'utf8');}catch(e){console.error('Write:',e.message);}}
@@ -74,11 +88,21 @@ app.get('/sw.js',function(req,res){res.setHeader('Content-Type','application/jav
 app.get('/api/data',async function(req,res){
   if(sbReady()){
     try{var d=await sbGetData();if(d){writeData(d);return res.json(d);}}catch(e){console.error('SB get:',e.message);}
+    return res.json(readData());
   }
+  // local: leer de la nube; si no hay internet, usar la copia local
+  try{
+    var r=await fetch(PROD_URL+'/api/data');
+    if(r.ok){var j=await r.json();writeData(j);return res.json(j);}
+  }catch(e){}
   res.json(readData());
 });
 app.post('/api/data',async function(req,res){
   try{
+    if(!sbReady()){
+      try{writeData(Object.assign(readData(),req.body||{}));}catch(e){}
+      return proxyCloud(req,res);
+    }
     var base=readData();
     if(sbReady()){try{var d=await sbGetData();if(d)base=d;}catch(e){console.error('SB read:',e.message);}}
     var m=Object.assign(base,req.body||{});
@@ -146,14 +170,14 @@ app.get('/api/ruc/:numero', async function(req, res){
 
 app.post('/api/claude',async function(req,res){
   var k=process.env.ANTHROPIC_API_KEY;
-  if(!k) return res.status(500).json({error:'Falta configurar ANTHROPIC_API_KEY en Railway. Ve a tu proyecto Railway > Variables > agrega ANTHROPIC_API_KEY con tu key de Anthropic.'});
+  if(!k) return proxyCloud(req,res);
   try{var r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':k,'anthropic-version':'2023-06-01','anthropic-beta':'pdfs-2024-09-25'},body:JSON.stringify(req.body)});var d=await r.json();res.status(r.status).json(d);}
   catch(e){res.status(502).json({error:e.message});}
 });
 
 app.post('/api/gemini',async function(req,res){
   var k=process.env.GEMINI_API_KEY;
-  if(!k)return res.status(500).json({error:'Falta GEMINI_API_KEY en Railway. Ve a Variables y agrega GEMINI_API_KEY con tu key de aistudio.google.com/apikey'});
+  if(!k)return proxyCloud(req,res);
   try{
     var parts=[{text:req.body.prompt}];
     if(req.body.imageBase64)parts.push({inline_data:{mime_type:req.body.mimeType||'application/pdf',data:req.body.imageBase64}});
@@ -174,7 +198,7 @@ app.post('/api/gemini',async function(req,res){
 });
 
 app.get('/api/empresas',async function(req,res){
-  if(!sbReady())return res.status(503).json({error:'Falta SUPABASE_SERVICE_KEY en las variables del servidor (Railway > Variables).'});
+  if(!sbReady())return proxyCloud(req,res);
   try{var d=await sbFetch('empresas?select=*&order=nombre');res.json(d);}
   catch(e){res.status(502).json({error:e.message});}
 });
@@ -250,7 +274,7 @@ async function driveEnsureSubpath(parent,segs,tok){
 }
 // Crea/asegura la ruta: SIGMA / Proyectos / Proyectos menos de 8 UIT / [entidad] / [nombre proyecto]
 app.post('/api/drive/proyecto',async function(req,res){
-  if(!driveReady())return res.status(503).json({error:'Falta GOOGLE_SA_KEY o DRIVE_ROOT_FOLDER_ID en Railway > Variables.'});
+  if(!driveReady())return proxyCloud(req,res);
   var nombre=((req.body&&req.body.nombre)||'').trim();
   var entidad=((req.body&&req.body.entidad)||'').trim()||'Sin entidad';
   var folders=Array.isArray(req.body&&req.body.folders)?req.body.folders:[];
@@ -274,7 +298,7 @@ app.post('/api/drive/proyecto',async function(req,res){
 });
 // Sube un archivo a la carpeta del proyecto (opcionalmente dentro de una subcarpeta por etapa)
 app.post('/api/drive/upload',async function(req,res){
-  if(!driveReady())return res.status(503).json({error:'Falta GOOGLE_SA_KEY o DRIVE_ROOT_FOLDER_ID en Railway > Variables.'});
+  if(!driveReady())return proxyCloud(req,res);
   var b=req.body||{};
   if(!b.name||!b.base64)return res.status(400).json({error:'Faltan datos (name, base64)'});
   if(!b.folderId&&!(b.path&&b.path.length))return res.status(400).json({error:'Falta folderId o path'});
@@ -302,7 +326,7 @@ app.post('/api/drive/upload',async function(req,res){
 });
 // Renombra una carpeta/archivo en Drive (usado al editar el nombre del proyecto)
 app.post('/api/drive/rename',async function(req,res){
-  if(!driveReady())return res.status(503).json({error:'Falta GOOGLE_SA_KEY o DRIVE_ROOT_FOLDER_ID en Railway > Variables.'});
+  if(!driveReady())return proxyCloud(req,res);
   var b=req.body||{};
   if(!b.id||!b.name)return res.status(400).json({error:'Faltan datos (id, name)'});
   try{
