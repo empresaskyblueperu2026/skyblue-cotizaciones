@@ -22,6 +22,15 @@ async function sbFetch(pathq,opts){
   return data;
 }
 
+// ---- Datos durables del sistema en Supabase (tabla app_data) ----
+async function sbGetData(){
+  var rows=await sbFetch('app_data?k=eq.global&select=data');
+  return (rows&&rows[0]&&rows[0].data)?rows[0].data:null;
+}
+async function sbPutData(obj){
+  await sbFetch('app_data?on_conflict=k',{method:'POST',prefer:'resolution=merge-duplicates,return=minimal',body:{k:'global',data:obj,updated_at:new Date().toISOString()}});
+}
+
 const DATA_FILE=path.join(__dirname,'skyblue_data.json');
 function readData(){try{return JSON.parse(fs.readFileSync(DATA_FILE,'utf8'));}catch(e){return {};}}
 function writeData(d){try{fs.writeFileSync(DATA_FILE,JSON.stringify(d,null,2),'utf8');}catch(e){console.error('Write:',e.message);}}
@@ -46,10 +55,21 @@ app.get('/api/diag',function(req,res){
 });
 app.get('/sw.js',function(req,res){res.setHeader('Content-Type','application/javascript');res.send("self.addEventListener('install',function(){self.skipWaiting();});self.addEventListener('activate',function(e){self.clients.claim();});self.addEventListener('fetch',function(e){if(e.request.url.includes('/api/'))return;e.respondWith(fetch(e.request).catch(function(){return caches.match(e.request);}));});");});
 
-app.get('/api/data',function(req,res){res.json(readData());});
-app.post('/api/data',function(req,res){
-  try{var m=Object.assign(readData(),req.body||{});writeData(m);res.json({ok:true});}
-  catch(e){res.status(500).json({error:e.message});}
+app.get('/api/data',async function(req,res){
+  if(sbReady()){
+    try{var d=await sbGetData();if(d){writeData(d);return res.json(d);}}catch(e){console.error('SB get:',e.message);}
+  }
+  res.json(readData());
+});
+app.post('/api/data',async function(req,res){
+  try{
+    var base=readData();
+    if(sbReady()){try{var d=await sbGetData();if(d)base=d;}catch(e){console.error('SB read:',e.message);}}
+    var m=Object.assign(base,req.body||{});
+    writeData(m);
+    if(sbReady()){try{await sbPutData(m);}catch(e){console.error('SB put:',e.message);}}
+    res.json({ok:true,cloud:sbReady()});
+  }catch(e){res.status(500).json({error:e.message});}
 });
 
 app.get('/api/ruc/:numero', async function(req, res){
