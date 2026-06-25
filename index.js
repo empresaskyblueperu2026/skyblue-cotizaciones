@@ -22,13 +22,29 @@ async function sbFetch(pathq,opts){
   return data;
 }
 
-// ---- Datos durables del sistema en Supabase (tabla app_data) ----
+// ---- Datos durables en Supabase Storage (se crea solo, sin SQL manual) ----
+var SB_BUCKET='sigma-data', SB_OBJ='global.json', _bucketOk=false;
+async function sbEnsureBucket(){
+  if(_bucketOk)return;
+  var h={'Authorization':'Bearer '+SB_KEY,'apikey':SB_KEY,'Content-Type':'application/json'};
+  var g=await fetch(SB_URL+'/storage/v1/bucket/'+SB_BUCKET,{headers:h});
+  if(g.status===200){_bucketOk=true;return;}
+  var c=await fetch(SB_URL+'/storage/v1/bucket',{method:'POST',headers:h,body:JSON.stringify({id:SB_BUCKET,name:SB_BUCKET,public:false})});
+  if(!c.ok&&c.status!==409){var t=await c.text();throw new Error('bucket '+c.status+' '+t);}
+  _bucketOk=true;
+}
 async function sbGetData(){
-  var rows=await sbFetch('app_data?k=eq.global&select=data');
-  return (rows&&rows[0]&&rows[0].data)?rows[0].data:null;
+  await sbEnsureBucket();
+  var r=await fetch(SB_URL+'/storage/v1/object/'+SB_BUCKET+'/'+SB_OBJ,{headers:{'Authorization':'Bearer '+SB_KEY,'apikey':SB_KEY}});
+  if(r.status===404||r.status===400)return null;
+  if(!r.ok)throw new Error('get '+r.status);
+  var t=await r.text();
+  try{return t?JSON.parse(t):null;}catch(e){return null;}
 }
 async function sbPutData(obj){
-  await sbFetch('app_data?on_conflict=k',{method:'POST',prefer:'resolution=merge-duplicates,return=minimal',body:{k:'global',data:obj,updated_at:new Date().toISOString()}});
+  await sbEnsureBucket();
+  var r=await fetch(SB_URL+'/storage/v1/object/'+SB_BUCKET+'/'+SB_OBJ,{method:'POST',headers:{'Authorization':'Bearer '+SB_KEY,'apikey':SB_KEY,'Content-Type':'application/json','x-upsert':'true'},body:JSON.stringify(obj)});
+  if(!r.ok){var t=await r.text();throw new Error('put '+r.status+' '+t);}
 }
 
 const DATA_FILE=path.join(__dirname,'skyblue_data.json');
