@@ -106,6 +106,88 @@ app.get('/api/telegram/test',async function(req,res){
   catch(e){res.status(500).json({error:e.message});}
 });
 
+// ---- Numeracion correlativa del sistema (COT / SC / OC) en la nube ----
+var NUM_PREFIX={cot:'COT',sc:'SC',oc:'OC'};
+function numFmt(tipo,n){return (NUM_PREFIX[tipo]||tipo.toUpperCase())+'-'+String(n).padStart(3,'0');}
+// Devuelve el SIGUIENTE numero sin consumirlo
+app.get('/api/numero/peek',async function(req,res){
+  if(!sbReady())return proxyCloud(req,res);
+  try{
+    var tipo=(req.query.tipo||'cot').toLowerCase(), emp=req.query.emp||'default';
+    var cfg=await sbGetConfig(); cfg.counters=cfg.counters||{};
+    var k=emp+':'+tipo; var next=(cfg.counters[k]||0)+1;
+    res.json({tipo:tipo,emp:emp,next:next,numero:numFmt(tipo,next)});
+  }catch(e){res.status(500).json({error:e.message});}
+});
+// Consume y devuelve el numero (lo incrementa de forma atomica en la nube)
+app.post('/api/numero/next',async function(req,res){
+  if(!sbReady())return proxyCloud(req,res);
+  try{
+    var b=req.body||{}; var tipo=(b.tipo||'cot').toLowerCase(), emp=b.emp||'default';
+    var cfg=await sbGetConfig(); cfg.counters=cfg.counters||{};
+    var k=emp+':'+tipo; var n=(cfg.counters[k]||0)+1; cfg.counters[k]=n;
+    await sbPutConfig(cfg);
+    res.json({tipo:tipo,emp:emp,n:n,numero:numFmt(tipo,n)});
+  }catch(e){res.status(500).json({error:e.message});}
+});
+// Permite fijar el contador (por si ya tienen numeros usados: p.ej. OC va en 4)
+app.post('/api/numero/set',async function(req,res){
+  if(!sbReady())return proxyCloud(req,res);
+  try{
+    var b=req.body||{}; var tipo=(b.tipo||'cot').toLowerCase(), emp=b.emp||'default';
+    var cfg=await sbGetConfig(); cfg.counters=cfg.counters||{};
+    cfg.counters[emp+':'+tipo]=parseInt(b.valor,10)||0;
+    await sbPutConfig(cfg);
+    res.json({ok:true,counters:cfg.counters});
+  }catch(e){res.status(500).json({error:e.message});}
+});
+
+// ---- Motor de alertas de plazos (revisa proyectos y avisa por Telegram) ----
+function _daysLeft(f){ if(!f)return null; var d=Math.ceil((new Date(f+'T23:59:59')-new Date())/86400000); return d; }
+function buildAlerts(data){
+  var out=[]; if(!data)return out;
+  Object.keys(data).forEach(function(key){
+    if(key.indexOf('sproy_')!==0)return;            // proyectos por empresa
+    var arr=data[key]; if(!Array.isArray(arr))return;
+    arr.forEach(function(p){
+      var dias=_daysLeft(p.fecha);
+      if(dias===null)return;
+      if(dias<=7){ out.push({nombre:p.n||p.nombre||'(proyecto)',fecha:p.fecha,dias:dias,cliente:p.cl||p.entidad||''}); }
+    });
+  });
+  out.sort(function(a,b){return a.dias-b.dias;});
+  return out;
+}
+function alertText(list){
+  if(!list.length)return '🟢 <b>SIGMA</b> — Sin plazos proximos (7 dias). Todo en orden.';
+  var t='🔔 <b>SIGMA — Alertas de plazos</b>\n\n';
+  list.forEach(function(a){
+    var ic=a.dias<0?'🔴':a.dias<=3?'🟠':'🟡';
+    var et=a.dias<0?('VENCIDO hace '+Math.abs(a.dias)+'d'):a.dias===0?'VENCE HOY':('faltan '+a.dias+'d');
+    t+=ic+' <b>'+a.nombre+'</b>'+(a.cliente?' ('+a.cliente+')':'')+'\n   '+et+' · '+a.fecha+'\n';
+  });
+  return t;
+}
+async function runAlertas(force){
+  var data=await sbGetData()||{};
+  var cfg=await sbGetConfig();
+  var hoy=new Date().toISOString().slice(0,10);
+  if(!force && cfg.lastAlertDate===hoy) return {skipped:true,reason:'ya se envio hoy'};
+  var list=buildAlerts(data);
+  // Solo enviar automatico si hay algo; manual (force) siempre envia
+  if(list.length||force){ try{ await tgSend(alertText(list)); }catch(e){ return {error:e.message}; } }
+  cfg.lastAlertDate=hoy; await sbPutConfig(cfg);
+  return {ok:true,enviadas:list.length,alertas:list};
+}
+app.get('/api/alertas/run',async function(req,res){
+  if(!sbReady())return proxyCloud(req,res);
+  try{ res.json(await runAlertas(true)); }catch(e){ res.status(500).json({error:e.message}); }
+});
+app.get('/api/alertas/list',async function(req,res){
+  if(!sbReady())return proxyCloud(req,res);
+  try{ var data=await sbGetData()||{}; res.json({alertas:buildAlerts(data)}); }catch(e){ res.status(500).json({error:e.message}); }
+});
+
 const DATA_FILE=path.join(__dirname,'skyblue_data.json');
 function readData(){try{return JSON.parse(fs.readFileSync(DATA_FILE,'utf8'));}catch(e){return {};}}
 function writeData(d){try{fs.writeFileSync(DATA_FILE,JSON.stringify(d,null,2),'utf8');}catch(e){console.error('Write:',e.message);}}
@@ -399,3 +481,12 @@ app.listen(PORT,'0.0.0.0',function(){
   console.log('SKY BLUE en puerto '+PORT);
   if(!fs.existsSync(DATA_FILE))writeData({});
 });
+
+// Programador de alertas: revisa cada 30 min y envia 1 vez al dia (~8am hora Peru = 13 UTC)
+if(sbReady()){
+  setInterval(function(){
+    if(new Date().getUTCHours()===13){
+      runAlertas(false).then(function(r){ if(r&&r.ok&&r.enviadas)console.log('Alertas enviadas:',r.enviadas); }).catch(function(e){console.error('Alertas:',e.message);});
+    }
+  }, 30*60*1000);
+}
