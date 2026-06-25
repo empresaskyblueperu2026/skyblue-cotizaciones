@@ -292,7 +292,25 @@ aside.rpanel{width:284px;flex-shrink:0;background:linear-gradient(180deg,var(--c
 .oblig{font-size:9px;font-weight:700;color:#ef4444;background:rgba(239,68,68,.1);padding:1px 6px;border-radius:5px;margin-left:6px;white-space:nowrap}
 .chk-d{font-size:11px;color:var(--tmuted);margin-top:3px;line-height:1.45}
 .chk-borr{font-size:11.5px;line-height:1.55;white-space:pre-wrap;background:var(--card);border:1px solid var(--border);border-radius:8px;padding:10px;margin-top:8px;max-height:240px;overflow:auto}
+.chk-html{font-size:11.5px;line-height:1.6;background:var(--card);border:1px solid var(--border);border-radius:8px;padding:10px;margin-top:8px;max-height:260px;overflow:auto}
+.chk-html h1,.chk-html h2,.chk-html h3{font-size:13px;margin:8px 0 5px;color:var(--tprimary)}
+.chk-html p{margin:5px 0}.chk-html ul{margin:5px 0 8px;padding-left:18px}.chk-html li{margin:3px 0}
 .chk-act{flex-shrink:0}
+.prop-progress{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin:14px 0}
+.prop-stat{background:var(--input);border:1px solid var(--border);border-radius:10px;padding:10px}
+.prop-stat-v{font-size:18px;font-weight:800;font-family:'DM Mono',monospace;color:var(--accent)}
+.prop-stat-l{font-size:9.5px;color:var(--tmuted);text-transform:uppercase;letter-spacing:.5px;margin-top:2px}
+.flow-guide{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:8px;margin-bottom:8px}
+.flow-item{display:flex;gap:9px;align-items:flex-start;background:var(--input);border:1px solid var(--border);border-radius:10px;padding:10px}
+.flow-dot{width:24px;height:24px;border-radius:8px;background:var(--pillbg);border:1px solid var(--pillborder);display:flex;align-items:center;justify-content:center;color:var(--accent);flex-shrink:0}
+.flow-dot svg{width:12px;height:12px}
+.flow-name{font-size:12px;font-weight:700;line-height:1.3}
+.flow-desc{font-size:10.5px;color:var(--tmuted);line-height:1.45;margin-top:2px}
+.drive-structure{background:var(--input);border:1px solid var(--border);border-radius:11px;padding:11px 12px;max-height:210px;overflow:auto;margin-bottom:12px}
+.drive-root{font-size:11.5px;font-weight:700;color:var(--accent);display:flex;align-items:center;gap:7px;margin-bottom:8px;line-height:1.4}
+.drive-root svg{width:14px;height:14px;flex-shrink:0}
+.drive-folder{font-size:11px;color:var(--tmuted);display:flex;align-items:center;gap:7px;padding:4px 0 4px 16px;border-top:1px solid var(--border)}
+.drive-folder svg{width:12px;height:12px;color:var(--accent);flex-shrink:0}
 /* Bóveda */
 .proy-wrap{padding:22px 26px;max-width:900px}
 .proy-hdr{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;margin-bottom:22px}
@@ -330,6 +348,16 @@ aside.rpanel{width:284px;flex-shrink:0;background:linear-gradient(180deg,var(--c
 .dbest{font-size:9px;font-weight:600;color:var(--tmuted);cursor:pointer;padding:2px 6px;border-radius:5px;background:var(--input)}
 .dbest.on{color:#16a34a;background:rgba(22,163,74,.12)}
 .dbx{font-size:11px;color:var(--tmuted);cursor:pointer}
+.dbprev{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.dbgen{position:absolute;right:4px;top:4px;font-size:8px;font-weight:800;background:#0d9488;color:white;border-radius:5px;padding:2px 5px}
+.draft-modal{position:fixed;inset:0;z-index:80;background:rgba(13,59,110,.62);display:flex;align-items:center;justify-content:center;padding:18px}
+.draft-box{width:min(980px,100%);max-height:92vh;background:var(--card);border-radius:14px;border:1px solid var(--border);box-shadow:0 24px 70px rgba(13,59,110,.28);display:flex;flex-direction:column;overflow:hidden}
+.draft-head{display:flex;justify-content:space-between;gap:12px;align-items:center;padding:14px 16px;border-bottom:1px solid var(--border)}
+.draft-title{font-size:14px;font-weight:800}
+.draft-body{display:grid;grid-template-columns:1fr 1fr;gap:0;min-height:520px;overflow:hidden}
+.draft-body textarea{border:none;border-right:1px solid var(--border);border-radius:0;min-height:520px;background:var(--input);resize:none}
+.draft-preview{padding:16px;overflow:auto;background:#fff;color:#17324d}
+.draft-foot{display:flex;justify-content:flex-end;gap:8px;padding:12px 16px;border-top:1px solid var(--border)}
 .prov-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:15px;margin-bottom:12px}
 .prov-top{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap;margin-bottom:11px}
 .prov-nm{font-size:14px;font-weight:700;line-height:1.3}
@@ -887,6 +915,59 @@ var STAGES=[
  {k:'fact',   t:'Facturación y Cobranza',              ag:'Ag. Facturación',    ic:'wallet',    lbl:'Comprobante electrónico SUNAT y cobranza'},
  {k:'pago',   t:'Pago',                                ag:'Ag. Tesorería',      ic:'card',      lbl:'Registro y conciliación del pago recibido'}
 ];
+var DRIVE_8UIT_FOLDERS=[
+ '01. Especificaciones tecnicas y anexos entidad',
+ '02. Analisis de viabilidad y proveedores',
+ '03. Oferta tecnica',
+ '03. Oferta tecnica/01. Anexos llenados',
+ '03. Oferta tecnica/02. Experiencia requerida',
+ '03. Oferta tecnica/03. Fichas tecnicas',
+ '03. Oferta tecnica/04. Oferta final subida',
+ '04. Subsanaciones',
+ '05. Orden de compra',
+ '06. Facturacion y guia',
+ '07. Entrega de productos',
+ '07. Entrega de productos/01. Documentos a llevar impresos',
+ '08. Conformidad',
+ '09. Seguimiento de pago'
+];
+var STAGE_DOC_RULES={
+ tdr:[
+  ['TDR / Especificaciones tecnicas','Subir el documento base enviado por la entidad.'],
+  ['Formatos y anexos de entidad','Guardar formatos editables o PDF recibidos.'],
+  ['Cotizaciones reales de proveedores','Registrar precios reales y compatibilidad por item.']
+ ],
+ prop:[
+  ['Anexos llenados','DJ, oferta economica, CCI y formatos de la entidad completos.'],
+  ['Experiencia requerida','Factura, guia, OC, conformidad u otros sustentos.'],
+  ['Fichas tecnicas','Una ficha por item/producto ofertado.'],
+  ['Oferta final subida','PDF final ordenado, firmado y listo para presentar.']
+ ],
+ oc:[
+  ['Orden de compra oficial','OC completa, firmada/sellada si corresponde.'],
+  ['Datos SIAF','Unidad ejecutora, expediente, monto, fecha y plazo activado.']
+ ],
+ compra:[
+  ['Compra a proveedores','OC/cotizaciones de compra, comprobantes y coordinacion de despacho.'],
+  ['Compatibilidad final','Validar que lo comprado sea igual o superior a lo ofertado.']
+ ],
+ entrega:[
+  ['Documentos impresos','OC, factura, guia y acta para llevar a almacen/area usuaria.'],
+  ['Evidencia de entrega','Cargo, fotos, sellos o constancia de recepcion.']
+ ],
+ conf:[
+  ['Acta de conformidad','Acta interna o de entidad firmada por almacen/area usuaria.'],
+  ['Observaciones levantadas','Guardar cualquier subsanacion posterior a la entrega.']
+ ],
+ fact:[
+  ['Factura SUNAT','Factura emitida exactamente contra OC.'],
+  ['Guia de remision','Guia vinculada a la factura y al traslado real.']
+ ],
+ pago:[
+  ['Seguimiento MEF/SIAF','Capturas, expediente y fechas de devengado/girado/pagado.'],
+  ['Cierre financiero','Pago recibido, margen real y conciliacion bancaria.']
+ ]
+};
 var AIPROMPTS={
  tdr:'ROLE: Eres DOBLE experto: (1) especialista MAXIMO en contrataciones con el Estado peruano para compras <8UIT; (2) comprador/cotizador senior del LADO DEL PROVEEDOR. Somos la empresa que VENDE al Estado. TASK: Analiza el TDR/Especificaciones y entrega una decision comercial accionable, con presupuesto conservador y comparativa por item/proveedor. OUTPUT: SOLO JSON valido (NADA de texto, markdown, explicaciones, backticks, comillas triples). ESTRUCTURA EXACTA: {\n"objeto":"[objeto]",\n"entidad":"[entidad]",\n"valor_referencial":"S/ [monto si aparece, si no vacio]",\n"limite_8uit":"S/ 42800",\n"items": [{"descripcion":"[desc]","cantidad":"[numero]","unidad":"[unidad]"}],\n"especificaciones_por_item": [{"item":"[producto/item]","especificacion":"[detalle tecnico completo]"}],\n"requisitos_calificacion": ["[experiencia]","[RNP/habilitacion]","[certificados]","[personal]"],\n"especificaciones": ["[esp general si aplica]"],\n"plazo_entrega":"[plazo]",\n"lugar_entrega":"[lugar]",\n"forma_pago":"[forma]",\n"garantias":"[garantias o vacio]",\n"penalidades":"[penalidades o vacio]",\n"criterios_evaluacion": ["[criterio]"],\n"investigacion_referencial": [{"item":"[item]","proveedor":"[Sodimac/Maestro/Promart/MercadoLibre/proveedor local/etc.]","producto":"[producto exacto o equivalente]","precio_unitario":"S/ XXX","precio_total":"S/ XXX","compatibilidad":95,"observacion":"[por que es equivalente/superior]"}],\n"comparativa_items": [{"item":"[item solicitado]","proveedor":"[proveedor]","producto":"[producto/marca exacta o equivalente]","precio_unitario":"S/ XXX","precio_total":"S/ XXX","compatibilidad":95,"observacion":"[por que cumple o supera]"}],\n"comparativa_por_item": [{"item":"[item solicitado]","proveedor_recomendado":"[proveedor]","mejor_precio":"S/ XXX","alternativas": [{"proveedor":"[proveedor]","precio":"S/ XXX","compatibilidad":90}],"observacion":"[conviene comprar aqui por precio/entrega/compatibilidad]"}],\n"comparativa_proveedores": [{"proveedor":"[proveedor/canal sugerido]","precio_total":"S/ XXX","entrega":"[dias]","calificacion":"Alta","recomendado":true,"items": [{"item":"[item]","precio":"S/ XXX","compatibilidad":95}]}],\n"viabilidad":{"veredicto":"VIABLE","razones": ["[razon 1]","[razon 2]"]},\n"decision":{"puntaje":85,"go_no_go":"GO","motivo":"[decision ejecutiva]","acciones_inmediatas": ["[accion 1]","[accion 2]"],"informacion_faltante": ["[dato que falta o vacio]"]},\n"presupuesto":{"costo_estimado":"S/ XXXXX","precio_oferta_sugerido":"S/ XXXXX","utilidad_estimada":"S/ XXXXX","margen_estimado":"22% referencial","desglose": [{"item":"[item]","cantidad":"[cant]","costo_unitario":"S/ XXX","costo_total":"S/ XXX","precio_sugerido":"S/ XXX"}],"observaciones":"[obs]"},\n"riesgos": ["[riesgo]"],\n"recomendacion":"[recomendacion breve]"\n}\nREGLAS:\n1) veredicto: exactamente VIABLE|RIESGOSO|NO VIABLE\n2) decision.go_no_go: exactamente GO|GO CON CONDICIONES|NO GO\n3) puntaje: 0-100 ponderando requisitos, plazo, riesgo, margen, disponibilidad y documentacion\n4) items: extrae TODOS con cantidad y unidad (criticos)\n5) especificaciones_por_item: detalla requisitos tecnicos por producto, no solo una lista general\n6) presupuesto: NO uses precios bajos optimistas. Usa precios conservadores de mercado peruano, con colchón por flete, IGV, variacion y disponibilidad. Si no puedes verificar precio exacto, marca observacion referencial y sube el costo, no lo bajes.\n7) margen_estimado: usa 22% como base referencial. Puede variar, pero explica si recomiendas mas o menos.\n8) comparativa_items: por CADA item indica proveedor, producto, precio y compatibilidad\n9) comparativa_por_item: recomienda donde comprar CADA item, permitiendo mezclar proveedores si conviene\n10) comparativa_proveedores: muestra totales por proveedor y detalle de items\n11) informacion_faltante: incluye todo dato que GEA deba confirmar antes de ofertar\n12) dato faltante = ""\n13) RESPONDE PURO JSON.\nTDR:\n',
  oc:'Eres el Ag. de Orden de Compra para contrataciones públicas peruanas. Con base en los DATOS MAESTRO del análisis, indica los pasos para recibir y registrar la orden de compra: datos que debe contener la OC, verificación contra el TDR, plazos que activa y un checklist de validación. Responde en texto claro y ordenado.',
@@ -1079,7 +1160,7 @@ function renderProyDetail(){
   var prog=Math.round(stageDone(p)/p.stages.length*100);
   var h='<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px" class="fade"><div class="pback" onclick="renderProyectos()">← Proyectos</div>'+
     (p.driveUrl
-      ? '<a href="'+esc(p.driveUrl)+'" target="_blank" class="minib" style="text-decoration:none;display:inline-flex;align-items:center;gap:5px">'+icon('layers')+'Abrir carpeta Drive</a>'
+      ? '<div style="display:flex;gap:7px;flex-wrap:wrap"><a href="'+esc(p.driveUrl)+'" target="_blank" class="minib" style="text-decoration:none;display:inline-flex;align-items:center;gap:5px">'+icon('layers')+'Abrir carpeta Drive</a><button class="minib" onclick="crearCarpetaDrive(CURP)" style="display:inline-flex;align-items:center;gap:5px">'+icon('check')+'Actualizar estructura</button></div>'
       : '<button class="minib" onclick="crearCarpetaDrive(CURP)" style="display:inline-flex;align-items:center;gap:5px">'+icon('layers')+'Crear carpeta Drive</button>'
     )+'</div>';
   h+='<div class="pdet-head fade"><div><h1>'+esc(p.nombre||'(sin nombre)')+'</h1><div class="pe">'+esc(p.entidad||'Sin entidad')+'</div></div>'+
@@ -1134,6 +1215,7 @@ function renderProyDetail(){
     h+='<div class="sp-lbl">'+esc(meta.lbl)+'</div>';
     h+='<textarea class="ta" placeholder="Escribe aquí…" oninput="stNotas('+si+',this.value)">'+esc(st.notas)+'</textarea>';
   }
+  if(meta.k!=='prop')h+=renderStageDocGuide(meta.k);
   if(meta.k!=='prop'&&meta.k!=='cot'){
     h+='<div class="sp-lbl">Documentos</div>';
     h+='<div class="dropz" id="dz_'+si+'" onclick="pickFile('+si+')" ondragover="dzOver(event,'+si+',1)" ondragleave="dzOver(event,'+si+',0)" ondrop="dzDrop(event,'+si+')">Arrastra archivos aquí o haz clic para seleccionar<br><span style="font-size:10.5px;opacity:.7">PDF, imágenes, Word, Excel · se vincularán a Google Drive próximamente</span></div>';
@@ -1152,6 +1234,19 @@ function stNotas(i,v){CURP.stages[i].notas=v;saveProy()}
 function stInput(i,v){CURP.stages[i].input=v;saveProy()}
 function toggleDone(i){CURP.stages[i].done=!CURP.stages[i].done;saveProy();if(CURP.stages[i].done&&i+1<CURP.stages.length)CURP._sel=i+1;renderProyDetail()}
 function rmDoc(i,di){CURP.stages[i].docs.splice(di,1);saveProy();renderProyDetail()}
+function renderStageDocGuide(k){
+  var arr=STAGE_DOC_RULES[k]||[];if(!arr.length)return '';
+  var h='<div class="sp-lbl" style="margin-top:18px">Expediente documental esperado</div><div class="flow-guide">';
+  arr.forEach(function(x){h+='<div class="flow-item"><div class="flow-dot">'+icon('check',2)+'</div><div><div class="flow-name">'+esc(x[0])+'</div><div class="flow-desc">'+esc(x[1])+'</div></div></div>'});
+  return h+'</div>';
+}
+function renderDriveStructurePanel(p){
+  var h='<div class="sp-lbl" style="margin-top:16px">Estructura Drive del expediente</div><div class="drive-structure">';
+  h+='<div class="drive-root">'+icon('layers')+' SIGMA / Proyectos / Proyectos menos de 8 UIT / '+esc(p.entidad||'Entidad')+' / '+esc(p.nombre||'Proyecto')+'</div>';
+  DRIVE_8UIT_FOLDERS.forEach(function(f){h+='<div class="drive-folder">'+icon('doc')+esc(f)+'</div>'});
+  h+='</div>';
+  return h;
+}
 function dzOver(e,i,on){e.preventDefault();var z=document.getElementById('dz_'+i);if(z)z.classList.toggle('drag',!!on)}
 function dzDrop(e,i){e.preventDefault();var z=document.getElementById('dz_'+i);if(z)z.classList.remove('drag');var f=e.dataTransfer.files[0];if(f)addFile(i,f)}
 function pickFile(i){_fileStage=i;_fileMode='docs';var inp=document.getElementById('pfile');inp.value='';inp.click()}
@@ -1218,14 +1313,45 @@ function empDocsKey(){return 'sigma_emp_docs_'+(EMP?EMP.id:'x')}
 function loadEmpDocs(){try{return JSON.parse(localStorage.getItem(empDocsKey())||'[]')}catch(e){return []}}
 function saveEmpDocs(a){try{localStorage.setItem(empDocsKey(),JSON.stringify(a||[]))}catch(e){}}
 function empDocHas(k){return loadEmpDocs().filter(function(d){return d.k===k}).length>0}
+function cleanAIText(s){return (''+(s||'')).replace(/^```[a-z]*\s*/i,'').replace(/```$/,'').trim()}
+function textToHTML(s){
+  s=cleanAIText(s);
+  if(!s)return '<p style="color:var(--tmuted)">Sin contenido.</p>';
+  var lines=s.split(/\r?\n/),h='',inList=false;
+  function close(){if(inList){h+='</ul>';inList=false}}
+  function fmt(line){return esc(line).replace(/\*\*(.*?)\*\*/g,'<b>$1</b>').replace(/\*(.*?)\*/g,'<b>$1</b>')}
+  lines.forEach(function(raw){
+    var line=raw.trim();
+    if(!line){close();return}
+    if(/^#{1,3}\s+/.test(line)){close();h+='<h3>'+fmt(line.replace(/^#{1,3}\s+/,''))+'</h3>';return}
+    if(/^[\-\*]\s+/.test(line)||/^\d+[\.\)]\s+/.test(line)){
+      if(!inList){h+='<ul>';inList=true}
+      h+='<li>'+fmt(line.replace(/^[\-\*]\s+/,'').replace(/^\d+[\.\)]\s+/,''))+'</li>';return
+    }
+    close();h+='<p>'+fmt(line)+'</p>';
+  });
+  close();return h;
+}
+function docHTML(title,body){
+  return '<!doctype html><html><head><meta charset="utf-8"><title>'+esc(title)+'</title><style>body{font-family:Arial,sans-serif;color:#172554;line-height:1.55;padding:34px;max-width:840px;margin:auto}h1{font-size:18px}h2,h3{font-size:14px;margin-top:18px}p{margin:8px 0}ul{margin:8px 0 12px 20px}li{margin:4px 0}.sign{margin-top:42px}</style></head><body><h1>'+esc(title)+'</h1>'+textToHTML(body)+'</body></html>';
+}
+function propStats(st){
+  var total=(st.checklist||[]).length,covered=0,firm=0,ready=0;
+  (st.checklist||[]).forEach(function(it){if(propDocPresent(st,it))covered++;if(it.requiere_firma)firm++});
+  (st.docboard||[]).forEach(function(d){if(d.estado==='listo')ready++});
+  return {total:total,covered:covered,firmas:firm,board:(st.docboard||[]).length,ready:ready,pct:total?Math.round(covered/total*100):0};
+}
 function stageProp(p,si,st){
   st.checklist=st.checklist||[];st.docboard=st.docboard||[];st.entidadDocs=st.entidadDocs||[];
   var m0=p.stages[0],hasM=!!(m0.data||m0.resumen);
   var col=hasM?'var(--accent)':'#f59e0b';
   var h='<div class="aibase" style="padding:11px 13px;border-radius:10px;margin-top:4px;font-size:11.5px;line-height:1.5;background:'+(hasM?'var(--alertbg)':'rgba(245,158,11,.08)')+';border:1px solid '+(hasM?'var(--alertborder)':'rgba(245,158,11,.28)')+'"><span style="color:'+col+'">'+icon(hasM?'spark':'search')+'</span><div>'+(hasM?'Este agente documental usa los <b>requisitos del análisis maestro</b> para armar la lista de anexos y declaraciones juradas, y puede redactarlas con tus datos.':'Primero ejecuta el <b>análisis del TDR</b> (etapa 1); de ahí saco los requisitos.')+'</div></div>';
+  var ps=propStats(st);
+  h+='<div class="prop-progress"><div class="prop-stat"><div class="prop-stat-v">'+ps.pct+'%</div><div class="prop-stat-l">Checklist cubierto</div></div><div class="prop-stat"><div class="prop-stat-v">'+ps.covered+'/'+ps.total+'</div><div class="prop-stat-l">Documentos</div></div><div class="prop-stat"><div class="prop-stat-v">'+ps.ready+'/'+ps.board+'</div><div class="prop-stat-l">Tablero listo</div></div><div class="prop-stat"><div class="prop-stat-v">'+ps.firmas+'</div><div class="prop-stat-l">Requieren firma</div></div></div>';
+  h+=renderStageDocGuide('prop')+renderDriveStructurePanel(p);
   h+='<div class="sp-lbl" style="margin-top:16px">1. Anexos y documentos enviados por la entidad</div>';
   h+='<div class="docboard-drop" onclick="pickEntidadDocs('+si+')">Sube aquí bases, anexos, formatos, cartas, DJ o archivos que envió la entidad<br><span style="font-size:10px;opacity:.7">La IA intentará leer cada PDF/imagen y convertirlo en guía de llenado</span></div>';
-  if(st.entidadDocs.length){h+='<div class="chk-list">';st.entidadDocs.forEach(function(d,di){h+='<div class="chk"><div class="chk-tp">Entidad</div><div class="chk-main"><div class="chk-n">'+esc(d.name)+'</div>'+(d.analisis?'<div class="chk-d">'+esc(d.analisis)+'</div>':'<div class="chk-d">Pendiente de análisis automático.</div>')+'</div><div class="chk-act"><button class="minib" onclick="rmEntidadDoc('+si+','+di+')">Eliminar</button></div></div>'});h+='</div>'}
+  if(st.entidadDocs.length){h+='<div class="chk-list">';st.entidadDocs.forEach(function(d,di){h+='<div class="chk"><div class="chk-tp">Entidad</div><div class="chk-main"><div class="chk-n">'+esc(d.name)+'</div>'+(d.analisis?'<div class="chk-html">'+textToHTML(d.analisis)+'</div>':'<div class="chk-d">Pendiente de análisis automático.</div>')+'</div><div class="chk-act"><button class="minib" onclick="previewPropFile(\'entidad\','+si+','+di+')">Ver</button><button class="minib" onclick="rmEntidadDoc('+si+','+di+')">Eliminar</button></div></div>'});h+='</div>'}
   var ed=loadEmpDocs();
   h+='<div class="sp-lbl" style="margin-top:18px">2. Matriz documental de '+(EMP?esc(EMP.nombre):'empresa')+'</div>';
   h+='<div class="chk-list">';
@@ -1237,8 +1363,8 @@ function stageProp(p,si,st){
     st.checklist.forEach(function(it,idx){
       var canDraft=/declaraci|anexo|jurad/i.test((it.tipo||'')+' '+(it.nombre||''));
       var present=propDocPresent(st,it), firm=it.requiere_firma?' · firma':'';
-      h+='<div class="chk"><div class="chk-tp">'+esc(it.tipo||'Doc')+'</div><div class="chk-main"><div class="chk-n">'+esc(it.nombre||'')+(it.obligatorio?'<span class="oblig">obligatorio</span>':'')+'</div>'+(it.descripcion?'<div class="chk-d">'+esc(it.descripcion)+'</div>':'')+(it.borrador?'<div class="chk-borr">'+esc(it.borrador)+'</div>':'')+'</div>'+
-      '<div class="chk-act"><div style="font-size:10px;color:'+(present?'#16a34a':'#f59e0b')+';margin-bottom:6px">'+(present?'Cubierto':'Falta')+firm+'</div>'+(canDraft?'<button class="minib" '+(it._dl?'disabled':'')+' onclick="aiDraftDoc('+si+','+idx+')">'+(it._dl?'…':(it.borrador?'Rehacer':'Guía / llenar'))+'</button>':'')+'</div></div>';
+      h+='<div class="chk"><div class="chk-tp">'+esc(it.tipo||'Doc')+'</div><div class="chk-main"><div class="chk-n">'+esc(it.nombre||'')+(it.obligatorio?'<span class="oblig">obligatorio</span>':'')+'</div>'+(it.descripcion?'<div class="chk-d">'+esc(it.descripcion)+'</div>':'')+(it.borrador?'<div class="chk-html">'+textToHTML(it.borrador)+'</div>':'')+'</div>'+
+      '<div class="chk-act"><div style="font-size:10px;color:'+(present?'#16a34a':'#f59e0b')+';margin-bottom:6px">'+(present?'Cubierto':'Falta')+firm+'</div>'+(canDraft?'<button class="minib" '+(it._dl?'disabled':'')+' onclick="aiDraftDoc('+si+','+idx+')">'+(it._dl?'…':(it.borrador?'Rehacer':'Guía / llenar'))+'</button>':'')+(it.borrador?'<button class="minib" onclick="openDraftEditor('+si+','+idx+')">Editar anexo</button>':'')+'</div></div>';
     });
     h+='</div>';
   }
@@ -1248,7 +1374,7 @@ function stageProp(p,si,st){
     h+='<div class="docboard">';
     st.docboard.forEach(function(dd,di){
       h+='<div class="dbcard" draggable="true" ondragstart="dbDragStart('+di+')" ondragover="event.preventDefault()" ondrop="dbReorder('+si+','+di+')">'+
-        '<div class="dbthumb">'+icon(/image/.test(dd.type||'')?'doc':'doc',1.3)+'<span class="dbnum">'+(di+1)+'</span></div>'+
+        '<div class="dbthumb" onclick="previewPropFile(\'board\','+si+','+di+')">'+(dd.preview?'<img class="dbprev" src="'+dd.preview+'">':icon(/image/.test(dd.type||'')?'doc':'doc',1.3))+'<span class="dbnum">'+(di+1)+'</span>'+(dd.generated?'<span class="dbgen">IA</span>':'')+'</div>'+
         '<div class="dbname" title="'+esc(dd.name)+'">'+esc(dd.name)+'</div>'+
         '<div class="dbfoot"><span class="dbest '+(dd.estado==='listo'?'on':'')+'" onclick="dbToggle('+si+','+di+')">'+(dd.estado==='listo'?'✓ Listo':'Pendiente')+'</span><span class="dbx" onclick="dbRemove('+si+','+di+')">✕</span></div>'+
         '</div>';
@@ -1281,7 +1407,14 @@ function rmEntidadDoc(si,di){CURP.stages[si].entidadDocs.splice(di,1);saveProy()
 function addEntidadDoc(si,f){
   var st=CURP.stages[si];st.entidadDocs=st.entidadDocs||[];
   var d={name:f.name,type:f.type||'',size:Math.round(f.size/1024),analisis:''};st.entidadDocs.push(d);saveProy();renderProyDetail();
-  if(/pdf|image/.test(f.type||'')){var rd=new FileReader();rd.onload=function(){aiAnalyzeEntidadDoc(si,d,(''+rd.result).split(',')[1],f.type)};rd.readAsDataURL(f)}
+  var rd=new FileReader();
+  rd.onload=function(){
+    var data=''+rd.result,b64=data.split(',')[1]||'';
+    d.b64=b64;d.preview=/image/.test(f.type||'')?data:'';
+    saveProy();renderProyDetail();
+    if(/pdf|image/.test(f.type||''))aiAnalyzeEntidadDoc(si,d,b64,f.type);
+  };
+  rd.readAsDataURL(f);
 }
 function saveEmpDoc(k,f){
   var docs=loadEmpDocs(),meta=EMP_DOC_TYPES.filter(function(x){return x.k===k})[0]||{k:k,n:k};
@@ -1328,7 +1461,7 @@ function aiDraftDoc(si,idx){
   var st=CURP.stages[si],it=st.checklist[idx],m0=CURP.stages[0];
   var base=m0.data?JSON.stringify(m0.data):(m0.resumen||'');
   var emp=EMP?('Empresa proveedora: '+EMP.nombre+(EMP.ruc?', RUC '+EMP.ruc:'')+(EMP.direccion?', '+EMP.direccion:'')+(EMP.telefono?', tel '+EMP.telefono:'')+(EMP.email?', email '+EMP.email:'')):'';
-  var prompt='Eres experto en redacción y llenado de anexos para contrataciones con el Estado peruano. Si el documento viene de un anexo/formato de la entidad, debes conservar su sentido, orden, campos y texto base; solo llena los espacios requeridos con datos de la empresa y del proceso. Si no tienes el anexo exacto, genera una guía y un borrador equivalente sin inventar requisitos. Incluye advertencias si falta DNI, firma, RNP, REMYPE, CCI u otro dato. Documento: "'+(it.nombre||'')+'" (tipo: '+(it.tipo||'')+'). '+(it.descripcion?'Debe contener: '+it.descripcion+'. ':'')+emp+'. MATRIZ EMPRESA: '+JSON.stringify(loadEmpDocs())+'. ANEXOS ENTIDAD: '+JSON.stringify(st.entidadDocs||[])+'. Responde SOLO con: GUIA DE LLENADO + BORRADOR LISTO PARA REVISAR, sin comentarios externos.';
+  var prompt='Eres experto en redaccion y llenado de anexos para contrataciones con el Estado peruano. Si existe un anexo/formato de entidad, conserva su sentido, orden, campos y texto base; solo llena espacios con datos de la empresa y del proceso. Si no tienes el anexo exacto, genera una guia breve y un borrador equivalente sin inventar requisitos. Usa titulos claros y parrafos limpios; NO uses markdown pesado, NO uses asteriscos decorativos, NO uses backticks. Incluye una seccion "Datos faltantes por confirmar" si falta DNI, firma, RNP, REMYPE, CCI u otro dato. Documento: "'+(it.nombre||'')+'" (tipo: '+(it.tipo||'')+'). '+(it.descripcion?'Debe contener: '+it.descripcion+'. ':'')+emp+'. MATRIZ EMPRESA: '+JSON.stringify(loadEmpDocs())+'. ANEXOS ENTIDAD ANALIZADOS: '+JSON.stringify(st.entidadDocs||[])+'. Responde con: GUIA DE LLENADO y DOCUMENTO LLENADO LISTO PARA REVISAR.';
   it._dl=true;renderProyDetail();
   fetch('/api/gemini',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt:prompt+'\n\nDATOS DEL PROCESO:\n'+base})})
    .then(function(r){return r.json()}).then(function(d){
@@ -1350,11 +1483,54 @@ function aiReviewOffer(si){
 }
 function dzOver2(e,si,on){e.preventDefault();var z=document.getElementById('dbdz_'+si);if(z)z.classList.toggle('drag',!!on)}
 function dbDrop(e,si){e.preventDefault();var z=document.getElementById('dbdz_'+si);if(z)z.classList.remove('drag');var fs=e.dataTransfer.files;if(fs)for(var i=0;i<fs.length;i++)addDocboard(si,fs[i])}
-function addDocboard(si,f){var st=CURP.stages[si];st.docboard=st.docboard||[];st.docboard.push({name:f.name,type:f.type||'',estado:'pendiente'});saveProy();renderProyDetail()}
+function addDocboard(si,f){
+  var st=CURP.stages[si];st.docboard=st.docboard||[];
+  var d={name:f.name,type:f.type||'',size:Math.round(f.size/1024),estado:'pendiente'};st.docboard.push(d);saveProy();renderProyDetail();
+  var rd=new FileReader();
+  rd.onload=function(){var data=''+rd.result;d.b64=data.split(',')[1]||'';d.preview=/image/.test(f.type||'')?data:'';saveProy();renderProyDetail()};
+  rd.readAsDataURL(f);
+}
 function dbDragStart(di){_dbSrc=di}
 function dbReorder(si,di){if(_dbSrc<0||_dbSrc===di){_dbSrc=-1;return}var arr=CURP.stages[si].docboard;var m=arr.splice(_dbSrc,1)[0];arr.splice(di,0,m);_dbSrc=-1;saveProy();renderProyDetail()}
 function dbToggle(si,di){var d=CURP.stages[si].docboard[di];d.estado=(d.estado==='listo'?'pendiente':'listo');saveProy();renderProyDetail()}
 function dbRemove(si,di){CURP.stages[si].docboard.splice(di,1);saveProy();renderProyDetail()}
+function previewPropFile(kind,si,di){
+  var d=kind==='entidad'?CURP.stages[si].entidadDocs[di]:CURP.stages[si].docboard[di];
+  if(!d){toast('No se encontrÃ³ el archivo');return}
+  var mime=d.type||'text/html',url=d.b64?('data:'+mime+';base64,'+d.b64):'';
+  var w=window.open('','_blank','width=900,height=720');
+  if(!w){toast('Permite ventanas emergentes para previsualizar');return}
+  if(d.html)w.document.write(d.html);
+  else if(url&&mime.indexOf('image/')===0)w.document.write('<html><body style="margin:0;background:#111;display:flex;align-items:center;justify-content:center;min-height:100vh"><img src="'+url+'" style="max-width:100%;max-height:100vh"></body></html>');
+  else if(url)w.document.write('<html><body style="margin:0"><embed src="'+url+'" type="'+mime+'" width="100%" height="100%" style="height:100vh"></body></html>');
+  else w.document.write('<html><body style="font-family:Arial;padding:24px">'+textToHTML(d.content||d.name||'Sin vista previa')+'</body></html>');
+  w.document.title=d.name||'Documento';
+}
+function openDraftEditor(si,idx){
+  var it=CURP.stages[si].checklist[idx];if(!it)return;
+  var old=document.getElementById('draft_modal');if(old)old.remove();
+  var html='<div class="draft-modal" id="draft_modal"><div class="draft-box"><div class="draft-head"><div><div class="draft-title">'+esc(it.nombre||'Anexo')+'</div><div style="font-size:11px;color:var(--tmuted)">Edita el texto generado; al guardar se crearÃ¡ un documento nuevo en el tablero y Drive.</div></div><button class="minib" onclick="closeDraftEditor()">Cerrar</button></div><div class="draft-body"><textarea class="ta" id="draft_txt" oninput="refreshDraftPreview()">'+esc(it.borrador||'')+'</textarea><div class="draft-preview chk-html" id="draft_prev">'+textToHTML(it.borrador||'')+'</div></div><div class="draft-foot"><button class="minib" onclick="openDraftWindow('+si+','+idx+')">Abrir en pestaÃ±a</button><button class="aibtn" onclick="saveDraftEditor('+si+','+idx+')">'+icon('check')+'Guardar como documento</button></div></div></div>';
+  document.body.insertAdjacentHTML('beforeend',html);
+}
+function closeDraftEditor(){var m=document.getElementById('draft_modal');if(m)m.remove()}
+function refreshDraftPreview(){var t=document.getElementById('draft_txt'),p=document.getElementById('draft_prev');if(t&&p)p.innerHTML=textToHTML(t.value)}
+function openDraftWindow(si,idx){
+  var it=CURP.stages[si].checklist[idx],txt=(document.getElementById('draft_txt')||{}).value||it.borrador||'';
+  var w=window.open('','_blank','width=900,height=720');if(!w){toast('Permite ventanas emergentes');return}
+  w.document.write(docHTML(it.nombre||'Anexo',txt));w.document.close();
+}
+function saveDraftEditor(si,idx){
+  var st=CURP.stages[si],it=st.checklist[idx],txt=(document.getElementById('draft_txt')||{}).value||'';
+  if(!txt.trim()){toast('El documento estÃ¡ vacÃ­o');return}
+  it.borrador=txt;it.estado='Generado';
+  var name=((idx+1)+' - '+(it.nombre||'anexo')).replace(/[\\/:*?"<>|]/g,' ').slice(0,90)+'.html';
+  var html=docHTML(it.nombre||'Anexo',txt),b64=btoa(unescape(encodeURIComponent(html)));
+  st.docboard=st.docboard||[];
+  st.docboard.push({name:name,type:'text/html',estado:'listo',generated:true,content:txt,html:html,b64:b64});
+  saveProy();closeDraftEditor();renderProyDetail();
+  subirTextoDrive(name,'text/html',b64,'03. Oferta tecnica/01. Anexos llenados');
+  toast('Anexo generado y agregado al tablero');
+}
 
 /* ===== Etapa Cotización: extracción y comparación de proveedores ===== */
 var COT_EXTRACT_PROMPT=`ROLE: Experto en análisis de cotizaciones, fichas técnicas y especificaciones para contrataciones públicas peruanas, trabajando para la empresa OFERTANTE. TASK: Del DOCUMENTO ADJUNTO extrae datos de proveedor, ítems, precios y compatibilidad contra el TDR. OUTPUT: SIEMPRE SOLO JSON válido (sin texto/markdown/backticks), incluso si el documento NO es cotización. ESTRUCTURA EXACTA:
@@ -1369,6 +1545,26 @@ REGLAS:
 function loadProvDB(){try{return JSON.parse(localStorage.getItem(provKey())||'[]')}catch(e){return []}}
 function parsePrice(s){var n=parseFloat((''+(s||'')).replace(/[^0-9.,]/g,'').replace(/,/g,''));return isNaN(n)?null:n}
 function cumpleBadge(v){var t=(''+(v||'')).toLowerCase();var c=t.indexOf('no')===0?'#ef4444':(t.indexOf('parc')>=0?'#f59e0b':'#16a34a');return '<span class="cumple" style="color:'+c+';background:'+bg(c,.13)+'">'+esc(v||'—')+'</span>'}
+function renderBestByItem(proveedores){
+  var rows=[];
+  (proveedores||[]).forEach(function(pr){
+    (pr.items||[]).forEach(function(it){
+      var desc=(it.descripcion||it.item||'').trim();if(!desc)return;
+      var price=parsePrice(it.precio_total||it.precio_unitario);
+      rows.push({item:desc,proveedor:pr.nombre||'(proveedor)',precio:price,precioTxt:it.precio_total||it.precio_unitario||'',cumple:it.cumple||'',obs:it.observacion||''});
+    });
+  });
+  if(!rows.length)return '';
+  var groups={};
+  rows.forEach(function(r){var key=r.item.toLowerCase().replace(/\s+/g,' ').slice(0,42);(groups[key]=groups[key]||[]).push(r)});
+  var h='<table class="rtab"><thead><tr><th>Item</th><th>Mejor proveedor</th><th>Precio</th><th>Alternativas</th></tr></thead><tbody>';
+  Object.keys(groups).forEach(function(k){
+    var g=groups[k].slice().sort(function(a,b){return (a.precio==null?999999999:a.precio)-(b.precio==null?999999999:b.precio)});
+    var best=g[0],alts=g.slice(1).map(function(x){return x.proveedor+(x.precioTxt?': '+x.precioTxt:'')}).join(' · ');
+    h+='<tr><td>'+esc(best.item)+'</td><td>'+esc(best.proveedor)+' '+cumpleBadge(best.cumple)+'</td><td>'+esc(best.precioTxt||'—')+'</td><td>'+esc(alts||best.obs||'—')+'</td></tr>';
+  });
+  return rblock('Mejor compra por item','search',h+'</tbody></table>');
+}
 function renderProvSection(p,si,st){
   st.proveedores=st.proveedores||[];
   var hasM=!!(st.data||st.resumen);
@@ -1384,6 +1580,7 @@ function renderProvSection(p,si,st){
     });
     ct+='</tbody></table>';h+=rblock('Comparativa de proveedores','search',ct);
   }
+  h+=renderBestByItem(st.proveedores);
   st.proveedores.forEach(function(pr,pi){
     h+='<div class="prov-card"><div class="prov-top"><div><div class="prov-nm">'+esc(pr.nombre||'(proveedor)')+'</div><div class="prov-sub">'+[pr.ruc?'RUC '+esc(pr.ruc):'',pr.telefono?'Tel '+esc(pr.telefono):'',pr.ubicacion?esc(pr.ubicacion):'',pr.email?esc(pr.email):''].filter(Boolean).join(' · ')+'</div></div><div class="prov-tot">'+esc(pr.total||'')+(pr.entrega_global?'<div style="font-size:9px;color:var(--tmuted);font-family:DM Sans">'+esc(pr.entrega_global)+'</div>':'')+'</div></div>';
     if(pr.items&&pr.items.length){
@@ -1406,10 +1603,10 @@ function aiCotExtract(si){
   if(m0.data){ctx='TDR requerido (items y especificaciones):\n'+JSON.stringify({items:m0.data.items||[],especificaciones:m0.data.especificaciones||[],especificaciones_por_item:m0.data.especificaciones_por_item||[],requisitos:m0.data.requisitos_calificacion||[]},null,2)}
   else if(m0.resumen){ctx='TDR:\n'+m0.resumen}
   st.cotError='';st._loading=true;renderProyDetail();
-  fetch('/api/gemini',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt:COT_EXTRACT_PROMPT+'\n\n'+ctx,imageBase64:_pendingFile.b64,mimeType:_pendingFile.type,model:'gemini-2.0-flash'})})
-   .then(function(r){return r.json()}).then(function(d){
+  fetch('/api/gemini',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt:COT_EXTRACT_PROMPT+'\n\n'+ctx,imageBase64:_pendingFile.b64,mimeType:_pendingFile.type})})
+   .then(function(r){return r.text().then(function(t){var d;try{d=JSON.parse(t)}catch(e){d={error:{message:t||('HTTP '+r.status)}}}if(!r.ok&&!d.error)d.error={message:'HTTP '+r.status};return d})}).then(function(d){
      var gt=geminiText(d),txt=gt.text,obj=null,arr=null;
-     if(gt.error){st.cotError=gt.error;st._loading=false;_pendingFile=null;toast('IA: '+gt.error.slice(0,90));saveProy();renderProyDetail();return}
+     if(gt.error){st.cotError=(gt.error.indexOf('429')>=0||/quota|rate|too many/i.test(gt.error))?'La IA esta con limite temporal o cuota (429). Espera un momento y vuelve a extraer; el archivo igual queda guardado en Drive.':gt.error;st._loading=false;_pendingFile=null;toast('IA: '+st.cotError.slice(0,90));saveProy();renderProyDetail();return}
      obj=parseJSON(txt);
      if(!obj){arr=parseJSONArr(txt);obj=normalizeCotObj(null,arr)}else obj=normalizeCotObj(obj);
      st._loading=false;_pendingFile=null;
@@ -1469,27 +1666,29 @@ function saveNewProy(){
   if(!n){toast('Ponle un nombre al proyecto');return}
   var p={id:'p'+Date.now(),nombre:n,entidad:(document.getElementById('np_e').value||'').trim(),
     monto:parseFloat(document.getElementById('np_m').value)||0,fecha:document.getElementById('np_f').value||'',
-    creado:Date.now(),driveId:'',driveUrl:'',stages:STAGES.map(function(s){return {k:s.k,mode:'manual',done:false,notas:'',input:'',resumen:'',data:null,docs:[],checklist:[],docboard:[],entidadDocs:[],revision:null,proveedores:[]}})};
+    creado:Date.now(),driveId:'',driveUrl:'',driveFolders:{},stages:STAGES.map(function(s){return {k:s.k,mode:'manual',done:false,notas:'',input:'',resumen:'',data:null,docs:[],checklist:[],docboard:[],entidadDocs:[],revision:null,proveedores:[]}})};
   loadProy();PROY.unshift(p);saveProy();closeNewProy();openProy(p.id);
   crearCarpetaDrive(p);
 }
 /* Crea la carpeta del proyecto en Google Drive: SIGMA/Proyectos/Proyectos menos de 8 UIT/[nombre] */
-function crearCarpetaDrive(p){
+function crearCarpetaDrive(p,cb){
   if(!p||!p.nombre)return;
-  toast('Creando carpeta en Drive…');
-  fetch('/api/drive/proyecto',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({nombre:p.nombre})})
+  toast((p.driveId?'Actualizando':'Creando')+' estructura en Drive…');
+  fetch('/api/drive/proyecto',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({nombre:p.nombre,entidad:p.entidad||'',folders:DRIVE_8UIT_FOLDERS})})
     .then(function(r){return r.json()})
     .then(function(d){
       if(d&&d.ok){
         loadProy();var t=PROY.filter(function(x){return x.id===p.id})[0];
-        if(t){t.driveId=d.id;t.driveUrl=d.url;saveProy()}
-        toast('Carpeta creada en Drive ✓');
+        if(t){t.driveId=d.id;t.driveUrl=d.url;t.driveFolders=d.folders||{};saveProy()}
+        toast('Estructura Drive lista ✓');
         if(CURP&&CURP.id===p.id){CURP.driveId=d.id;CURP.driveUrl=d.url;if(typeof renderProyDetail==='function')renderProyDetail()}
+        cb&&cb(true);
       } else {
         toast('Drive: '+((d&&d.error)||'no se pudo crear la carpeta'));
+        cb&&cb(false);
       }
     })
-    .catch(function(e){toast('Drive sin conexión: '+e.message)});
+    .catch(function(e){toast('Drive sin conexión: '+e.message);cb&&cb(false)});
 }
 /* Editar nombre/datos del proyecto · renombra la carpeta en Drive si cambia el nombre */
 function openEditProy(){
@@ -1539,8 +1738,15 @@ function confirmDelProy(){
 }
 /* ===== Subida automática de documentos a Google Drive ===== */
 function driveSubf(si){
-  var names=['1. Analisis y Presupuesto','2. Propuesta Tecnica','3. Orden de Compra','4. Compra a Proveedores','5. Entrega a Cliente','6. Conformidad','7. Facturacion y Cobranza','8. Pago'];
+  var names=['02. Analisis de viabilidad y proveedores','03. Oferta tecnica','05. Orden de compra','02. Analisis de viabilidad y proveedores','07. Entrega de productos','08. Conformidad','06. Facturacion y guia','09. Seguimiento de pago'];
   return names[si]||'Documentos';
+}
+function driveSubfByMode(si,mode){
+  if(si===0&&mode!=='cot')return '01. Especificaciones tecnicas y anexos entidad';
+  if(mode==='cot'||mode&&mode.indexOf('ficha:')===0)return '02. Analisis de viabilidad y proveedores';
+  if(mode==='propentity')return '01. Especificaciones tecnicas y anexos entidad';
+  if(mode==='board')return '03. Oferta tecnica/04. Oferta final subida';
+  return driveSubf(si);
 }
 function subirArchivoDrive(file,subfolder){
   if(!CURP||!CURP.driveId||!file)return;
@@ -1554,6 +1760,25 @@ function subirArchivoDrive(file,subfolder){
       .catch(function(e){toast('Drive: '+e.message)});
   };
   rd.readAsDataURL(file);
+}
+function ensureDriveThen(cb){
+  if(!CURP)return;
+  if(CURP.driveId)return cb&&cb();
+  crearCarpetaDrive(CURP,function(){cb&&cb()});
+}
+function subirArchivoDriveSeguro(file,subfolder){
+  if(!file)return;
+  ensureDriveThen(function(){subirArchivoDrive(file,subfolder)});
+}
+function subirTextoDrive(name,mime,b64,subfolder){
+  ensureDriveThen(function(){
+    if(!CURP||!CURP.driveId||!b64)return;
+    fetch('/api/drive/upload',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({folderId:CURP.driveId,subfolder:subfolder||'',name:name,mimeType:mime||'text/html',base64:b64})})
+      .then(function(r){return r.json()})
+      .then(function(d){if(d&&d.ok)toast('Documento generado subido a Drive');else toast('Drive: '+((d&&d.error)||'no se subiÃ³ documento generado'))})
+      .catch(function(e){toast('Drive: '+e.message)});
+  });
 }
 /* Subida por ruta de carpetas desde la raíz (ej. Bóveda de Empresa) */
 function subirDrivePath(path,name,mime,b64,cb){
@@ -1590,8 +1815,11 @@ function subirBovedaDrive(){
   else{addFile(_fileStage,f)}
   /* Copia automática a Google Drive (carpeta del proyecto · subcarpeta por etapa) */
   if(CURP&&CURP.driveId&&_fileStage>=0&&!(_fileMode&&_fileMode.indexOf('empdoc:')===0)){
-    var sub=driveSubf(_fileStage);
-    for(var di=0;di<this.files.length;di++)subirArchivoDrive(this.files[di],sub);
+    var sub=driveSubfByMode(_fileStage,_fileMode);
+    for(var di=0;di<this.files.length;di++)subirArchivoDriveSeguro(this.files[di],sub);
+  }else if(CURP&&_fileStage>=0&&!(_fileMode&&_fileMode.indexOf('empdoc:')===0)){
+    var sub2=driveSubfByMode(_fileStage,_fileMode);
+    for(var dj=0;dj<this.files.length;dj++)subirArchivoDriveSeguro(this.files[dj],sub2);
   }
   this.multiple=false;
 }})();
