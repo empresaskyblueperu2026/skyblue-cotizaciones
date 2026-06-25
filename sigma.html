@@ -620,6 +620,7 @@ function selectEmpresa(e){
   var idx=EMPRESAS.indexOf(e),col=e.color_primario&&e.color_primario!=='#0d3b6e'?e.color_primario:accentFor(idx<0?0:idx);
   $('topcav').textContent=initials(e.nombre);$('topcav').style.background=col;$('topcnm').textContent=e.nombre;
   ACTIVE='dashboard';renderNav();renderDashboard();renderAgents();renderActivity();
+  cloudSyncPull(function(){loadProy();if(ACTIVE==='dashboard')renderDashboard();});
 }
 function goPortal(){$('app').style.display='none';$('portal').style.display='flex'}
 function renderPortal(){
@@ -751,7 +752,7 @@ var _provQ='';
 
 function catKey(){return 'sigma_cat_'+(EMP?EMP.id:'x')}
 function loadCatalog(){try{return JSON.parse(localStorage.getItem(catKey())||'[]')}catch(e){return []}}
-function saveCatalog(a){try{localStorage.setItem(catKey(),JSON.stringify(a||[]))}catch(e){}}
+function saveCatalog(a){try{localStorage.setItem(catKey(),JSON.stringify(a||[]))}catch(e){}cloudSyncPush()}
 
 /* Consolida proveedores: base guardada + todos los proyectos activos */
 function consolidateProveedores(){
@@ -868,7 +869,7 @@ function renderProveedores(){
 
 function delProvDB(rucOrNombre){
   var db=loadProvDB().filter(function(p){return p.ruc!==rucOrNombre&&p.nombre!==rucOrNombre});
-  try{localStorage.setItem(provKey(),JSON.stringify(db));renderProveedores()}catch(e){}
+  try{localStorage.setItem(provKey(),JSON.stringify(db));renderProveedores();cloudSyncPush()}catch(e){}
 }
 
 function addProvManualGlobal(){
@@ -878,7 +879,7 @@ function addProvManualGlobal(){
   var e=prompt('Email (opcional):');
   var db=loadProvDB();
   db.push({nombre:n.trim(),ruc:(r||'').trim(),telefono:(t||'').trim(),email:(e||'').trim(),ubicacion:'',productos:[]});
-  try{localStorage.setItem(provKey(),JSON.stringify(db));toast('Proveedor agregado');renderProveedores()}catch(e2){}
+  try{localStorage.setItem(provKey(),JSON.stringify(db));toast('Proveedor agregado');renderProveedores();cloudSyncPush()}catch(e2){}
 }
 
 function renderAgents(){
@@ -984,7 +985,31 @@ function migrateProj(p){if(!p)return p;var old=p.stages||[],byk={};old.forEach(f
   if(legacyProv.length&&p.stages[0]&&!(p.stages[0].proveedores&&p.stages[0].proveedores.length))p.stages[0].proveedores=legacyProv;
   if(p._sel!=null&&p._sel>=p.stages.length)p._sel=0;return p}
 function loadProy(){try{PROY=JSON.parse(localStorage.getItem(proyKey())||'[]')}catch(e){PROY=[]}PROY=PROY.map(migrateProj)}
-function saveProy(){try{localStorage.setItem(proyKey(),JSON.stringify(PROY))}catch(e){}}
+function saveProy(){try{localStorage.setItem(proyKey(),JSON.stringify(PROY))}catch(e){}cloudSyncPush()}
+
+/* ===== Sincronizacion con la nube (datos durables: proyectos, proveedores, catalogo) ===== */
+function cloudSyncPush(){
+  if(!EMP)return;
+  try{
+    var payload={};
+    payload['sproy_'+EMP.id]=JSON.parse(localStorage.getItem(proyKey())||'[]');
+    payload['sprov_'+EMP.id]=JSON.parse(localStorage.getItem(provKey())||'[]');
+    payload['scat_'+EMP.id]=JSON.parse(localStorage.getItem(catKey())||'[]');
+    fetch('/api/data',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+  }catch(e){}
+}
+function cloudSyncPull(cb){
+  if(!EMP){if(cb)cb();return;}
+  fetch('/api/data').then(function(r){return r.json()}).then(function(d){
+    try{
+      if(d&&d['sproy_'+EMP.id])localStorage.setItem(proyKey(),JSON.stringify(d['sproy_'+EMP.id]));
+      if(d&&d['sprov_'+EMP.id])localStorage.setItem(provKey(),JSON.stringify(d['sprov_'+EMP.id]));
+      if(d&&d['scat_'+EMP.id])localStorage.setItem(catKey(),JSON.stringify(d['scat_'+EMP.id]));
+    }catch(e){}
+    if(cb)cb();
+  }).catch(function(){if(cb)cb();});
+}
+try{setInterval(cloudSyncPush,45000);window.addEventListener('beforeunload',cloudSyncPush);}catch(e){}
 function fmtMonto(m){return 'S/ '+(m||0).toLocaleString('es-PE')}
 function uitOf(m){return ((m||0)/UIT).toFixed(1)}
 function stageDone(p){return p.stages.filter(function(s){return s.done}).length}
