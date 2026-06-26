@@ -75,6 +75,27 @@ async function sbPutConfig(obj){
   await fetch(SB_URL+'/storage/v1/object/'+SB_BUCKET+'/config.json',{method:'POST',headers:{'Authorization':'Bearer '+SB_KEY,'apikey':SB_KEY,'Content-Type':'application/json','cache-control':'no-cache','x-upsert':'true'},body:JSON.stringify(obj)});
 }
 
+// ---- Aprendizaje: anotaciones/mejoras del usuario por modulo (las lee Claude al reprogramar) ----
+async function sbGetAprend(){
+  try{ await sbEnsureBucket();
+    var r=await fetch(SB_URL+'/storage/v1/object/'+SB_BUCKET+'/aprendizaje.json?t='+Date.now(),{headers:{'Authorization':'Bearer '+SB_KEY,'apikey':SB_KEY,'cache-control':'no-cache'}});
+    if(!r.ok)return []; var a=JSON.parse(await r.text()); return Array.isArray(a)?a:[];
+  }catch(e){return [];}
+}
+async function sbPutAprend(arr){
+  await sbEnsureBucket();
+  await fetch(SB_URL+'/storage/v1/object/'+SB_BUCKET+'/aprendizaje.json',{method:'POST',headers:{'Authorization':'Bearer '+SB_KEY,'apikey':SB_KEY,'Content-Type':'application/json','cache-control':'no-cache','x-upsert':'true'},body:JSON.stringify(arr)});
+}
+app.get('/api/aprendizaje',async function(req,res){
+  if(!sbReady())return proxyCloud(req,res);
+  try{res.json({notas:await sbGetAprend()});}catch(e){res.status(500).json({error:e.message});}
+});
+app.post('/api/aprendizaje',async function(req,res){
+  if(!sbReady())return proxyCloud(req,res);
+  try{var arr=await sbGetAprend();var b=req.body||{};arr.push({fecha:new Date().toISOString(),modulo:b.modulo||'',empresa:b.empresa||'',texto:(b.texto||'').slice(0,2000)});await sbPutAprend(arr);res.json({ok:true,total:arr.length});}
+  catch(e){res.status(500).json({error:e.message});}
+});
+
 // ---- Telegram: alertas y avisos ----
 async function tgSend(text){
   var cfg=await sbGetConfig();

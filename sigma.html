@@ -1064,16 +1064,20 @@ var OCREC=[];
 function ocrecKey(){return 'sigma_ocrec_'+(EMP?EMP.id:'x')}
 function loadOCREC(){try{OCREC=JSON.parse(localStorage.getItem(ocrecKey())||'[]')}catch(e){OCREC=[]}}
 function saveOCREC(){try{localStorage.setItem(ocrecKey(),JSON.stringify(OCREC))}catch(e){}cloudSyncPush()}
-function ocrecTotal(){return OCREC.reduce(function(s,o){return s+(+o.monto||0)},0)}
+function fmtMon(m,mon){var s=(mon==='US$'||mon==='USD'||mon==='$')?'US$ ':'S/ ';return s+(Number(m||0)).toLocaleString('es-PE',{minimumFractionDigits:2,maximumFractionDigits:2});}
+function curOf(m){return (m==='US$'||m==='USD'||m==='$'||m==='dolares'||m==='dólares')?'US$':'S/';}
+function _totByCur(arr){var t={'S/':0,'US$':0};(arr||[]).forEach(function(o){t[curOf(o.moneda)]+=(+o.monto||0)});return t;}
+function _vencInfo(o){if(o.forma_pago!=='credito'||!o.fecha_venc)return '';var dl=daysLeft(o.fecha_venc);var col=dl<0?'#ef4444':dl<=5?'#f59e0b':'#16a34a';return '<span class="badge" style="color:'+col+';background:'+bg(col,.14)+'">'+(dl<0?'venció':('vence '+dl+'d'))+'</span>';}
+function fechaMas(f,dias){if(!f)return '';var d=new Date(f+'T12:00:00');if(isNaN(d))return '';d.setDate(d.getDate()+(parseInt(dias,10)||0));return d.toISOString().slice(0,10);}
 function renderOCRecibidas(){
   loadOCREC();
+  var t=_totByCur(OCREC);
   var h='<div class="pmod-head fade"><div><h1 style="font-size:23px;font-weight:700;letter-spacing:-.6px">Órdenes de Compra Recibidas</h1>'+
     '<div style="font-size:13px;color:var(--tmuted);margin-top:4px">Ventas confirmadas de clientes y del Estado · '+(EMP?EMP.nombre:'')+'</div></div>'+
     '<button class="btn-new" onclick="toggleOcrecForm()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" style="width:13px;height:13px"><path d="M12 5v14M5 12h14"/></svg>Nueva OC recibida</button></div>';
-  /* resumen */
-  h+='<div class="kpis fade" style="margin-bottom:16px"><div class="kpi"><div class="top"><div class="kic">'+icon('cart')+'</div></div><div class="val mono">'+fmtMonto(ocrecTotal())+'</div><div class="lab">Total ventas confirmadas</div></div>'+
-     '<div class="kpi"><div class="top"><div class="kic">'+icon('check')+'</div></div><div class="val mono">'+OCREC.length+'</div><div class="lab">Órdenes recibidas</div></div></div>';
-  /* formulario (oculto) */
+  h+='<div class="kpis fade" style="margin-bottom:16px"><div class="kpi"><div class="val mono">'+fmtMon(t['S/'],'S/')+'</div><div class="lab">Confirmado en soles</div></div>'+
+     '<div class="kpi"><div class="val mono">'+fmtMon(t['US$'],'US$')+'</div><div class="lab">Confirmado en dólares</div></div>'+
+     '<div class="kpi"><div class="val mono">'+OCREC.length+'</div><div class="lab">Órdenes recibidas</div></div></div>';
   h+='<div id="ocrecForm" class="card fade" style="display:none;margin-bottom:16px">'+
      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px"><div class="ct" style="font-weight:600">Registrar OC recibida</div>'+
      '<label class="aibtn" style="cursor:pointer">'+icon('bolt')+' Cargar OC del cliente (IA)<input type="file" accept="application/pdf,image/*" style="display:none" onchange="ocrecAI(this.files[0])"></label></div>'+
@@ -1083,23 +1087,43 @@ function renderOCRecibidas(){
        ocrecField('ocr_cli','Cliente / Entidad','Razón social')+
        ocrecField('ocr_ruc','RUC','11 dígitos')+
        ocrecField('ocr_fecha','Fecha','',(new Date()).toISOString().slice(0,10),'date')+
-       ocrecField('ocr_monto','Monto (S/)','0.00','','number')+
+       ocrecField('ocr_monto','Monto total','0.00','','number')+
+       ocrecSelect('ocr_moneda','Moneda',[['S/','Soles (S/)'],['US$','Dólares (US$)']])+
        ocrecSelect('ocr_rubro','Rubro',[['publico','Estado (público)'],['privado','Privado / B2B']])+
+       ocrecSelect('ocr_pago','Forma de pago',[['contado','Contado (inmediato)'],['credito','Crédito']])+
+       ocrecField('ocr_dias','Días crédito','0','0','number')+
        ocrecField('ocr_proy','Proyecto (opcional)','Nombre del proyecto')+
      '</div>'+
      '<div style="margin-top:12px;display:flex;gap:8px"><button class="btn-new" onclick="addOCRec()">Guardar OC recibida</button>'+
      '<button class="aibtn" onclick="toggleOcrecForm(true)">Cancelar</button></div></div>';
-  /* lista */
   if(!OCREC.length){
-    h+='<div class="empty fade"><div class="ei">'+icon('cart',1.5)+'</div><div style="font-size:15px;font-weight:600;color:var(--tprimary);margin-bottom:6px">Aún no hay OC recibidas</div><div style="font-size:13px;max-width:430px;margin:0 auto;line-height:1.6">Registra aquí las órdenes de compra que te emiten tus clientes o el Estado. Cada una es una <b>venta confirmada</b> y suma a tus ingresos. Puedes cargar el PDF y la IA extrae los datos.</div></div>';
+    h+='<div class="empty fade"><div class="ei">'+icon('cart',1.5)+'</div><div style="font-size:15px;font-weight:600;color:var(--tprimary);margin-bottom:6px">Aún no hay OC recibidas</div><div style="font-size:13px;max-width:430px;margin:0 auto;line-height:1.6">Registra las órdenes de compra que te emiten tus clientes o el Estado. Cada una es una <b>venta confirmada</b>. Puedes cargar el PDF y la IA extrae todos los datos (incluye moneda soles/dólares y forma de pago).</div></div>';
   } else {
-    h+='<div class="card fade"><div class="ptable-wrap"><table class="ptable"><thead><tr><th>N° OC</th><th>Cliente</th><th>Rubro</th><th>Monto</th><th>Proyecto</th><th>Fecha</th><th></th></tr></thead><tbody>';
+    h+='<div class="card fade"><div class="ptable-wrap"><table class="ptable"><thead><tr><th>N° OC</th><th>Cliente</th><th>Rubro</th><th>Monto</th><th>Pago</th><th>Fecha</th><th></th></tr></thead><tbody>';
     OCREC.slice().sort(function(a,b){return (b.fecha||'').localeCompare(a.fecha||'')}).forEach(function(o){
-      h+='<tr><td class="mono">'+esc(o.num||'—')+'</td><td>'+esc(o.cliente||'—')+(o.ruc?'<div class="pdl">RUC '+esc(o.ruc)+'</div>':'')+'</td>'+
+      h+='<tr style="cursor:pointer" onclick="openOCRec(\''+o.id+'\')"><td class="mono">'+esc(o.num||'—')+'</td><td>'+esc(o.cliente||'—')+(o.ruc?'<div class="pdl">RUC '+esc(o.ruc)+'</div>':'')+'</td>'+
         '<td><span class="badge" style="color:'+(o.rubro==='publico'?'#0ea5e9':'#8b5cf6')+';background:'+bg(o.rubro==='publico'?'#0ea5e9':'#8b5cf6',.14)+'">'+(o.rubro==='publico'?'Estado':'Privado')+'</span></td>'+
-        '<td class="mono" style="font-weight:600">'+fmtMonto(o.monto)+'</td><td style="color:var(--tmuted)">'+esc(o.proyecto||'—')+'</td><td style="color:var(--tmuted)">'+esc(o.fecha||'—')+'</td>'+
-        '<td><button onclick="delOCRec(\''+o.id+'\')" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:16px">×</button></td></tr>';
+        '<td class="mono" style="font-weight:600">'+fmtMon(o.monto,o.moneda)+'</td><td>'+(o.forma_pago==='credito'?('Crédito '+(o.dias_credito||0)+'d '+_vencInfo(o)):'Contado')+'</td><td style="color:var(--tmuted)">'+esc(o.fecha||'—')+'</td>'+
+        '<td><button onclick="event.stopPropagation();delOCRec(\''+o.id+'\')" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:16px">×</button></td></tr>';
     });
+    h+='</tbody></table></div></div>';
+  }
+  $('content').innerHTML=h;
+}
+function openOCRec(id){
+  loadOCREC(); var o=null; OCREC.forEach(function(x){if(x.id===id)o=x;}); if(!o){renderOCRecibidas();return;}
+  var h='<div class="pmod-head fade"><div><button class="btn-new" onclick="renderOCRecibidas()" style="margin-bottom:10px">← OC Recibidas</button><h1 style="font-size:21px;font-weight:700">OC '+esc(o.num||'')+'</h1>'+
+    '<div style="font-size:13px;color:var(--tmuted);margin-top:4px">'+esc(o.cliente||'')+(o.ruc?(' · RUC '+esc(o.ruc)):'')+'</div></div></div>';
+  function row(k,v){return v?('<div class="k">'+k+'</div><div>'+v+'</div>'):''}
+  h+='<div class="card fade"><div class="kv">'+
+     row('Monto total','<b>'+fmtMon(o.monto,o.moneda)+'</b>')+row('Moneda',curOf(o.moneda)==='US$'?'Dólares (US$)':'Soles (S/)')+
+     row('Rubro',o.rubro==='publico'?'Estado (público)':'Privado / B2B')+
+     row('Forma de pago',o.forma_pago==='credito'?('Crédito a '+(o.dias_credito||0)+' días'):'Contado (inmediato)')+
+     (o.forma_pago==='credito'?row('Vence',(o.fecha_venc||'—')+' '+_vencInfo(o)):'')+
+     row('Fecha OC',o.fecha)+row('Proyecto',o.proyecto)+'</div></div>';
+  if(o.items&&o.items.length){
+    h+='<div class="card fade"><div class="ct" style="font-weight:600;margin-bottom:10px">Detalle de ítems</div><div class="ptable-wrap"><table class="ptable"><thead><tr><th>Descripción</th><th>Cant.</th><th>P. Unit.</th><th>Subtotal</th></tr></thead><tbody>';
+    o.items.forEach(function(it){var q=+it.qty||0,p=+it.precio||0;h+='<tr><td>'+esc(it.desc||it.descripcion||'')+'</td><td class="mono">'+q+'</td><td class="mono">'+fmtMon(p,o.moneda)+'</td><td class="mono">'+fmtMon(q*p,o.moneda)+'</td></tr>'});
     h+='</tbody></table></div></div>';
   }
   $('content').innerHTML=h;
@@ -1110,7 +1134,9 @@ function toggleOcrecForm(hide){var f=$('ocrecForm');if(!f)return;f.style.display
 function _v(id){var e=$(id);return e?e.value.trim():'';}
 function addOCRec(){
   var cli=_v('ocr_cli'); if(!cli){toast('Falta el cliente');return;}
-  OCREC.push({id:'OR'+Date.now(),num:_v('ocr_num'),cliente:cli,ruc:_v('ocr_ruc'),fecha:_v('ocr_fecha'),monto:parseFloat(_v('ocr_monto'))||0,proyecto:_v('ocr_proy'),rubro:_v('ocr_rubro')||'publico',estado:'recibida',items:[]});
+  var pago=_v('ocr_pago')||'contado', dias=parseInt(_v('ocr_dias'),10)||0, fecha=_v('ocr_fecha');
+  OCREC.push({id:'OR'+Date.now(),num:_v('ocr_num'),cliente:cli,ruc:_v('ocr_ruc'),fecha:fecha,monto:parseFloat(_v('ocr_monto'))||0,moneda:_v('ocr_moneda')||'S/',rubro:_v('ocr_rubro')||'publico',forma_pago:pago,dias_credito:dias,fecha_venc:(pago==='credito'?fechaMas(fecha,dias):''),proyecto:_v('ocr_proy'),estado:'recibida',items:(window._ocrecItems||[])});
+  window._ocrecItems=null;
   saveOCREC();toast('OC recibida registrada');renderOCRecibidas();
 }
 function delOCRec(id){if(!confirm('¿Eliminar esta OC recibida?'))return;OCREC=OCREC.filter(function(o){return o.id!==id});saveOCREC();renderOCRecibidas();}
@@ -1120,7 +1146,7 @@ function ocrecAI(file){
   rd.onload=function(e){
     var b64=String(e.target.result).split(',')[1];
     fetch('/api/gemini',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
-      prompt:'Eres un extractor de datos de ÓRDENES DE COMPRA emitidas por un cliente o entidad del Estado peruano hacia un proveedor. Devuelve SOLO un JSON válido sin markdown: {"num":"numero de la OC","cliente":"razon social de quien emite la OC (la entidad/cliente)","ruc":"RUC de 11 digitos del cliente","fecha":"YYYY-MM-DD","monto":numero_total,"rubro":"publico si es entidad del Estado o privado si es empresa","items":[{"desc":"descripcion","qty":numero,"precio":numero}]}. Extrae el monto TOTAL. Si un dato no existe usa "" o 0.',
+      prompt:'Eres un extractor de datos de ÓRDENES DE COMPRA que un cliente o entidad del Estado peruano emite a un proveedor. Devuelve SOLO JSON válido sin markdown: {"num":"numero de OC","cliente":"razon social del cliente/entidad","ruc":"RUC 11 digitos","fecha":"YYYY-MM-DD","monto":numero_total,"moneda":"S/ si es soles o US$ si es dolares","rubro":"publico si es entidad del Estado o privado","forma_pago":"contado o credito","dias_credito":numero_de_dias_si_es_credito,"items":[{"desc":"descripcion","qty":numero,"precio":numero}]}. IMPORTANTE: detecta la MONEDA correctamente (soles S/. o dolares US$/$). Si dice contado o pago inmediato usa "contado"; si menciona dias de pago o credito usa "credito" y pon los dias. Si un dato no existe usa "" o 0.',
       imageBase64:b64, mimeType:file.type||'application/pdf'
     })}).then(function(r){return r.json()}).then(function(d){
       if(d&&d.error){if(st){st.textContent='Error IA: '+((d.error.message||JSON.stringify(d.error))+'').slice(0,80);st.style.color='#ef4444';}return;}
@@ -1130,8 +1156,12 @@ function ocrecAI(file){
       try{var o=JSON.parse(m[0]);
         if($('ocr_num'))$('ocr_num').value=o.num||''; if($('ocr_cli'))$('ocr_cli').value=o.cliente||''; if($('ocr_ruc'))$('ocr_ruc').value=(o.ruc||'').replace(/\D/g,'');
         if(o.fecha&&$('ocr_fecha'))$('ocr_fecha').value=o.fecha; if($('ocr_monto'))$('ocr_monto').value=o.monto||0;
+        if($('ocr_moneda'))$('ocr_moneda').value=curOf(o.moneda);
         if($('ocr_rubro')&&o.rubro)$('ocr_rubro').value=(o.rubro+'').indexOf('priv')>=0?'privado':'publico';
-        if(st){st.textContent='✓ Datos extraídos. Revisa y guarda.';st.style.color='#16a34a';}
+        if($('ocr_pago')&&o.forma_pago)$('ocr_pago').value=(o.forma_pago+'').indexOf('cred')>=0?'credito':'contado';
+        if($('ocr_dias'))$('ocr_dias').value=o.dias_credito||0;
+        window._ocrecItems=Array.isArray(o.items)?o.items:[];
+        if(st){st.textContent='✓ Datos extraídos ('+(window._ocrecItems.length)+' ítems). Revisa y guarda.';st.style.color='#16a34a';}
       }catch(e2){if(st){st.textContent='Error al leer la respuesta de la IA.';st.style.color='#ef4444';}}
     }).catch(function(){if(st){st.textContent='Error de conexión con la IA.';st.style.color='#ef4444';}});
   };
@@ -1173,59 +1203,87 @@ var FACT=[];
 function factKey(){return 'sigma_fact_'+(EMP?EMP.id:'x')}
 function loadFact(){try{FACT=JSON.parse(localStorage.getItem(factKey())||'[]')}catch(e){FACT=[]}}
 function saveFact(){try{localStorage.setItem(factKey(),JSON.stringify(FACT))}catch(e){}cloudSyncPush()}
-function factTotals(){var f=0,c=0;FACT.forEach(function(x){f+=(+x.monto||0);if(x.estado==='pagada')c+=(+x.monto||0);});return {facturado:f,cobrado:c,porcobrar:f-c}}
+function factTot(){var r={fS:0,fD:0,cS:0,cD:0};FACT.forEach(function(x){var d=curOf(x.moneda)==='US$';var m=+x.monto||0;if(d){r.fD+=m;if(x.estado==='pagada')r.cD+=m;}else{r.fS+=m;if(x.estado==='pagada')r.cS+=m;}});r.pS=r.fS-r.cS;r.pD=r.fD-r.cD;return r;}
+function _dual(s,d){var a=fmtMon(s,'S/');if(d>0)a+=' · '+fmtMon(d,'US$');return a;}
+function factAutoRef(cli,monto){
+  cli=(cli||'').toLowerCase().trim();
+  for(var i=0;i<OCREC.length;i++){var o=OCREC[i];var on=(o.cliente||'').toLowerCase();if(cli&&on&&(on.indexOf(cli)>=0||cli.indexOf(on)>=0)&&Math.abs((+o.monto||0)-(+monto||0))<=Math.max(1,(+monto||0)*0.02))return {tipo:'oc',id:o.id,num:o.num};}
+  var hist=DASH.hist||[];
+  for(var j=0;j<hist.length;j++){var c=hist[j];var cn=((c.cli&&c.cli.n)||'').toLowerCase();if(cn&&cli&&(cn.indexOf(cli)>=0||cli.indexOf(cn)>=0)&&Math.abs((+c.tot||0)-(+monto||0))<=Math.max(1,(+monto||0)*0.02))return {tipo:'cot',id:c.num,num:c.num};}
+  return null;
+}
+function refLabel(ref){if(!ref||!ref.tipo)return '—';return (ref.tipo==='oc'?'OC ':'COT-')+(ref.num||'');}
 function renderFacturacion(){
-  loadFact();
-  var t=factTotals();
-  var h='<div class="pmod-head fade"><div><h1 style="font-size:23px;font-weight:700;letter-spacing:-.6px">Facturación</h1><div style="font-size:13px;color:var(--tmuted);margin-top:4px">Facturas y boletas emitidas · '+(EMP?EMP.nombre:'')+'</div></div>'+
-    '<button class="btn-new" onclick="toggleFactForm()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" style="width:13px;height:13px"><path d="M12 5v14M5 12h14"/></svg>Nueva factura</button></div>';
-  h+='<div class="kpis fade" style="margin-bottom:16px"><div class="kpi"><div class="top"><div class="kic">'+icon('card')+'</div></div><div class="val mono">'+fmtMonto(t.facturado)+'</div><div class="lab">Facturado</div></div>'+
-     '<div class="kpi"><div class="top"><div class="kic">'+icon('check')+'</div></div><div class="val mono" style="color:#16a34a">'+fmtMonto(t.cobrado)+'</div><div class="lab">Cobrado</div></div>'+
-     '<div class="kpi"><div class="top"><div class="kic">'+icon('wallet')+'</div></div><div class="val mono" style="color:#f59e0b">'+fmtMonto(t.porcobrar)+'</div><div class="lab">Por cobrar</div></div></div>';
-  h+='<div id="factForm" class="card fade" style="display:none;margin-bottom:16px">'+
-     '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px"><div class="ct" style="font-weight:600">Registrar factura / boleta</div>'+
-     '<label class="aibtn" style="cursor:pointer">'+icon('bolt')+' Cargar con IA<input type="file" accept="application/pdf,image/*" style="display:none" onchange="factAI(this.files[0])"></label></div>'+
-     '<div id="factAiSt" style="font-size:11.5px;color:var(--tmuted);margin-bottom:10px"></div>'+
-     '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">'+
-       ocrecField('fc_num','N° comprobante','Ej: F001-00123')+
-       ocrecField('fc_cli','Cliente','Razón social')+
-       ocrecField('fc_ruc','RUC / DNI','')+
-       ocrecField('fc_fecha','Fecha','',(new Date()).toISOString().slice(0,10),'date')+
-       ocrecField('fc_monto','Monto (S/)','0.00','','number')+
-       ocrecSelect('fc_tipo','Tipo',[['factura','Factura'],['boleta','Boleta']])+
-       ocrecSelect('fc_estado','Estado',[['emitida','Emitida (por cobrar)'],['pagada','Pagada (cobrada)']])+
-     '</div>'+
-     '<div style="margin-top:12px;display:flex;gap:8px"><button class="btn-new" onclick="addFact()">Guardar</button><button class="aibtn" onclick="toggleFactForm(true)">Cancelar</button></div></div>';
-  if(!FACT.length){ h+='<div class="empty fade"><div class="ei">'+icon('card',1.5)+'</div><div style="font-size:15px;font-weight:600;color:var(--tprimary);margin-bottom:6px">Aún no hay facturas</div><div style="font-size:13px;max-width:430px;margin:0 auto;line-height:1.6">Registra aquí tus facturas y boletas emitidas. Cada una es un ingreso realizado. Marca "Pagada" cuando te cobren para ver "Por cobrar" real.</div></div>'; $('content').innerHTML=h; return; }
-  h+='<div class="card fade"><div class="ptable-wrap"><table class="ptable"><thead><tr><th>Comprobante</th><th>Cliente</th><th>Monto</th><th>Fecha</th><th>Estado</th><th></th></tr></thead><tbody>';
-  FACT.slice().sort(function(a,b){return (b.fecha||'').localeCompare(a.fecha||'')}).forEach(function(x){
-    var pag=x.estado==='pagada';
-    h+='<tr><td class="mono">'+esc(x.num||'—')+'<div class="pdl">'+(x.tipo==='boleta'?'Boleta':'Factura')+'</div></td><td>'+esc(x.cliente||'—')+'</td><td class="mono" style="font-weight:600">'+fmtMonto(x.monto)+'</td><td style="color:var(--tmuted)">'+esc(x.fecha||'—')+'</td>'+
-      '<td><span class="badge" title="Click para cambiar" onclick="toggleFactPagada(\''+x.id+'\')" style="cursor:pointer;color:'+(pag?'#16a34a':'#f59e0b')+';background:'+bg(pag?'#16a34a':'#f59e0b',.14)+'">'+(pag?'Pagada':'Por cobrar')+'</span></td>'+
-      '<td><button onclick="delFact(\''+x.id+'\')" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:16px">×</button></td></tr>';
+  $('content').innerHTML='<div class="pmod-head fade"><div><h1 style="font-size:23px;font-weight:700">Facturación</h1><div style="font-size:13px;color:var(--tmuted);margin-top:4px">Cargando…</div></div></div>';
+  loadFact(); loadOCREC();
+  loadDash(function(){
+    var t=factTot();
+    var hist=DASH.hist||[];
+    var refOpts='<option value="">— Sin enlace —</option>';
+    OCREC.forEach(function(o){refOpts+='<option value="oc:'+o.id+'">OC '+esc(o.num||'')+' · '+esc(o.cliente||'')+' · '+fmtMon(o.monto,o.moneda)+'</option>';});
+    hist.forEach(function(c){refOpts+='<option value="cot:'+c.num+'">COT-'+esc(c.num||'')+' · '+esc((c.cli&&c.cli.n)||'')+' · '+fmtMon(c.tot,c.mon)+'</option>';});
+    var h='<div class="pmod-head fade"><div><h1 style="font-size:23px;font-weight:700;letter-spacing:-.6px">Facturación</h1><div style="font-size:13px;color:var(--tmuted);margin-top:4px">Facturas y boletas emitidas · '+(EMP?EMP.nombre:'')+'</div></div>'+
+      '<button class="btn-new" onclick="toggleFactForm()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" style="width:13px;height:13px"><path d="M12 5v14M5 12h14"/></svg>Nueva factura</button></div>';
+    h+='<div class="kpis fade" style="margin-bottom:16px"><div class="kpi"><div class="top"><div class="kic">'+icon('card')+'</div></div><div class="val mono" style="font-size:17px">'+_dual(t.fS,t.fD)+'</div><div class="lab">Facturado</div></div>'+
+       '<div class="kpi"><div class="top"><div class="kic">'+icon('check')+'</div></div><div class="val mono" style="font-size:17px;color:#16a34a">'+_dual(t.cS,t.cD)+'</div><div class="lab">Cobrado</div></div>'+
+       '<div class="kpi"><div class="top"><div class="kic">'+icon('wallet')+'</div></div><div class="val mono" style="font-size:17px;color:#f59e0b">'+_dual(t.pS,t.pD)+'</div><div class="lab">Por cobrar</div></div></div>';
+    h+='<div id="factForm" class="card fade" style="display:none;margin-bottom:16px">'+
+       '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px"><div class="ct" style="font-weight:600">Registrar factura / boleta</div>'+
+       '<label class="aibtn" style="cursor:pointer">'+icon('bolt')+' Cargar con IA<input type="file" accept="application/pdf,image/*" style="display:none" onchange="factAI(this.files[0])"></label></div>'+
+       '<div id="factAiSt" style="font-size:11.5px;color:var(--tmuted);margin-bottom:10px"></div>'+
+       '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">'+
+         ocrecField('fc_num','N° comprobante','Ej: F001-00123')+
+         ocrecField('fc_cli','Cliente','Razón social')+
+         ocrecField('fc_ruc','RUC / DNI','')+
+         ocrecField('fc_fecha','Fecha emisión','',(new Date()).toISOString().slice(0,10),'date')+
+         ocrecField('fc_monto','Monto total','0.00','','number')+
+         ocrecSelect('fc_moneda','Moneda',[['S/','Soles (S/)'],['US$','Dólares (US$)']])+
+         ocrecSelect('fc_tipo','Tipo',[['factura','Factura'],['boleta','Boleta']])+
+         ocrecSelect('fc_pago','Forma de pago',[['contado','Contado (inmediato)'],['credito','Crédito']])+
+         ocrecField('fc_dias','Días crédito','0','0','number')+
+         ocrecSelect('fc_estado','Estado',[['emitida','Emitida (por cobrar)'],['pagada','Pagada (cobrada)']])+
+       '</div>'+
+       '<div style="margin-top:10px"><div style="font-size:9.5px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--tmuted);margin-bottom:3px">Enlazar a (OC recibida o cotización) — se autocompleta si coincide</div>'+
+       '<select id="fc_ref" style="width:100%;padding:8px 10px;border:1px solid var(--bd,#e2e8f0);border-radius:8px;font-size:13px;background:var(--input,#fff);color:var(--tprimary)">'+refOpts+'</select></div>'+
+       '<div style="margin-top:12px;display:flex;gap:8px"><button class="btn-new" onclick="addFact()">Guardar</button><button class="aibtn" onclick="toggleFactForm(true)">Cancelar</button></div></div>';
+    if(!FACT.length){ h+='<div class="empty fade"><div class="ei">'+icon('card',1.5)+'</div><div style="font-size:15px;font-weight:600;color:var(--tprimary);margin-bottom:6px">Aún no hay facturas</div><div style="font-size:13px;max-width:430px;margin:0 auto;line-height:1.6">Registra facturas y boletas (soles o dólares). Marca contado o crédito (con vencimiento) y enlázalas a la OC recibida o cotización. La IA puede leerlas del PDF.</div></div>'; $('content').innerHTML=h; return; }
+    h+='<div class="card fade"><div class="ptable-wrap"><table class="ptable"><thead><tr><th>Comprobante</th><th>Cliente</th><th>Monto</th><th>Pago</th><th>Enlace</th><th>Estado</th><th></th></tr></thead><tbody>';
+    FACT.slice().sort(function(a,b){return (b.fecha||'').localeCompare(a.fecha||'')}).forEach(function(x){
+      var pag=x.estado==='pagada';
+      var pagoTxt=x.forma_pago==='credito'?('Crédito '+(x.dias_credito||0)+'d'+(x.fecha_venc?(' · '+_vencInfo({forma_pago:'credito',fecha_venc:x.fecha_venc})):'')):'Contado';
+      h+='<tr><td class="mono">'+esc(x.num||'—')+'<div class="pdl">'+(x.tipo==='boleta'?'Boleta':'Factura')+'</div></td><td>'+esc(x.cliente||'—')+'</td><td class="mono" style="font-weight:600">'+fmtMon(x.monto,x.moneda)+'</td><td style="font-size:11.5px">'+pagoTxt+'</td><td style="color:var(--tmuted);font-size:11.5px">'+refLabel(x.ref)+'</td>'+
+        '<td><span class="badge" title="Click para cambiar" onclick="toggleFactPagada(\''+x.id+'\')" style="cursor:pointer;color:'+(pag?'#16a34a':'#f59e0b')+';background:'+bg(pag?'#16a34a':'#f59e0b',.14)+'">'+(pag?'Pagada':'Por cobrar')+'</span></td>'+
+        '<td><button onclick="delFact(\''+x.id+'\')" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:16px">×</button></td></tr>';
+    });
+    h+='</tbody></table></div></div>';
+    $('content').innerHTML=h;
   });
-  h+='</tbody></table></div></div>';
-  $('content').innerHTML=h;
 }
 function toggleFactForm(hide){var f=$('factForm');if(!f)return;f.style.display=(hide||f.style.display!=='none')?'none':'block';}
 function addFact(){
   var cli=_v('fc_cli'); if(!cli){toast('Falta el cliente');return;}
-  FACT.push({id:'FT'+Date.now(),num:_v('fc_num'),cliente:cli,ruc:_v('fc_ruc'),fecha:_v('fc_fecha'),monto:parseFloat(_v('fc_monto'))||0,tipo:_v('fc_tipo')||'factura',estado:_v('fc_estado')||'emitida'});
-  saveFact();toast('Comprobante registrado');renderFacturacion();
+  var pago=_v('fc_pago')||'contado', dias=parseInt(_v('fc_dias'),10)||0, fecha=_v('fc_fecha'), monto=parseFloat(_v('fc_monto'))||0;
+  var refv=_v('fc_ref'), ref=null;
+  if(refv){var p=refv.split(':');var arr=p[0]==='oc'?OCREC:(DASH.hist||[]);for(var i=0;i<arr.length;i++){var it=arr[i];if((p[0]==='oc'&&it.id===p[1])||(p[0]==='cot'&&it.num===p[1])){ref={tipo:p[0],id:p[1],num:it.num};break;}}}
+  if(!ref)ref=factAutoRef(cli,monto);
+  FACT.push({id:'FT'+Date.now(),num:_v('fc_num'),cliente:cli,ruc:_v('fc_ruc'),fecha:fecha,monto:monto,moneda:_v('fc_moneda')||'S/',tipo:_v('fc_tipo')||'factura',forma_pago:pago,dias_credito:dias,fecha_venc:(pago==='credito'?fechaMas(fecha,dias):''),estado:_v('fc_estado')||'emitida',ref:ref});
+  saveFact();toast('Comprobante registrado'+(ref?(' · enlazado a '+refLabel(ref)):''));renderFacturacion();
 }
 function delFact(id){if(!confirm('¿Eliminar este comprobante?'))return;FACT=FACT.filter(function(x){return x.id!==id});saveFact();renderFacturacion();}
-function toggleFactPagada(id){FACT.forEach(function(x){if(x.id===id)x.estado=(x.estado==='pagada'?'emitida':'pagada');});saveFact();renderFacturacion();}
+function toggleFactPagada(id){loadFact();FACT.forEach(function(x){if(x.id===id)x.estado=(x.estado==='pagada'?'emitida':'pagada');});saveFact();renderFacturacion();}
 function factAI(file){
   if(!file)return; var st=$('factAiSt'); if(st){st.textContent='Leyendo con IA…';st.style.color='var(--tmuted)';}
   var rd=new FileReader();
   rd.onload=function(e){var b64=String(e.target.result).split(',')[1];
     fetch('/api/gemini',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
-      prompt:'Extrae datos de esta FACTURA o BOLETA electronica peruana. Devuelve SOLO JSON: {"num":"serie-numero ej F001-123","cliente":"razon social del cliente","ruc":"ruc o dni del cliente","fecha":"YYYY-MM-DD","monto":total_numero,"tipo":"factura o boleta"}. Si falta un dato usa "" o 0.',
+      prompt:'Extrae datos de esta FACTURA o BOLETA electronica peruana. Devuelve SOLO JSON: {"num":"serie-numero ej F001-123","cliente":"razon social del cliente","ruc":"ruc o dni del cliente","fecha":"YYYY-MM-DD","monto":total_numero,"moneda":"S/ si soles o US$ si dolares","tipo":"factura o boleta","forma_pago":"contado o credito","dias_credito":dias_si_credito}. Detecta bien la MONEDA (soles S/. o dolares US$/$). Si falta un dato usa "" o 0.',
       imageBase64:b64,mimeType:file.type||'application/pdf'})}).then(function(r){return r.json()}).then(function(d){
       if(d&&d.error){if(st){st.textContent='Error IA';st.style.color='#ef4444';}return;}
       var tx='';if(d&&d.candidates&&d.candidates[0]&&d.candidates[0].content&&d.candidates[0].content.parts)tx=d.candidates[0].content.parts.map(function(p){return p.text||''}).join('');
       var m=tx.replace(/```json/g,'').replace(/```/g,'').match(/\{[\s\S]*\}/);if(!m){if(st){st.textContent='No se pudo leer.';st.style.color='#f59e0b';}return;}
-      try{var o=JSON.parse(m[0]);if($('fc_num'))$('fc_num').value=o.num||'';if($('fc_cli'))$('fc_cli').value=o.cliente||'';if($('fc_ruc'))$('fc_ruc').value=(o.ruc||'').replace(/\D/g,'');if(o.fecha&&$('fc_fecha'))$('fc_fecha').value=o.fecha;if($('fc_monto'))$('fc_monto').value=o.monto||0;if($('fc_tipo')&&o.tipo)$('fc_tipo').value=(o.tipo+'').indexOf('bol')>=0?'boleta':'factura';if(st){st.textContent='✓ Datos extraídos. Revisa y guarda.';st.style.color='#16a34a';}}catch(e2){if(st){st.textContent='Error al leer respuesta.';st.style.color='#ef4444';}}
+      try{var o=JSON.parse(m[0]);if($('fc_num'))$('fc_num').value=o.num||'';if($('fc_cli'))$('fc_cli').value=o.cliente||'';if($('fc_ruc'))$('fc_ruc').value=(o.ruc||'').replace(/\D/g,'');if(o.fecha&&$('fc_fecha'))$('fc_fecha').value=o.fecha;if($('fc_monto'))$('fc_monto').value=o.monto||0;if($('fc_moneda'))$('fc_moneda').value=curOf(o.moneda);if($('fc_tipo')&&o.tipo)$('fc_tipo').value=(o.tipo+'').indexOf('bol')>=0?'boleta':'factura';if($('fc_pago')&&o.forma_pago)$('fc_pago').value=(o.forma_pago+'').indexOf('cred')>=0?'credito':'contado';if($('fc_dias'))$('fc_dias').value=o.dias_credito||0;
+        var rf=factAutoRef(o.cliente||'',o.monto||0);if(rf&&$('fc_ref'))$('fc_ref').value=rf.tipo+':'+(rf.tipo==='oc'?rf.id:rf.num);
+        if(st){st.textContent='✓ Datos extraídos'+(rf?(' · enlazado a '+refLabel(rf)):'')+'. Revisa y guarda.';st.style.color='#16a34a';}}catch(e2){if(st){st.textContent='Error al leer respuesta.';st.style.color='#ef4444';}}
     }).catch(function(){if(st){st.textContent='Error de conexión.';st.style.color='#ef4444';}});
   };rd.readAsDataURL(file);
 }
@@ -1233,17 +1291,28 @@ function factAI(file){
 function initAgente(){
   if(document.getElementById('_agbtn'))return;
   var b=document.createElement('button'); b.id='_agbtn';
-  b.title='Agente IA — analiza este módulo y sugiere mejoras';
+  b.title='Agente IA — sugerencias o dejar una anotación/mejora';
   b.style.cssText='position:fixed;right:20px;bottom:20px;z-index:900;display:flex;align-items:center;gap:8px;background:linear-gradient(135deg,#0ea5e9,#0d3b6e);color:#fff;border:none;border-radius:30px;padding:12px 18px;font-size:13px;font-weight:600;cursor:pointer;box-shadow:0 6px 20px rgba(13,59,110,.35)';
   b.innerHTML=icon('bolt')+'<span>Agente IA</span>';
   b.onclick=agenteAnalizar;
   document.body.appendChild(b);
   var m=document.createElement('div'); m.id='_agmodal';
   m.style.cssText='position:fixed;inset:0;z-index:950;background:rgba(15,23,42,.5);display:none;align-items:center;justify-content:center;padding:18px';
-  m.innerHTML='<div style="background:var(--card,#fff);color:var(--tprimary,#0f172a);max-width:560px;width:100%;max-height:80vh;overflow:auto;border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,.3)">'+
+  m.innerHTML='<div style="background:var(--card,#fff);color:var(--tprimary,#0f172a);max-width:560px;width:100%;max-height:82vh;overflow:auto;border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,.3)">'+
     '<div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--bd,#e2e8f0)"><div style="font-weight:700;font-size:15px;display:flex;align-items:center;gap:8px">'+icon('bolt')+' Agente IA <span id="_agmod" style="font-size:11px;color:var(--tmuted);font-weight:500"></span></div><button onclick="document.getElementById(\'_agmodal\').style.display=\'none\'" style="background:none;border:none;font-size:22px;color:var(--tmuted);cursor:pointer;line-height:1">×</button></div>'+
     '<div id="_agbody" style="padding:18px 20px;font-size:13.5px;line-height:1.7"></div></div>';
   document.body.appendChild(m);
+}
+function agenteAnalizar(){
+  var m=document.getElementById('_agmodal'); if(!m){initAgente();m=document.getElementById('_agmodal');}
+  document.getElementById('_agmod').textContent='· '+ACTIVE;
+  document.getElementById('_agbody').innerHTML=
+    '<div style="font-size:13px;color:var(--tmuted);margin-bottom:14px">¿Qué quieres hacer en el módulo <b style="color:var(--tprimary)">'+ACTIVE+'</b>?</div>'+
+    '<div style="display:grid;gap:10px">'+
+    '<button class="btn-new" style="justify-content:flex-start;text-align:left;padding:14px 16px" onclick="agenteSugerir()">💡  Pedir sugerencias a la IA<br><span style="font-weight:400;font-size:11.5px;opacity:.8">Analiza tus datos y propone mejoras, oportunidades y riesgos</span></button>'+
+    '<button class="aibtn" style="justify-content:flex-start;text-align:left;padding:14px 16px;border:1px solid var(--bd,#e2e8f0)" onclick="agenteAnotarUI()">✍️  Dejar una anotación / mejora<br><span style="font-weight:400;font-size:11.5px;opacity:.8">Escribe instrucciones o mejoras; quedan guardadas para mejorar SIGMA</span></button>'+
+    '</div>';
+  m.style.display='flex';
 }
 function _agSum(a,k){return (a||[]).reduce(function(s,x){return s+(+x[k]||0)},0)}
 function agenteCtx(){
@@ -1252,33 +1321,46 @@ function agenteCtx(){
   var hist=DASH.hist||[], ocrec=OCREC||[], fact=FACT||[], cot=COTSTAT||{};
   var ctx={
     modulo:mod, empresa:EMP?EMP.nombre:'',
+    nota_monedas:'Hay montos en soles (S/) y dolares (US$); NO sumar monedas distintas, tratarlas por separado.',
     cotizaciones:hist.length,
     cotizaciones_aceptadas:Object.keys(cot).filter(function(k){return cot[k]==='aceptada'}).length,
-    oc_recibidas:{cantidad:ocrec.length,monto_total:_agSum(ocrec,'monto')},
-    facturas:{cantidad:fact.length,facturado:_agSum(fact,'monto'),cobrado:fact.filter(function(x){return x.estado==='pagada'}).reduce(function(s,x){return s+(+x.monto||0)},0)},
-    proyectos:(PROY||[]).map(function(p){var dl=daysLeft(p.fecha);return {nombre:p.nombre,entidad:p.entidad,monto:p.monto,plazo_dias:dl}}),
+    oc_recibidas:ocrec.map(function(o){return {cliente:o.cliente,monto:o.monto,moneda:o.moneda,rubro:o.rubro,forma_pago:o.forma_pago,vence:o.fecha_venc}}).slice(0,20),
+    facturas:fact.map(function(x){return {cliente:x.cliente,monto:x.monto,moneda:x.moneda,estado:x.estado,forma_pago:x.forma_pago,vence:x.fecha_venc}}).slice(0,20),
+    proyectos:(PROY||[]).map(function(p){var dl=daysLeft(p.fecha);return {nombre:p.nombre,entidad:p.entidad,monto:p.monto,plazo_dias:dl}})
   };
   if(mod==='clientes'){ try{ctx.clientes=cliAgg().slice(0,15).map(function(c){return {cliente:c.nombre,total:c.total,cotizaciones:c.nCot}})}catch(e){} }
   if(mod==='productos'){ try{ctx.productos=prodAgg().slice(0,15).map(function(p){return {producto:p.desc,venta_prom:Math.round(p.avgVenta),compra_prom:Math.round(p.avgCompra),margen_pct:p.margen}})}catch(e){} }
-  if(mod==='ocrec'){ ctx.detalle_oc=ocrec.slice(0,15).map(function(o){return {cliente:o.cliente,monto:o.monto,rubro:o.rubro,fecha:o.fecha}}); }
-  if(mod==='facturacion'){ ctx.detalle_fact=fact.slice(0,15).map(function(x){return {cliente:x.cliente,monto:x.monto,estado:x.estado,fecha:x.fecha}}); }
   return JSON.stringify(ctx);
 }
-function agenteAnalizar(){
-  var m=document.getElementById('_agmodal'); if(!m){initAgente();m=document.getElementById('_agmodal');}
-  document.getElementById('_agmod').textContent='· '+ACTIVE;
+function agenteSugerir(){
   var body=document.getElementById('_agbody');
   body.innerHTML='<div style="color:var(--tmuted)">Analizando los datos de este módulo con IA…</div>';
-  m.style.display='flex';
-  var prompt='Eres un asesor experto en negocios, contrataciones con el Estado peruano (Ley 32069 / OSCE / SEACE) y mejora de procesos, trabajando para esta empresa que vende al sector publico y privado (B2B y retail). Analiza estos datos del modulo actual de su ERP y entrega: (1) un diagnostico muy breve (1-2 lineas), (2) entre 3 y 5 sugerencias ACCIONABLES y concretas para mejorar su forma de trabajo, vender mas, mejorar margen o reducir riesgos/plazos. Si hay pocos datos, sugiere como aprovechar mejor el modulo. Responde en espanol, claro y conciso, usando vinetas que empiecen con "- ". No uses markdown de encabezados ni asteriscos. Datos del modulo:\n'+agenteCtx();
+  var prompt='Eres un asesor experto en negocios, contrataciones con el Estado peruano (Ley 32069 / OSCE / SEACE) y mejora de procesos, para una empresa que vende al sector publico y privado (B2B y retail), en soles y dolares. Analiza estos datos del modulo actual de su ERP y entrega: (1) un diagnostico muy breve (1-2 lineas), (2) entre 3 y 5 sugerencias ACCIONABLES y concretas para vender mas, mejorar margen, cobrar a tiempo o reducir riesgos/plazos. Respeta las monedas (no sumes soles con dolares). Responde en espanol, claro y conciso, con vinetas que empiecen con "- ". Sin markdown de encabezados ni asteriscos. Datos del modulo:\n'+agenteCtx();
   fetch('/api/gemini',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt:prompt})})
     .then(function(r){return r.json()}).then(function(d){
       if(d&&d.error){body.innerHTML='<div style="color:#ef4444">No se pudo analizar: '+esc((d.error.message||'')+'').slice(0,120)+'</div>';return;}
       var tx='';if(d&&d.candidates&&d.candidates[0]&&d.candidates[0].content&&d.candidates[0].content.parts)tx=d.candidates[0].content.parts.map(function(p){return p.text||''}).join('');
       if(!tx){body.innerHTML='<div style="color:var(--tmuted)">La IA no devolvió sugerencias. Intenta de nuevo.</div>';return;}
       var safe=esc(tx).replace(/^- (.*)$/gm,'<div style="display:flex;gap:8px;margin:6px 0"><span style="color:#0ea5e9">•</span><span>$1</span></div>').replace(/\n{2,}/g,'<br>').replace(/\n/g,'<br>');
-      body.innerHTML=safe+'<div style="margin-top:14px;font-size:10.5px;color:var(--tmuted);border-top:1px solid var(--bd,#eef2f7);padding-top:8px">Sugerencias generadas por IA (Gemini) a partir de tus datos. Revisa antes de aplicar.</div>';
+      body.innerHTML=safe+'<div style="margin-top:14px"><button class="aibtn" onclick="agenteAnalizar()" style="border:1px solid var(--bd,#e2e8f0)">← Volver</button></div><div style="margin-top:10px;font-size:10.5px;color:var(--tmuted);border-top:1px solid var(--bd,#eef2f7);padding-top:8px">Sugerencias IA (Gemini) a partir de tus datos. Revisa antes de aplicar.</div>';
     }).catch(function(){body.innerHTML='<div style="color:#ef4444">Error de conexión con la IA.</div>';});
+}
+function agenteAnotarUI(){
+  var body=document.getElementById('_agbody');
+  body.innerHTML='<div style="font-size:12.5px;color:var(--tmuted);margin-bottom:8px">Escribe una mejora, instrucción o idea para el módulo <b style="color:var(--tprimary)">'+ACTIVE+'</b>. Se guardará para que se aplique al reprogramar SIGMA.</div>'+
+    '<textarea id="_agnota" rows="5" placeholder="Ej: En este módulo me gustaría poder filtrar por fecha y exportar a Excel..." style="width:100%;padding:10px;border:1px solid var(--bd,#e2e8f0);border-radius:10px;font-size:13px;background:var(--input,#fff);color:var(--tprimary);resize:vertical"></textarea>'+
+    '<div id="_agnotaSt" style="font-size:11.5px;color:var(--tmuted);margin-top:8px"></div>'+
+    '<div style="margin-top:12px;display:flex;gap:8px"><button class="btn-new" onclick="agenteGuardarNota()">Guardar anotación</button><button class="aibtn" onclick="agenteAnalizar()" style="border:1px solid var(--bd,#e2e8f0)">← Volver</button></div>';
+}
+function agenteGuardarNota(){
+  var ta=document.getElementById('_agnota'); var st=document.getElementById('_agnotaSt');
+  var txt=(ta&&ta.value||'').trim(); if(!txt){if(st){st.textContent='Escribe algo primero.';st.style.color='#f59e0b';}return;}
+  if(st){st.textContent='Guardando…';st.style.color='var(--tmuted)';}
+  fetch('/api/aprendizaje',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({modulo:ACTIVE,empresa:EMP?EMP.nombre:'',texto:txt})})
+    .then(function(r){return r.json()}).then(function(d){
+      if(d&&d.ok){if(st){st.textContent='✓ Anotación guardada. Gracias, se tendrá en cuenta para mejorar SIGMA.';st.style.color='#16a34a';}ta.value='';}
+      else{if(st){st.textContent='No se pudo guardar. Revisa tu conexión.';st.style.color='#ef4444';}}
+    }).catch(function(){if(st){st.textContent='Error de conexión.';st.style.color='#ef4444';}});
 }
 /* ===== Módulo: Proyectos Públicos < 8 UIT ===== */
 
