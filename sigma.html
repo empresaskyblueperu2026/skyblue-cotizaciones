@@ -491,7 +491,7 @@ aside.rpanel{width:284px;flex-shrink:0;background:linear-gradient(180deg,var(--c
 <div id="portal">
   <div class="brandbig">
     <div class="logomark"><svg viewBox="0 0 24 24" fill="none"><path d="M4 7l8-4 8 4-8 4-8-4z" stroke="#fff" stroke-width="1.7" stroke-linejoin="round"/><path d="M4 12l8 4 8-4M4 17l8 4 8-4" stroke="#fff" stroke-width="1.7" stroke-linejoin="round" opacity=".72"/></svg></div>
-    <div><div class="brandname">SIGMA <span class="vtag">v1.0</span></div><div class="brandsub">Plataforma ERP · IA</div></div>
+    <div><div class="brandname">SIGMA <span class="vtag">2.0</span></div><div class="brandsub">Plataforma ERP · IA</div></div>
   </div>
   <div class="portal-title">Selecciona la empresa con la que vas a trabajar</div>
   <div class="cards" id="ecards"><div style="grid-column:1/-1;text-align:center;color:var(--tmuted);font-size:13px;padding:30px">Cargando empresas…</div></div>
@@ -505,7 +505,7 @@ aside.rpanel{width:284px;flex-shrink:0;background:linear-gradient(180deg,var(--c
   <aside class="side" id="sidebar">
     <div class="side-logo">
       <div class="lm"><svg viewBox="0 0 24 24" fill="none"><path d="M4 7l8-4 8 4-8 4-8-4z" stroke="#fff" stroke-width="1.7" stroke-linejoin="round"/><path d="M4 12l8 4 8-4M4 17l8 4 8-4" stroke="#fff" stroke-width="1.7" stroke-linejoin="round" opacity=".72"/></svg></div>
-      <div><div class="nm">SIGMA</div><div class="sb">ERP · v1.0</div></div>
+      <div><div class="nm">SIGMA</div><div class="sb">ERP · 2.0</div></div>
     </div>
     <nav class="navlist" id="navlist"></nav>
     <div class="side-user">
@@ -581,7 +581,7 @@ var NAV=[
   {cat:'Principal'},
   {id:'dashboard',ic:'dashboard',lb:'Dashboard'},
   {cat:'Comercial'},
-  {id:'oportunidades',ic:'search',lb:'Oportunidades',soon:true},
+  {id:'oportunidades',ic:'search',lb:'Oportunidades'},
   {id:'proyectos',ic:'clipboard',lb:'Proyectos Públicos'},
   {id:'cotizaciones',ic:'chat',lb:'Cotizaciones',tab:'cot'},
   {id:'segcot',ic:'check',lb:'Seguim. Ventas'},
@@ -594,14 +594,14 @@ var NAV=[
   {id:'traza',ic:'search',lb:'Trazabilidad'},
   {id:'catalogo',ic:'layers',lb:'Catálogo',tab:'cat'},
   {cat:'Operaciones'},
-  {id:'logistica',ic:'truck',lb:'Logística',soon:true},
+  {id:'logistica',ic:'truck',lb:'Logística'},
   {id:'facturacion',ic:'card',lb:'Facturación'},
   {id:'cobranza',ic:'wallet',lb:'Cobranza'},
   {cat:'Gestión'},
   {id:'boveda',ic:'layers',lb:'Bóveda de Empresa'},
   {id:'historial',ic:'clock',lb:'Historial',tab:'hist'},
-  {id:'reportes',ic:'trending',lb:'Reportes',soon:true},
-  {id:'config',ic:'gear',lb:'Configuración',soon:true}
+  {id:'reportes',ic:'trending',lb:'Reportes'},
+  {id:'config',ic:'gear',lb:'Configuración'}
 ];
 function renderNav(){
   var n=$('navlist');n.innerHTML='';
@@ -616,7 +616,7 @@ function navClick(it){
   toggleMenu(false);
   if(it.tab){window.location.href='/cotizador?tab='+it.tab;return}
   ACTIVE=it.id;renderNav();
-  if(it.id==='dashboard')refreshDash();else if(it.id==='proyectos')renderProyectos();else if(it.id==='boveda')renderBoveda();else if(it.id==='proveedores')renderProveedores();else if(it.id==='clientes')renderClientes();else if(it.id==='productos')renderProductos();else if(it.id==='ocrec')renderOCRecibidas();else if(it.id==='segcot')renderSegCot();else if(it.id==='facturacion')renderFacturacion();else if(it.id==='cobranza')renderCobranza();else if(it.id==='traza')renderTraza();else renderSoon(it);
+  if(it.id==='dashboard')refreshDash();else if(it.id==='proyectos')renderProyectos();else if(it.id==='boveda')renderBoveda();else if(it.id==='proveedores')renderProveedores();else if(it.id==='clientes')renderClientes();else if(it.id==='productos')renderProductos();else if(it.id==='ocrec')renderOCRecibidas();else if(it.id==='segcot')renderSegCot();else if(it.id==='facturacion')renderFacturacion();else if(it.id==='cobranza')renderCobranza();else if(it.id==='traza')renderTraza();else if(it.id==='reportes')renderReportes();else if(it.id==='config')renderConfig();else if(it.id==='oportunidades')renderOportunidades();else if(it.id==='logistica')renderLogistica();else renderSoon(it);
 }
 
 function selectEmpresa(e){
@@ -833,6 +833,22 @@ function addAllProvProdsToCatalog(prov){
 
 function delFromCatalog(id){
   saveCatalog(loadCatalog().filter(function(c){return c.id!==id}));renderProveedores();
+}
+/* Auto-agrega TODOS los productos de proveedores al catálogo (crece nuestra oferta) */
+function autoMergeCatalog(){
+  try{
+    var db=consolidateProveedores(); var cat=loadCatalog(); var changed=false;
+    db.forEach(function(prov){(prov.productos||[]).forEach(function(prod){
+      var nombre=(prod.descripcion||prod.item||'').trim(); if(!nombre)return;
+      var norm=nombre.toLowerCase();
+      var price=parsePrice(prod.precio_total||prod.total||prod.precio_unitario||prod.precio||'');
+      var ex=cat.filter(function(c){return (c.nombre||'').toLowerCase()===norm})[0];
+      if(ex){ if(price!=null){if(ex.precio_min==null||price<ex.precio_min){ex.precio_min=price;changed=true;}if(ex.precio_max==null||price>ex.precio_max){ex.precio_max=price;changed=true;}} if(!ex.proveedores)ex.proveedores=[]; if(prov.nombre&&ex.proveedores.indexOf(prov.nombre)<0){ex.proveedores.push(prov.nombre);changed=true;} }
+      else { cat.push({id:Date.now()+Math.floor(Math.random()*100000),nombre:nombre,unidad:prod.unidad||'',precio_min:price,precio_max:price,proveedores:prov.nombre?[prov.nombre]:[],fecha:new Date().toISOString().slice(0,10)}); changed=true; }
+    });});
+    if(changed)saveCatalog(cat);
+    return changed;
+  }catch(e){return false;}
 }
 
 function provComprasAgg(){
@@ -1455,7 +1471,138 @@ function renderTraza(){
     $('content').innerHTML=h;
   });
 }
+/* ===== Utilidad: descargar archivo ===== */
+function _dl(name,content,type){var b=new Blob([content],{type:(type||'text/csv')+';charset=utf-8'});var u=URL.createObjectURL(b);var a=document.createElement('a');a.href=u;a.download=name;document.body.appendChild(a);a.click();document.body.removeChild(a);setTimeout(function(){URL.revokeObjectURL(u)},5000);}
+
+/* ===== Módulo: Reportes (resumen financiero + exportar) ===== */
+function renderReportes(){
+  $('content').innerHTML='<div class="pmod-head fade"><div><h1 style="font-size:23px;font-weight:700">Reportes</h1><div style="font-size:13px;color:var(--tmuted);margin-top:4px">Cargando…</div></div></div>';
+  loadOCREC(); loadFact(); loadCotStat();
+  loadDash(function(){
+    var hist=(DASH.hist||[]).filter(function(c){return !(EMP&&c.empresaId&&c.empresaId!==EMP.id)});
+    var ventasConf={'S/':0,'US$':0};
+    (OCREC||[]).forEach(function(o){ventasConf[curOf(o.moneda)]+=(+o.monto||0)});
+    hist.forEach(function(c){if(COTSTAT[c.num]==='aceptada')ventasConf[curOf(c.mon)]+=(+c.tot||0)});
+    var ft=factTot();
+    var comprasOC=0;(DASH.ocHist||[]).forEach(function(o){(o.items||[]).forEach(function(it){comprasOC+=(+it.qty||0)*(+it.precio||0)})});
+    var pa=provComprasAgg();var tv=0,tc=0;pa.forEach(function(m){tv+=m.ventaTot;tc+=m.compraTot;});
+    var margen=tv>0?((tv-tc)/tv*100):null;
+    var cl=(typeof cliAgg==='function')?cliAgg():[];
+    var pr=(typeof prodAgg==='function')?prodAgg():[];
+    function kpi(lb,val,col){return '<div class="kpi"><div class="val mono" style="font-size:16px'+(col?(';color:'+col):'')+'">'+val+'</div><div class="lab">'+lb+'</div></div>';}
+    var h='<div class="pmod-head fade"><div><h1 style="font-size:23px;font-weight:700;letter-spacing:-.6px">Reportes</h1><div style="font-size:13px;color:var(--tmuted);margin-top:4px">Resumen del negocio · '+(EMP?EMP.nombre:'')+'</div></div><button class="btn-new" onclick="exportReporteCSV()">'+icon('layers')+'Exportar CSV</button></div>';
+    h+='<div class="kpis fade" style="margin-bottom:14px">'+
+      kpi('Ventas confirmadas',_dual(ventasConf['S/'],ventasConf['US$']))+
+      kpi('Facturado',_dual(ft.fS,ft.fD))+
+      kpi('Cobrado',_dual(ft.cS,ft.cD),'#16a34a')+
+      kpi('Por cobrar',_dual(ft.pS,ft.pD),'#f59e0b')+'</div>';
+    h+='<div class="kpis fade" style="margin-bottom:16px">'+
+      kpi('Compras a proveedores',fmtMonto(comprasOC+tc))+
+      kpi('Margen promedio',margen===null?'—':margen.toFixed(0)+'%',(margen!==null&&margen<15?'#ef4444':'#16a34a'))+
+      kpi('Cotizaciones',String(hist.length))+
+      kpi('Productos en catálogo',String(loadCatalog().length))+'</div>';
+    h+='<div class="charts">';
+    h+='<div class="card fade"><div class="ct" style="font-weight:600;margin-bottom:8px">Top clientes (por ventas)</div><div class="ptable-wrap"><table class="ptable"><thead><tr><th>Cliente</th><th>Total</th><th>Cotiz.</th></tr></thead><tbody>';
+    cl.slice(0,5).forEach(function(c){h+='<tr><td>'+esc(c.nombre)+'</td><td class="mono">'+fmtMonto(c.total)+'</td><td class="mono">'+c.nCot+'</td></tr>'});
+    if(!cl.length)h+='<tr><td colspan="3" style="color:var(--tmuted)">Sin datos</td></tr>';
+    h+='</tbody></table></div></div>';
+    h+='<div class="card fade"><div class="ct" style="font-weight:600;margin-bottom:8px">Top productos (por margen)</div><div class="ptable-wrap"><table class="ptable"><thead><tr><th>Producto</th><th>Margen</th></tr></thead><tbody>';
+    pr.filter(function(p){return p.margen!==null}).sort(function(a,b){return b.margen-a.margen}).slice(0,5).forEach(function(p){h+='<tr><td>'+esc(p.desc)+'</td><td class="mono">'+p.margen.toFixed(0)+'%</td></tr>'});
+    if(!pr.filter(function(p){return p.margen!==null}).length)h+='<tr><td colspan="2" style="color:var(--tmuted)">Sin datos de margen aún</td></tr>';
+    h+='</tbody></table></div></div></div>';
+    $('content').innerHTML=h;
+  });
+}
+function exportReporteCSV(){
+  try{
+    var cl=(typeof cliAgg==='function')?cliAgg():[];
+    var rows=[['Cliente','RUC','Total vendido','# Cotizaciones']];
+    cl.forEach(function(c){rows.push([c.nombre,c.ruc,c.total,c.nCot])});
+    var csv=rows.map(function(r){return r.map(function(x){return '"'+(''+x).replace(/"/g,'""')+'"'}).join(',')}).join('\n');
+    _dl('reporte_clientes_'+(new Date().toISOString().slice(0,10))+'.csv',csv);
+    toast('Reporte exportado');
+  }catch(e){toast('No se pudo exportar');}
+}
+
+/* ===== Módulo: Configuración ===== */
+function renderConfig(){
+  var h='<div class="pmod-head fade"><div><h1 style="font-size:23px;font-weight:700;letter-spacing:-.6px">Configuración</h1><div style="font-size:13px;color:var(--tmuted);margin-top:4px">Ajustes del sistema · '+(EMP?EMP.nombre:'')+'</div></div></div>';
+  h+='<div class="card fade" style="margin-bottom:14px"><div class="ct" style="font-weight:600;margin-bottom:10px">'+icon('bolt')+' Telegram (alertas)</div>'+
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">'+ocrecField('cfg_tgtoken','Token del bot','Pega el token de @BotFather')+ocrecField('cfg_tgchat','Chat ID (opcional)','Se detecta solo si le escribes al bot')+'</div>'+
+    '<div id="cfgTgSt" style="font-size:11.5px;color:var(--tmuted);margin-top:8px"></div>'+
+    '<div style="margin-top:10px;display:flex;gap:8px"><button class="btn-new" onclick="cfgTgGuardar()">Conectar</button><button class="aibtn" onclick="cfgTgProbar()" style="border:1px solid var(--bd,#e2e8f0)">Enviar prueba</button></div></div>';
+  h+='<div class="card fade" style="margin-bottom:14px"><div class="ct" style="font-weight:600;margin-bottom:10px">'+icon('clock')+' Respaldo</div>'+
+    '<div style="font-size:12.5px;color:var(--tmuted);line-height:1.6">Respaldo automático diario a las <b>6:00 PM</b> en la nube y en tu PC. También puedes respaldar ahora mismo.</div>'+
+    '<div style="margin-top:10px"><button class="btn-new" onclick="cfgRespaldar()">Respaldar ahora (nube)</button></div></div>';
+  h+='<div class="card fade"><div class="ct" style="font-weight:600;margin-bottom:10px">'+icon('building')+' Empresa</div>'+
+    '<div class="kv"><div class="k">Nombre</div><div>'+esc(EMP?EMP.nombre:'')+'</div><div class="k">RUC</div><div>'+esc(EMP&&EMP.ruc||'—')+'</div><div class="k">Margen sugerido al cotizar</div><div>25% (editable en cada cotización)</div></div></div>';
+  $('content').innerHTML=h;
+}
+function cfgTgGuardar(){var t=_v('cfg_tgtoken'),c=_v('cfg_tgchat'),st=$('cfgTgSt');if(!t&&!c){if(st)st.textContent='Pega el token primero.';return;}if(st){st.textContent='Conectando…';}var body={};if(t)body.token=t;if(c)body.chatId=c;fetch('/api/telegram/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}).then(function(r){return r.json()}).then(function(d){if(st){st.textContent=d&&d.configured?('✓ Conectado. Chat ID: '+d.chatId):(d&&d.tieneToken?'Token guardado. Escríbele algo al bot y vuelve a tocar Conectar para detectar tu chat.':'No se pudo conectar.');st.style.color=d&&d.configured?'#16a34a':'#f59e0b';}}).catch(function(){if(st){st.textContent='Error de conexión.';st.style.color='#ef4444';}});}
+function cfgTgProbar(){var st=$('cfgTgSt');if(st)st.textContent='Enviando prueba…';fetch('/api/telegram/test').then(function(r){return r.json()}).then(function(d){if(st){st.textContent=d&&d.ok?'✓ Mensaje de prueba enviado a tu Telegram.':'No se pudo enviar (configura el token y chat).';st.style.color=d&&d.ok?'#16a34a':'#f59e0b';}}).catch(function(){if(st)st.textContent='Error.';});}
+function cfgRespaldar(){toast('Respaldando en la nube…');fetch('/api/backup/run').then(function(r){return r.json()}).then(function(d){toast(d&&d.ok?('Respaldo nube OK ('+d.fecha+')'):'No se pudo respaldar');}).catch(function(){toast('Error');});}
+
+/* ===== Módulo: Oportunidades (pipeline comercial previo a cotizar) ===== */
+var OPORT=[];
+function oportKey(){return 'sigma_oport_'+(EMP?EMP.id:'x')}
+function loadOport(){try{OPORT=JSON.parse(localStorage.getItem(oportKey())||'[]')}catch(e){OPORT=[]}}
+function saveOport(){try{localStorage.setItem(oportKey(),JSON.stringify(OPORT))}catch(e){}cloudSyncPush()}
+var OPORT_EST=[['prospecto','Prospecto','#0ea5e9'],['cotizando','Cotizando','#14b8a6'],['ganado','Ganado','#16a34a'],['perdido','Perdido','#ef4444']];
+function renderOportunidades(){
+  loadOport();
+  var h='<div class="pmod-head fade"><div><h1 style="font-size:23px;font-weight:700;letter-spacing:-.6px">Oportunidades</h1><div style="font-size:13px;color:var(--tmuted);margin-top:4px">Posibles ventas antes de cotizar · '+(EMP?EMP.nombre:'')+'</div></div><button class="btn-new" onclick="toggleOportForm()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" style="width:13px;height:13px"><path d="M12 5v14M5 12h14"/></svg>Nueva oportunidad</button></div>';
+  var byE={};OPORT_EST.forEach(function(e){byE[e[0]]=0});OPORT.forEach(function(o){byE[o.estado]=(byE[o.estado]||0)+1});
+  h+='<div class="kpis fade" style="margin-bottom:14px">'+OPORT_EST.map(function(e){return '<div class="kpi"><div class="val mono" style="color:'+e[2]+'">'+(byE[e[0]]||0)+'</div><div class="lab">'+e[1]+'</div></div>'}).join('')+'</div>';
+  h+='<div id="oportForm" class="card fade" style="display:none;margin-bottom:14px"><div class="ct" style="font-weight:600;margin-bottom:10px">Nueva oportunidad</div><div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">'+
+    ocrecField('op_nom','Nombre / objeto','Ej: EPP para GORE')+ocrecField('op_cli','Cliente / Entidad','')+ocrecField('op_monto','Monto estimado','0','','number')+
+    ocrecSelect('op_mon','Moneda',[['S/','Soles (S/)'],['US$','Dólares (US$)']])+ocrecSelect('op_est','Estado',OPORT_EST.map(function(e){return [e[0],e[1]]}))+ocrecField('op_fecha','Fecha','',(new Date()).toISOString().slice(0,10),'date')+
+    '</div><div style="margin-top:10px;display:flex;gap:8px"><button class="btn-new" onclick="addOport()">Guardar</button><button class="aibtn" onclick="toggleOportForm(true)">Cancelar</button></div></div>';
+  if(!OPORT.length){h+='<div class="empty fade"><div class="ei">'+icon('search',1.5)+'</div><div style="font-size:15px;font-weight:600;color:var(--tprimary);margin-bottom:6px">Aún no hay oportunidades</div><div style="font-size:13px;max-width:430px;margin:0 auto;line-height:1.6">Registra licitaciones o clientes potenciales. Cuando ganes una, cotiza y se vuelve venta confirmada.</div></div>';$('content').innerHTML=h;return;}
+  h+='<div class="card fade"><div class="ptable-wrap"><table class="ptable"><thead><tr><th>Oportunidad</th><th>Cliente</th><th>Monto est.</th><th>Estado</th><th>Fecha</th><th></th></tr></thead><tbody>';
+  OPORT.slice().sort(function(a,b){return (b.fecha||'').localeCompare(a.fecha||'')}).forEach(function(o){
+    var e=OPORT_EST.filter(function(x){return x[0]===o.estado})[0]||['','',''];
+    var sel='<select onchange="setOportEst(\''+o.id+'\',this.value)" style="padding:5px 8px;border-radius:8px;border:1px solid '+bg(e[2],.5)+';background:'+bg(e[2],.12)+';color:'+e[2]+';font-size:12px;font-weight:600">'+OPORT_EST.map(function(x){return '<option value="'+x[0]+'"'+(x[0]===o.estado?' selected':'')+'>'+x[1]+'</option>'}).join('')+'</select>';
+    h+='<tr><td>'+esc(o.nombre||'—')+'</td><td>'+esc(o.cliente||'—')+'</td><td class="mono">'+fmtMon(o.monto,o.moneda)+'</td><td>'+sel+'</td><td style="color:var(--tmuted)">'+esc(o.fecha||'—')+'</td><td><button onclick="delOport(\''+o.id+'\')" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:16px">×</button></td></tr>';
+  });
+  h+='</tbody></table></div></div>';
+  $('content').innerHTML=h;
+}
+function toggleOportForm(hide){var f=$('oportForm');if(!f)return;f.style.display=(hide||f.style.display!=='none')?'none':'block';}
+function addOport(){var n=_v('op_nom');if(!n){toast('Falta el nombre');return;}OPORT.push({id:'OP'+Date.now(),nombre:n,cliente:_v('op_cli'),monto:parseFloat(_v('op_monto'))||0,moneda:_v('op_mon')||'S/',estado:_v('op_est')||'prospecto',fecha:_v('op_fecha')});saveOport();toast('Oportunidad creada');renderOportunidades();}
+function setOportEst(id,v){OPORT.forEach(function(o){if(o.id===id)o.estado=v;});saveOport();renderOportunidades();}
+function delOport(id){if(!confirm('¿Eliminar oportunidad?'))return;OPORT=OPORT.filter(function(o){return o.id!==id});saveOport();renderOportunidades();}
+
+/* ===== Módulo: Logística (entregas) ===== */
+var LOGIST=[];
+function logistKey(){return 'sigma_logist_'+(EMP?EMP.id:'x')}
+function loadLogist(){try{LOGIST=JSON.parse(localStorage.getItem(logistKey())||'[]')}catch(e){LOGIST=[]}}
+function saveLogist(){try{localStorage.setItem(logistKey(),JSON.stringify(LOGIST))}catch(e){}cloudSyncPush()}
+var LOG_EST=[['preparando','Preparando','#f59e0b'],['camino','En camino','#0ea5e9'],['entregado','Entregado','#16a34a']];
+function renderLogistica(){
+  loadLogist();
+  var h='<div class="pmod-head fade"><div><h1 style="font-size:23px;font-weight:700;letter-spacing:-.6px">Logística</h1><div style="font-size:13px;color:var(--tmuted);margin-top:4px">Entregas a clientes · '+(EMP?EMP.nombre:'')+'</div></div><button class="btn-new" onclick="toggleLogForm()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" style="width:13px;height:13px"><path d="M12 5v14M5 12h14"/></svg>Nueva entrega</button></div>';
+  var pend=LOGIST.filter(function(x){return x.estado!=='entregado'}).length;
+  h+='<div class="kpis fade" style="margin-bottom:14px"><div class="kpi"><div class="val mono">'+LOGIST.length+'</div><div class="lab">Entregas</div></div><div class="kpi"><div class="val mono" style="color:#f59e0b">'+pend+'</div><div class="lab">Pendientes</div></div></div>';
+  h+='<div id="logForm" class="card fade" style="display:none;margin-bottom:14px"><div class="ct" style="font-weight:600;margin-bottom:10px">Nueva entrega</div><div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">'+
+    ocrecField('lg_cli','Cliente / Proyecto','')+ocrecField('lg_desc','Descripción','Qué se entrega')+ocrecField('lg_fecha','Fecha entrega','',(new Date()).toISOString().slice(0,10),'date')+
+    ocrecField('lg_guia','N° Guía remisión','')+ocrecSelect('lg_est','Estado',LOG_EST.map(function(e){return [e[0],e[1]]}))+
+    '</div><div style="margin-top:10px;display:flex;gap:8px"><button class="btn-new" onclick="addLog()">Guardar</button><button class="aibtn" onclick="toggleLogForm(true)">Cancelar</button></div></div>';
+  if(!LOGIST.length){h+='<div class="empty fade"><div class="ei">'+icon('truck',1.5)+'</div><div style="font-size:15px;font-weight:600;color:var(--tprimary);margin-bottom:6px">Aún no hay entregas</div><div style="font-size:13px;max-width:430px;margin:0 auto;line-height:1.6">Registra las entregas a tus clientes con su guía de remisión y estado, para hacer seguimiento hasta la conformidad.</div></div>';$('content').innerHTML=h;return;}
+  h+='<div class="card fade"><div class="ptable-wrap"><table class="ptable"><thead><tr><th>Cliente / Proyecto</th><th>Descripción</th><th>Guía</th><th>Fecha</th><th>Estado</th><th></th></tr></thead><tbody>';
+  LOGIST.slice().sort(function(a,b){return (b.fecha||'').localeCompare(a.fecha||'')}).forEach(function(x){
+    var e=LOG_EST.filter(function(y){return y[0]===x.estado})[0]||['','',''];
+    var sel='<select onchange="setLogEst(\''+x.id+'\',this.value)" style="padding:5px 8px;border-radius:8px;border:1px solid '+bg(e[2],.5)+';background:'+bg(e[2],.12)+';color:'+e[2]+';font-size:12px;font-weight:600">'+LOG_EST.map(function(y){return '<option value="'+y[0]+'"'+(y[0]===x.estado?' selected':'')+'>'+y[1]+'</option>'}).join('')+'</select>';
+    h+='<tr><td>'+esc(x.cliente||'—')+'</td><td>'+esc(x.desc||'—')+'</td><td class="mono">'+esc(x.guia||'—')+'</td><td style="color:var(--tmuted)">'+esc(x.fecha||'—')+'</td><td>'+sel+'</td><td><button onclick="delLog(\''+x.id+'\')" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:16px">×</button></td></tr>';
+  });
+  h+='</tbody></table></div></div>';
+  $('content').innerHTML=h;
+}
+function toggleLogForm(hide){var f=$('logForm');if(!f)return;f.style.display=(hide||f.style.display!=='none')?'none':'block';}
+function addLog(){var c=_v('lg_cli');if(!c){toast('Falta el cliente/proyecto');return;}LOGIST.push({id:'LG'+Date.now(),cliente:c,desc:_v('lg_desc'),fecha:_v('lg_fecha'),guia:_v('lg_guia'),estado:_v('lg_est')||'preparando'});saveLogist();toast('Entrega registrada');renderLogistica();}
+function setLogEst(id,v){LOGIST.forEach(function(x){if(x.id===id)x.estado=v;});saveLogist();renderLogistica();}
+function delLog(id){if(!confirm('¿Eliminar entrega?'))return;LOGIST=LOGIST.filter(function(x){return x.id!==id});saveLogist();renderLogistica();}
 /* ===== Módulo: Proyectos Públicos < 8 UIT ===== */
+
 
 
 
@@ -1557,6 +1704,8 @@ function cloudSyncPush(){
     payload['ocrec_'+EMP.id]=JSON.parse(localStorage.getItem(ocrecKey())||'[]');
     payload['cotstat_'+EMP.id]=JSON.parse(localStorage.getItem(cotstatKey())||'{}');
     payload['fact_'+EMP.id]=JSON.parse(localStorage.getItem(factKey())||'[]');
+    payload['oport_'+EMP.id]=JSON.parse(localStorage.getItem(oportKey())||'[]');
+    payload['logist_'+EMP.id]=JSON.parse(localStorage.getItem(logistKey())||'[]');
     fetch('/api/data',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
   }catch(e){}
 }
@@ -1570,7 +1719,10 @@ function cloudSyncPull(cb){
       if(d&&d['ocrec_'+EMP.id])localStorage.setItem(ocrecKey(),JSON.stringify(d['ocrec_'+EMP.id]));
       if(d&&d['cotstat_'+EMP.id])localStorage.setItem(cotstatKey(),JSON.stringify(d['cotstat_'+EMP.id]));
       if(d&&d['fact_'+EMP.id])localStorage.setItem(factKey(),JSON.stringify(d['fact_'+EMP.id]));
+      if(d&&d['oport_'+EMP.id])localStorage.setItem(oportKey(),JSON.stringify(d['oport_'+EMP.id]));
+      if(d&&d['logist_'+EMP.id])localStorage.setItem(logistKey(),JSON.stringify(d['logist_'+EMP.id]));
     }catch(e){}
+    try{autoMergeCatalog();}catch(e){}
     if(cb)cb();
   }).catch(function(){if(cb)cb();});
 }
