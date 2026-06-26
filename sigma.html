@@ -660,11 +660,13 @@ function renderDashboard(){
   var now=new Date(), mk=now.getFullYear()*12+now.getMonth();
   var ventasMes=0, nCotMes=0;
   hist.forEach(function(c){var f=_pf(c.fecha);var t=_docTot(c);if(f&&f.getFullYear()*12+f.getMonth()===mk){ventasMes+=t;nCotMes++;}});
+  var ingresosMes=0, nOcMes=0;
+  oc.forEach(function(o){var f=_pf(o.fecha);var t=_docTot(o);if(f&&f.getFullYear()*12+f.getMonth()===mk){ingresosMes+=t;nOcMes++;}});
   var porCobrar=0;
   PROY.forEach(function(p){var byk={};p.stages.forEach(function(s){byk[s.k]=s});if(byk.fact&&byk.fact.done&&(!byk.pago||!byk.pago.done))porCobrar+=(+p.monto||0);});
   var meses=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
   var serie=[];for(var i=5;i>=0;i--){var dd=new Date(now.getFullYear(),now.getMonth()-i,1);serie.push({k:dd.getFullYear()*12+dd.getMonth(),lb:meses[dd.getMonth()],v:0});}
-  hist.forEach(function(c){var f=_pf(c.fecha);if(!f)return;var key=f.getFullYear()*12+f.getMonth();serie.forEach(function(s){if(s.k===key)s.v+=_docTot(c);});});
+  oc.forEach(function(c){var f=_pf(c.fecha);if(!f)return;var key=f.getFullYear()*12+f.getMonth();serie.forEach(function(s){if(s.k===key)s.v+=_docTot(c);});});
   var maxv=Math.max.apply(null,serie.map(function(s){return s.v}).concat([1]));
   var pcount={};STAGES.forEach(function(s){pcount[s.k]=0;});PROY.forEach(function(p){var cs=curStage(p);var k=p.stages[cs]?p.stages[cs].k:'tdr';pcount[k]=(pcount[k]||0)+1;});
   var maxp=Math.max.apply(null,Object.keys(pcount).map(function(k){return pcount[k]}).concat([1]));
@@ -672,7 +674,7 @@ function renderDashboard(){
   var kpis=[
     {ic:'chat',lb:'Cotizaciones',v:String(hist.length),t:'+'+nCotMes+' mes',up:1,onc:"goCot('cot')"},
     {ic:'box',lb:'Órdenes de compra',v:String(oc.length),t:'total',up:1,onc:"goCot('oc')"},
-    {ic:'trending',lb:'Ventas del mes',v:_fmtK(ventasMes),t:nCotMes+' cot.',up:1,onc:"goCot('cot')"},
+    {ic:'trending',lb:'Ingresos del mes',v:_fmtK(ingresosMes),t:nOcMes+' OC',up:1,onc:"goCot('oc')"},
     {ic:'wallet',lb:'Por cobrar',v:_fmtK(porCobrar),t:(nAlert?('⚠ '+nAlert):'ok'),up:porCobrar?0:1,onc:"navClick({id:'proyectos'})"}
   ];
   var hoy=now.toLocaleDateString('es-PE',{weekday:'long',day:'numeric',month:'long'});
@@ -692,7 +694,7 @@ function renderDashboard(){
   var labels=serie.map(function(s,i){var x=16+step*i;return '<text x="'+Math.round(x)+'" y="120" text-anchor="middle" fill="var(--chartlabel)" style="font-size:8.5px">'+s.lb+'</text>'}).join('');
   var last=pts[pts.length-1];
   h+='<div class="charts">';
-  h+='<div class="card fade"><div class="chead"><div><div class="ct">Ventas del año</div><div class="cs">Últimos 6 meses · soles</div></div></div>'+
+  h+='<div class="card fade"><div class="chead"><div><div class="ct">Ingresos del año</div><div class="cs">Últimos 6 meses · órdenes de compra</div></div></div>'+
      '<svg viewBox="0 0 340 130" style="width:100%;height:150px;display:block;overflow:visible"><defs><linearGradient id="af" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#0ea5e9" stop-opacity=".22"/><stop offset="100%" stop-color="#0ea5e9" stop-opacity="0"/></linearGradient></defs>'+
      '<line x1="0" y1="24" x2="340" y2="24" stroke="var(--chartgrid)" stroke-dasharray="3 5"/><line x1="0" y1="62" x2="340" y2="62" stroke="var(--chartgrid)" stroke-dasharray="3 5"/><line x1="0" y1="100" x2="340" y2="100" stroke="var(--chartgrid)" stroke-dasharray="3 5"/>'+
      '<path d="'+area+'" fill="url(#af)"/><path d="'+line+'" fill="none" stroke="#0ea5e9" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>'+
