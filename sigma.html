@@ -835,6 +835,25 @@ function delFromCatalog(id){
   saveCatalog(loadCatalog().filter(function(c){return c.id!==id}));renderProveedores();
 }
 
+function provComprasAgg(){
+  var map={};
+  function get(p){p=(p||'(sin proveedor)').trim()||'(sin proveedor)';if(!map[p])map[p]={prov:p,prods:{},compraTot:0,ventaTot:0,qty:0};return map[p];}
+  (DASH.hist||[]).forEach(function(c){if(EMP&&c.empresaId&&c.empresaId!==EMP.id)return;(c.items||[]).forEach(function(it){if(!it.prov&&!it.compra)return;var m=get(it.prov);var q=+it.qty||0,co=+it.compra||0,ve=+it.precio||0;m.qty+=q;m.compraTot+=co*q;m.ventaTot+=ve*q;var d=(it.desc||'').trim();if(d){if(!m.prods[d])m.prods[d]={desc:d,compra:co,venta:ve,qty:0};m.prods[d].qty+=q;if(co)m.prods[d].compra=co;if(ve)m.prods[d].venta=ve;}});});
+  (DASH.ocHist||[]).forEach(function(o){var pn=(o.prov&&o.prov.n)||'';(o.items||[]).forEach(function(it){var m=get(pn);var q=+it.qty||0,co=+it.precio||0;m.compraTot+=co*q;m.qty+=q;var d=(it.desc||'').trim();if(d){if(!m.prods[d])m.prods[d]={desc:d,compra:co,venta:0,qty:0};m.prods[d].qty+=q;if(co)m.prods[d].compra=co;}});});
+  return Object.keys(map).map(function(k){var m=map[k];m.nprod=Object.keys(m.prods).length;m.margen=(m.ventaTot>0&&m.compraTot>0)?((m.ventaTot-m.compraTot)/m.ventaTot*100):null;return m;}).sort(function(a,b){return b.compraTot-a.compraTot});
+}
+function provMargenHTML(q){
+  var list=provComprasAgg().filter(function(m){return !q||m.prov.toLowerCase().indexOf(q)>=0});
+  if(!list.length)return '<div class="empty-state">'+icon('trending')+'<br>Aún no hay compras registradas.<br>Se llenan al cargar cotizaciones de proveedores (precio de compra) y al registrar OC a proveedores.</div>';
+  var h='<div style="font-size:11.5px;color:var(--tmuted);margin:8px 0">Qué le compras a cada proveedor, cuánto y tu margen al revender. Montos referenciales (S/).</div>';
+  h+='<div class="card"><div class="ptable-wrap"><table class="ptable"><thead><tr><th>Proveedor</th><th>Productos</th><th>Comprado</th><th>Vendido</th><th>Margen</th></tr></thead><tbody>';
+  list.forEach(function(m){
+    var col=m.margen===null?'#94a3b8':(m.margen<10?'#ef4444':m.margen<25?'#f59e0b':'#16a34a');
+    h+='<tr><td>'+esc(m.prov)+'</td><td class="mono">'+m.nprod+'</td><td class="mono">'+fmtMonto(m.compraTot)+'</td><td class="mono">'+(m.ventaTot?fmtMonto(m.ventaTot):'—')+'</td><td><span class="badge" style="color:'+col+';background:'+bg(col,.14)+'">'+(m.margen===null?'sin venta':m.margen.toFixed(0)+'%')+'</span></td></tr>';
+  });
+  h+='</tbody></table></div></div>';
+  return h;
+}
 function renderProveedores(){
   var db=consolidateProveedores();
   var cat=loadCatalog();
@@ -848,6 +867,7 @@ function renderProveedores(){
   h+='<div class="seg">';
   h+='<button class="'+(_provTab==='proveedores'?'on':'')+'" onclick="_provTab=\'proveedores\';renderProveedores()">'+icon('building')+'Proveedores ('+db.length+')</button>';
   h+='<button class="'+(_provTab==='catalogo'?'on':'')+'" onclick="_provTab=\'catalogo\';renderProveedores()">'+icon('layers')+'Catálogo de productos ('+cat.length+')</button>';
+  h+='<button class="'+(_provTab==='margen'?'on':'')+'" onclick="_provTab=\'margen\';loadDash(function(){renderProveedores()})">'+icon('trending')+'Compras y margen</button>';
   h+='</div>';
 
   h+='<input class="prov-search" placeholder="Buscar..." value="'+esc(_provQ)+'" oninput="_provQ=this.value;renderProveedores()">';
@@ -886,7 +906,7 @@ function renderProveedores(){
       });
       h+='</div>';
     }
-  } else {
+  } else if(_provTab==='catalogo'){
     /* Catálogo */
     var filteredCat=cat.filter(function(c){return !q||(c.nombre||'').toLowerCase().indexOf(q)>=0});
     if(!filteredCat.length){
@@ -906,6 +926,8 @@ function renderProveedores(){
       });
       h+='</div>';
     }
+  } else {
+    h+=provMargenHTML(q);
   }
   h+='</div>';
   $('content').innerHTML=h;
