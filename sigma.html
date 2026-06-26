@@ -584,8 +584,9 @@ var NAV=[
   {id:'oportunidades',ic:'search',lb:'Oportunidades',soon:true},
   {id:'proyectos',ic:'clipboard',lb:'Proyectos Públicos'},
   {id:'cotizaciones',ic:'chat',lb:'Cotizaciones',tab:'cot'},
+  {id:'ocrec',ic:'cart',lb:'OC Recibidas'},
   {id:'solicitudes',ic:'send',lb:'Solicitud Cotiz.',tab:'sc'},
-  {id:'ordenes',ic:'box',lb:'Órdenes de Compra',tab:'oc'},
+  {id:'ordenes',ic:'box',lb:'OC a Proveedores',tab:'oc'},
   {id:'clientes',ic:'dollar',lb:'Clientes'},
   {id:'proveedores',ic:'building',lb:'Proveedores'},
   {id:'productos',ic:'trending',lb:'Productos'},
@@ -613,7 +614,7 @@ function navClick(it){
   toggleMenu(false);
   if(it.tab){window.location.href='/cotizador?tab='+it.tab;return}
   ACTIVE=it.id;renderNav();
-  if(it.id==='dashboard')refreshDash();else if(it.id==='proyectos')renderProyectos();else if(it.id==='boveda')renderBoveda();else if(it.id==='proveedores')renderProveedores();else if(it.id==='clientes')renderClientes();else if(it.id==='productos')renderProductos();else renderSoon(it);
+  if(it.id==='dashboard')refreshDash();else if(it.id==='proyectos')renderProyectos();else if(it.id==='boveda')renderBoveda();else if(it.id==='proveedores')renderProveedores();else if(it.id==='clientes')renderClientes();else if(it.id==='productos')renderProductos();else if(it.id==='ocrec')renderOCRecibidas();else renderSoon(it);
 }
 
 function selectEmpresa(e){
@@ -639,7 +640,7 @@ function renderPortal(){
   });
 }
 
-var DASH={hist:[],ocHist:[],scHist:[]};
+var DASH={hist:[],ocHist:[],scHist:[],ocrec:[]};
 function _pf(f){ if(!f)return null; f=(''+f).trim(); var m; if(/^\d{4}-\d{2}-\d{2}/.test(f))return new Date(f.slice(0,10)+'T12:00:00'); m=f.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/); if(m)return new Date(+m[3],+m[2]-1,+m[1],12); var d=new Date(f); return isNaN(d)?null:d; }
 function _docTot(o){ if(o&&o.tot!=null&&!isNaN(+o.tot))return +o.tot; var s=0; if(o&&o.items&&o.items.length)o.items.forEach(function(i){s+=(+i.qty||+i.cantidad||0)*(+i.precio||+i.price||0)}); return s; }
 function _fmtK(n){ n=+n||0; var s=n<0?'-':''; n=Math.abs(n); if(n>=1000)return 'S/ '+s+(n/1000).toFixed(n>=10000?0:1)+'K'; return 'S/ '+s+Math.round(n); }
@@ -650,6 +651,7 @@ function goCot(t){window.location.href='/cotizador?tab='+t;}
 function loadDash(cb){
   fetch('/api/data').then(function(r){return r.json()}).then(function(d){
     d=d||{}; DASH.hist=Array.isArray(d.hist)?d.hist:[]; DASH.ocHist=Array.isArray(d.ocHist)?d.ocHist:[]; DASH.scHist=Array.isArray(d.scHist)?d.scHist:[];
+    DASH.ocrec=(EMP&&Array.isArray(d['ocrec_'+EMP.id]))?d['ocrec_'+EMP.id]:(Array.isArray(d.ocrec)?d.ocrec:[]);
     if(cb)cb();
   }).catch(function(){if(cb)cb();});
 }
@@ -660,21 +662,22 @@ function renderDashboard(){
   var now=new Date(), mk=now.getFullYear()*12+now.getMonth();
   var ventasMes=0, nCotMes=0;
   hist.forEach(function(c){var f=_pf(c.fecha);var t=_docTot(c);if(f&&f.getFullYear()*12+f.getMonth()===mk){ventasMes+=t;nCotMes++;}});
+  var ocrec=DASH.ocrec||[];
   var ingresosMes=0, nOcMes=0;
-  oc.forEach(function(o){var f=_pf(o.fecha);var t=_docTot(o);if(f&&f.getFullYear()*12+f.getMonth()===mk){ingresosMes+=t;nOcMes++;}});
+  ocrec.forEach(function(o){var f=_pf(o.fecha);var t=(+o.monto||0);if(f&&f.getFullYear()*12+f.getMonth()===mk){ingresosMes+=t;nOcMes++;}});
   var porCobrar=0;
   PROY.forEach(function(p){var byk={};p.stages.forEach(function(s){byk[s.k]=s});if(byk.fact&&byk.fact.done&&(!byk.pago||!byk.pago.done))porCobrar+=(+p.monto||0);});
   var meses=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
   var serie=[];for(var i=5;i>=0;i--){var dd=new Date(now.getFullYear(),now.getMonth()-i,1);serie.push({k:dd.getFullYear()*12+dd.getMonth(),lb:meses[dd.getMonth()],v:0});}
-  oc.forEach(function(c){var f=_pf(c.fecha);if(!f)return;var key=f.getFullYear()*12+f.getMonth();serie.forEach(function(s){if(s.k===key)s.v+=_docTot(c);});});
+  ocrec.forEach(function(c){var f=_pf(c.fecha);if(!f)return;var key=f.getFullYear()*12+f.getMonth();serie.forEach(function(s){if(s.k===key)s.v+=(+c.monto||0);});});
   var maxv=Math.max.apply(null,serie.map(function(s){return s.v}).concat([1]));
   var pcount={};STAGES.forEach(function(s){pcount[s.k]=0;});PROY.forEach(function(p){var cs=curStage(p);var k=p.stages[cs]?p.stages[cs].k:'tdr';pcount[k]=(pcount[k]||0)+1;});
   var maxp=Math.max.apply(null,Object.keys(pcount).map(function(k){return pcount[k]}).concat([1]));
   var nAlert=_alertCount();
   var kpis=[
     {ic:'chat',lb:'Cotizaciones',v:String(hist.length),t:'+'+nCotMes+' mes',up:1,onc:"goCot('cot')"},
-    {ic:'box',lb:'Órdenes de compra',v:String(oc.length),t:'total',up:1,onc:"goCot('oc')"},
-    {ic:'trending',lb:'Ingresos del mes',v:_fmtK(ingresosMes),t:nOcMes+' OC',up:1,onc:"goCot('oc')"},
+    {ic:'box',lb:'OC a proveedores',v:String(oc.length),t:'compras',up:1,onc:"goCot('oc')"},
+    {ic:'trending',lb:'Ventas confirmadas (mes)',v:_fmtK(ingresosMes),t:nOcMes+' OC recib.',up:1,onc:"navClick({id:'ocrec'})"},
     {ic:'wallet',lb:'Por cobrar',v:_fmtK(porCobrar),t:(nAlert?('⚠ '+nAlert):'ok'),up:porCobrar?0:1,onc:"navClick({id:'proyectos'})"}
   ];
   var hoy=now.toLocaleDateString('es-PE',{weekday:'long',day:'numeric',month:'long'});
@@ -694,7 +697,7 @@ function renderDashboard(){
   var labels=serie.map(function(s,i){var x=16+step*i;return '<text x="'+Math.round(x)+'" y="120" text-anchor="middle" fill="var(--chartlabel)" style="font-size:8.5px">'+s.lb+'</text>'}).join('');
   var last=pts[pts.length-1];
   h+='<div class="charts">';
-  h+='<div class="card fade"><div class="chead"><div><div class="ct">Ingresos del año</div><div class="cs">Últimos 6 meses · órdenes de compra</div></div></div>'+
+  h+='<div class="card fade"><div class="chead"><div><div class="ct">Ventas confirmadas del año</div><div class="cs">Últimos 6 meses · OC recibidas</div></div></div>'+
      '<svg viewBox="0 0 340 130" style="width:100%;height:150px;display:block;overflow:visible"><defs><linearGradient id="af" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#0ea5e9" stop-opacity=".22"/><stop offset="100%" stop-color="#0ea5e9" stop-opacity="0"/></linearGradient></defs>'+
      '<line x1="0" y1="24" x2="340" y2="24" stroke="var(--chartgrid)" stroke-dasharray="3 5"/><line x1="0" y1="62" x2="340" y2="62" stroke="var(--chartgrid)" stroke-dasharray="3 5"/><line x1="0" y1="100" x2="340" y2="100" stroke="var(--chartgrid)" stroke-dasharray="3 5"/>'+
      '<path d="'+area+'" fill="url(#af)"/><path d="'+line+'" fill="none" stroke="#0ea5e9" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>'+
@@ -1050,7 +1053,86 @@ function openProducto(key){
   h+='</tbody></table></div></div>';
   $('content').innerHTML=h;
 }
+/* ===== Módulo: Órdenes de Compra Recibidas (ventas confirmadas: Estado / B2B) ===== */
+var OCREC=[];
+function ocrecKey(){return 'sigma_ocrec_'+(EMP?EMP.id:'x')}
+function loadOCREC(){try{OCREC=JSON.parse(localStorage.getItem(ocrecKey())||'[]')}catch(e){OCREC=[]}}
+function saveOCREC(){try{localStorage.setItem(ocrecKey(),JSON.stringify(OCREC))}catch(e){}cloudSyncPush()}
+function ocrecTotal(){return OCREC.reduce(function(s,o){return s+(+o.monto||0)},0)}
+function renderOCRecibidas(){
+  loadOCREC();
+  var h='<div class="pmod-head fade"><div><h1 style="font-size:23px;font-weight:700;letter-spacing:-.6px">Órdenes de Compra Recibidas</h1>'+
+    '<div style="font-size:13px;color:var(--tmuted);margin-top:4px">Ventas confirmadas de clientes y del Estado · '+(EMP?EMP.nombre:'')+'</div></div>'+
+    '<button class="btn-new" onclick="toggleOcrecForm()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" style="width:13px;height:13px"><path d="M12 5v14M5 12h14"/></svg>Nueva OC recibida</button></div>';
+  /* resumen */
+  h+='<div class="kpis fade" style="margin-bottom:16px"><div class="kpi"><div class="top"><div class="kic">'+icon('cart')+'</div></div><div class="val mono">'+fmtMonto(ocrecTotal())+'</div><div class="lab">Total ventas confirmadas</div></div>'+
+     '<div class="kpi"><div class="top"><div class="kic">'+icon('check')+'</div></div><div class="val mono">'+OCREC.length+'</div><div class="lab">Órdenes recibidas</div></div></div>';
+  /* formulario (oculto) */
+  h+='<div id="ocrecForm" class="card fade" style="display:none;margin-bottom:16px">'+
+     '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px"><div class="ct" style="font-weight:600">Registrar OC recibida</div>'+
+     '<label class="aibtn" style="cursor:pointer">'+icon('bolt')+' Cargar OC del cliente (IA)<input type="file" accept="application/pdf,image/*" style="display:none" onchange="ocrecAI(this.files[0])"></label></div>'+
+     '<div id="ocrecAiSt" style="font-size:11.5px;color:var(--tmuted);margin-bottom:10px"></div>'+
+     '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">'+
+       ocrecField('ocr_num','N° de OC','Ej: 0001-2026')+
+       ocrecField('ocr_cli','Cliente / Entidad','Razón social')+
+       ocrecField('ocr_ruc','RUC','11 dígitos')+
+       ocrecField('ocr_fecha','Fecha','',(new Date()).toISOString().slice(0,10),'date')+
+       ocrecField('ocr_monto','Monto (S/)','0.00','','number')+
+       ocrecSelect('ocr_rubro','Rubro',[['publico','Estado (público)'],['privado','Privado / B2B']])+
+       ocrecField('ocr_proy','Proyecto (opcional)','Nombre del proyecto')+
+     '</div>'+
+     '<div style="margin-top:12px;display:flex;gap:8px"><button class="btn-new" onclick="addOCRec()">Guardar OC recibida</button>'+
+     '<button class="aibtn" onclick="toggleOcrecForm(true)">Cancelar</button></div></div>';
+  /* lista */
+  if(!OCREC.length){
+    h+='<div class="empty fade"><div class="ei">'+icon('cart',1.5)+'</div><div style="font-size:15px;font-weight:600;color:var(--tprimary);margin-bottom:6px">Aún no hay OC recibidas</div><div style="font-size:13px;max-width:430px;margin:0 auto;line-height:1.6">Registra aquí las órdenes de compra que te emiten tus clientes o el Estado. Cada una es una <b>venta confirmada</b> y suma a tus ingresos. Puedes cargar el PDF y la IA extrae los datos.</div></div>';
+  } else {
+    h+='<div class="card fade"><div class="ptable-wrap"><table class="ptable"><thead><tr><th>N° OC</th><th>Cliente</th><th>Rubro</th><th>Monto</th><th>Proyecto</th><th>Fecha</th><th></th></tr></thead><tbody>';
+    OCREC.slice().sort(function(a,b){return (b.fecha||'').localeCompare(a.fecha||'')}).forEach(function(o){
+      h+='<tr><td class="mono">'+esc(o.num||'—')+'</td><td>'+esc(o.cliente||'—')+(o.ruc?'<div class="pdl">RUC '+esc(o.ruc)+'</div>':'')+'</td>'+
+        '<td><span class="badge" style="color:'+(o.rubro==='publico'?'#0ea5e9':'#8b5cf6')+';background:'+bg(o.rubro==='publico'?'#0ea5e9':'#8b5cf6',.14)+'">'+(o.rubro==='publico'?'Estado':'Privado')+'</span></td>'+
+        '<td class="mono" style="font-weight:600">'+fmtMonto(o.monto)+'</td><td style="color:var(--tmuted)">'+esc(o.proyecto||'—')+'</td><td style="color:var(--tmuted)">'+esc(o.fecha||'—')+'</td>'+
+        '<td><button onclick="delOCRec(\''+o.id+'\')" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:16px">×</button></td></tr>';
+    });
+    h+='</tbody></table></div></div>';
+  }
+  $('content').innerHTML=h;
+}
+function ocrecField(id,lb,ph,val,type){return '<div><div style="font-size:9.5px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--tmuted);margin-bottom:3px">'+lb+'</div><input id="'+id+'" type="'+(type||'text')+'" placeholder="'+(ph||'')+'" value="'+(val||'')+'" style="width:100%;padding:8px 10px;border:1px solid var(--bd,#e2e8f0);border-radius:8px;font-size:13px;background:var(--input,#fff);color:var(--tprimary)"></div>';}
+function ocrecSelect(id,lb,opts){var o=opts.map(function(x){return '<option value="'+x[0]+'">'+x[1]+'</option>'}).join('');return '<div><div style="font-size:9.5px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--tmuted);margin-bottom:3px">'+lb+'</div><select id="'+id+'" style="width:100%;padding:8px 10px;border:1px solid var(--bd,#e2e8f0);border-radius:8px;font-size:13px;background:var(--input,#fff);color:var(--tprimary)">'+o+'</select></div>';}
+function toggleOcrecForm(hide){var f=$('ocrecForm');if(!f)return;f.style.display=(hide||f.style.display!=='none')?'none':'block';}
+function _v(id){var e=$(id);return e?e.value.trim():'';}
+function addOCRec(){
+  var cli=_v('ocr_cli'); if(!cli){toast('Falta el cliente');return;}
+  OCREC.push({id:'OR'+Date.now(),num:_v('ocr_num'),cliente:cli,ruc:_v('ocr_ruc'),fecha:_v('ocr_fecha'),monto:parseFloat(_v('ocr_monto'))||0,proyecto:_v('ocr_proy'),rubro:_v('ocr_rubro')||'publico',estado:'recibida',items:[]});
+  saveOCREC();toast('OC recibida registrada');renderOCRecibidas();
+}
+function delOCRec(id){if(!confirm('¿Eliminar esta OC recibida?'))return;OCREC=OCREC.filter(function(o){return o.id!==id});saveOCREC();renderOCRecibidas();}
+function ocrecAI(file){
+  if(!file)return; var st=$('ocrecAiSt'); if(st){st.textContent='Leyendo y analizando con IA…';st.style.color='var(--tmuted)';}
+  var rd=new FileReader();
+  rd.onload=function(e){
+    var b64=String(e.target.result).split(',')[1];
+    fetch('/api/gemini',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+      prompt:'Eres un extractor de datos de ÓRDENES DE COMPRA emitidas por un cliente o entidad del Estado peruano hacia un proveedor. Devuelve SOLO un JSON válido sin markdown: {"num":"numero de la OC","cliente":"razon social de quien emite la OC (la entidad/cliente)","ruc":"RUC de 11 digitos del cliente","fecha":"YYYY-MM-DD","monto":numero_total,"rubro":"publico si es entidad del Estado o privado si es empresa","items":[{"desc":"descripcion","qty":numero,"precio":numero}]}. Extrae el monto TOTAL. Si un dato no existe usa "" o 0.',
+      imageBase64:b64, mimeType:file.type||'application/pdf'
+    })}).then(function(r){return r.json()}).then(function(d){
+      if(d&&d.error){if(st){st.textContent='Error IA: '+((d.error.message||JSON.stringify(d.error))+'').slice(0,80);st.style.color='#ef4444';}return;}
+      var tx=''; if(d&&d.candidates&&d.candidates[0]&&d.candidates[0].content&&d.candidates[0].content.parts)tx=d.candidates[0].content.parts.map(function(p){return p.text||''}).join('');
+      var m=tx.replace(/```json/g,'').replace(/```/g,'').match(/\{[\s\S]*\}/);
+      if(!m){if(st){st.textContent='No se pudo leer la OC. Llena los datos manualmente.';st.style.color='#f59e0b';}return;}
+      try{var o=JSON.parse(m[0]);
+        if($('ocr_num'))$('ocr_num').value=o.num||''; if($('ocr_cli'))$('ocr_cli').value=o.cliente||''; if($('ocr_ruc'))$('ocr_ruc').value=(o.ruc||'').replace(/\D/g,'');
+        if(o.fecha&&$('ocr_fecha'))$('ocr_fecha').value=o.fecha; if($('ocr_monto'))$('ocr_monto').value=o.monto||0;
+        if($('ocr_rubro')&&o.rubro)$('ocr_rubro').value=(o.rubro+'').indexOf('priv')>=0?'privado':'publico';
+        if(st){st.textContent='✓ Datos extraídos. Revisa y guarda.';st.style.color='#16a34a';}
+      }catch(e2){if(st){st.textContent='Error al leer la respuesta de la IA.';st.style.color='#ef4444';}}
+    }).catch(function(){if(st){st.textContent='Error de conexión con la IA.';st.style.color='#ef4444';}});
+  };
+  rd.readAsDataURL(file);
+}
 /* ===== Módulo: Proyectos Públicos < 8 UIT ===== */
+
 
 
 var UIT=5350; /* S/ referencial (configurable) */
@@ -1144,6 +1226,7 @@ function cloudSyncPush(){
     payload['sproy_'+EMP.id]=JSON.parse(localStorage.getItem(proyKey())||'[]');
     payload['sprov_'+EMP.id]=JSON.parse(localStorage.getItem(provKey())||'[]');
     payload['scat_'+EMP.id]=JSON.parse(localStorage.getItem(catKey())||'[]');
+    payload['ocrec_'+EMP.id]=JSON.parse(localStorage.getItem(ocrecKey())||'[]');
     fetch('/api/data',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
   }catch(e){}
 }
@@ -1154,6 +1237,7 @@ function cloudSyncPull(cb){
       if(d&&d['sproy_'+EMP.id])localStorage.setItem(proyKey(),JSON.stringify(d['sproy_'+EMP.id]));
       if(d&&d['sprov_'+EMP.id])localStorage.setItem(provKey(),JSON.stringify(d['sprov_'+EMP.id]));
       if(d&&d['scat_'+EMP.id])localStorage.setItem(catKey(),JSON.stringify(d['scat_'+EMP.id]));
+      if(d&&d['ocrec_'+EMP.id])localStorage.setItem(ocrecKey(),JSON.stringify(d['ocrec_'+EMP.id]));
     }catch(e){}
     if(cb)cb();
   }).catch(function(){if(cb)cb();});
