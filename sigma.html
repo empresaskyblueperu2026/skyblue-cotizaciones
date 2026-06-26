@@ -624,6 +624,7 @@ function selectEmpresa(e){
   var idx=EMPRESAS.indexOf(e),col=e.color_primario&&e.color_primario!=='#0d3b6e'?e.color_primario:accentFor(idx<0?0:idx);
   $('topcav').textContent=initials(e.nombre);$('topcav').style.background=col;$('topcnm').textContent=e.nombre;
   ACTIVE='dashboard';renderNav();renderDashboard();renderAgents();renderActivity();
+  initAgente();
   cloudSyncPull(function(){refreshDash();});
 }
 function goPortal(){$('app').style.display='none';$('portal').style.display='flex'}
@@ -1228,7 +1229,59 @@ function factAI(file){
     }).catch(function(){if(st){st.textContent='Error de conexión.';st.style.color='#ef4444';}});
   };rd.readAsDataURL(file);
 }
+/* ===== Agente IA (analiza el módulo actual y sugiere mejoras) ===== */
+function initAgente(){
+  if(document.getElementById('_agbtn'))return;
+  var b=document.createElement('button'); b.id='_agbtn';
+  b.title='Agente IA — analiza este módulo y sugiere mejoras';
+  b.style.cssText='position:fixed;right:20px;bottom:20px;z-index:900;display:flex;align-items:center;gap:8px;background:linear-gradient(135deg,#0ea5e9,#0d3b6e);color:#fff;border:none;border-radius:30px;padding:12px 18px;font-size:13px;font-weight:600;cursor:pointer;box-shadow:0 6px 20px rgba(13,59,110,.35)';
+  b.innerHTML=icon('bolt')+'<span>Agente IA</span>';
+  b.onclick=agenteAnalizar;
+  document.body.appendChild(b);
+  var m=document.createElement('div'); m.id='_agmodal';
+  m.style.cssText='position:fixed;inset:0;z-index:950;background:rgba(15,23,42,.5);display:none;align-items:center;justify-content:center;padding:18px';
+  m.innerHTML='<div style="background:var(--card,#fff);color:var(--tprimary,#0f172a);max-width:560px;width:100%;max-height:80vh;overflow:auto;border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,.3)">'+
+    '<div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--bd,#e2e8f0)"><div style="font-weight:700;font-size:15px;display:flex;align-items:center;gap:8px">'+icon('bolt')+' Agente IA <span id="_agmod" style="font-size:11px;color:var(--tmuted);font-weight:500"></span></div><button onclick="document.getElementById(\'_agmodal\').style.display=\'none\'" style="background:none;border:none;font-size:22px;color:var(--tmuted);cursor:pointer;line-height:1">×</button></div>'+
+    '<div id="_agbody" style="padding:18px 20px;font-size:13.5px;line-height:1.7"></div></div>';
+  document.body.appendChild(m);
+}
+function _agSum(a,k){return (a||[]).reduce(function(s,x){return s+(+x[k]||0)},0)}
+function agenteCtx(){
+  var mod=ACTIVE;
+  try{loadProy()}catch(e){} try{loadOCREC()}catch(e){} try{loadFact()}catch(e){} try{loadCotStat()}catch(e){}
+  var hist=DASH.hist||[], ocrec=OCREC||[], fact=FACT||[], cot=COTSTAT||{};
+  var ctx={
+    modulo:mod, empresa:EMP?EMP.nombre:'',
+    cotizaciones:hist.length,
+    cotizaciones_aceptadas:Object.keys(cot).filter(function(k){return cot[k]==='aceptada'}).length,
+    oc_recibidas:{cantidad:ocrec.length,monto_total:_agSum(ocrec,'monto')},
+    facturas:{cantidad:fact.length,facturado:_agSum(fact,'monto'),cobrado:fact.filter(function(x){return x.estado==='pagada'}).reduce(function(s,x){return s+(+x.monto||0)},0)},
+    proyectos:(PROY||[]).map(function(p){var dl=daysLeft(p.fecha);return {nombre:p.nombre,entidad:p.entidad,monto:p.monto,plazo_dias:dl}}),
+  };
+  if(mod==='clientes'){ try{ctx.clientes=cliAgg().slice(0,15).map(function(c){return {cliente:c.nombre,total:c.total,cotizaciones:c.nCot}})}catch(e){} }
+  if(mod==='productos'){ try{ctx.productos=prodAgg().slice(0,15).map(function(p){return {producto:p.desc,venta_prom:Math.round(p.avgVenta),compra_prom:Math.round(p.avgCompra),margen_pct:p.margen}})}catch(e){} }
+  if(mod==='ocrec'){ ctx.detalle_oc=ocrec.slice(0,15).map(function(o){return {cliente:o.cliente,monto:o.monto,rubro:o.rubro,fecha:o.fecha}}); }
+  if(mod==='facturacion'){ ctx.detalle_fact=fact.slice(0,15).map(function(x){return {cliente:x.cliente,monto:x.monto,estado:x.estado,fecha:x.fecha}}); }
+  return JSON.stringify(ctx);
+}
+function agenteAnalizar(){
+  var m=document.getElementById('_agmodal'); if(!m){initAgente();m=document.getElementById('_agmodal');}
+  document.getElementById('_agmod').textContent='· '+ACTIVE;
+  var body=document.getElementById('_agbody');
+  body.innerHTML='<div style="color:var(--tmuted)">Analizando los datos de este módulo con IA…</div>';
+  m.style.display='flex';
+  var prompt='Eres un asesor experto en negocios, contrataciones con el Estado peruano (Ley 32069 / OSCE / SEACE) y mejora de procesos, trabajando para esta empresa que vende al sector publico y privado (B2B y retail). Analiza estos datos del modulo actual de su ERP y entrega: (1) un diagnostico muy breve (1-2 lineas), (2) entre 3 y 5 sugerencias ACCIONABLES y concretas para mejorar su forma de trabajo, vender mas, mejorar margen o reducir riesgos/plazos. Si hay pocos datos, sugiere como aprovechar mejor el modulo. Responde en espanol, claro y conciso, usando vinetas que empiecen con "- ". No uses markdown de encabezados ni asteriscos. Datos del modulo:\n'+agenteCtx();
+  fetch('/api/gemini',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt:prompt})})
+    .then(function(r){return r.json()}).then(function(d){
+      if(d&&d.error){body.innerHTML='<div style="color:#ef4444">No se pudo analizar: '+esc((d.error.message||'')+'').slice(0,120)+'</div>';return;}
+      var tx='';if(d&&d.candidates&&d.candidates[0]&&d.candidates[0].content&&d.candidates[0].content.parts)tx=d.candidates[0].content.parts.map(function(p){return p.text||''}).join('');
+      if(!tx){body.innerHTML='<div style="color:var(--tmuted)">La IA no devolvió sugerencias. Intenta de nuevo.</div>';return;}
+      var safe=esc(tx).replace(/^- (.*)$/gm,'<div style="display:flex;gap:8px;margin:6px 0"><span style="color:#0ea5e9">•</span><span>$1</span></div>').replace(/\n{2,}/g,'<br>').replace(/\n/g,'<br>');
+      body.innerHTML=safe+'<div style="margin-top:14px;font-size:10.5px;color:var(--tmuted);border-top:1px solid var(--bd,#eef2f7);padding-top:8px">Sugerencias generadas por IA (Gemini) a partir de tus datos. Revisa antes de aplicar.</div>';
+    }).catch(function(){body.innerHTML='<div style="color:#ef4444">Error de conexión con la IA.</div>';});
+}
 /* ===== Módulo: Proyectos Públicos < 8 UIT ===== */
+
 
 
 
