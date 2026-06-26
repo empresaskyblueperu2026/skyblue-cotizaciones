@@ -591,6 +591,7 @@ var NAV=[
   {id:'clientes',ic:'dollar',lb:'Clientes'},
   {id:'proveedores',ic:'building',lb:'Proveedores'},
   {id:'productos',ic:'trending',lb:'Productos'},
+  {id:'traza',ic:'search',lb:'Trazabilidad'},
   {id:'catalogo',ic:'layers',lb:'Catálogo',tab:'cat'},
   {cat:'Operaciones'},
   {id:'logistica',ic:'truck',lb:'Logística',soon:true},
@@ -615,7 +616,7 @@ function navClick(it){
   toggleMenu(false);
   if(it.tab){window.location.href='/cotizador?tab='+it.tab;return}
   ACTIVE=it.id;renderNav();
-  if(it.id==='dashboard')refreshDash();else if(it.id==='proyectos')renderProyectos();else if(it.id==='boveda')renderBoveda();else if(it.id==='proveedores')renderProveedores();else if(it.id==='clientes')renderClientes();else if(it.id==='productos')renderProductos();else if(it.id==='ocrec')renderOCRecibidas();else if(it.id==='segcot')renderSegCot();else if(it.id==='facturacion')renderFacturacion();else if(it.id==='cobranza')renderCobranza();else renderSoon(it);
+  if(it.id==='dashboard')refreshDash();else if(it.id==='proyectos')renderProyectos();else if(it.id==='boveda')renderBoveda();else if(it.id==='proveedores')renderProveedores();else if(it.id==='clientes')renderClientes();else if(it.id==='productos')renderProductos();else if(it.id==='ocrec')renderOCRecibidas();else if(it.id==='segcot')renderSegCot();else if(it.id==='facturacion')renderFacturacion();else if(it.id==='cobranza')renderCobranza();else if(it.id==='traza')renderTraza();else renderSoon(it);
 }
 
 function selectEmpresa(e){
@@ -1364,12 +1365,13 @@ function agenteGuardarNota(){
 }
 /* ===== Módulo: Cobranza (seguimiento de pagos pendientes por vencimiento) ===== */
 function cobranzaMarcar(id){loadFact();FACT.forEach(function(x){if(x.id===id)x.estado='pagada';});saveFact();renderCobranza();}
+function cobranzaRecordar(){toast('Enviando recordatorio por Telegram…');fetch('/api/alertas/run').then(function(r){return r.json()}).then(function(d){toast(d&&d.ok?('Recordatorio enviado a Telegram ('+(d.enviadas||0)+' alertas)'):'No se pudo enviar');}).catch(function(){toast('Error de conexión');});}
 function renderCobranza(){
   loadFact();
   var pend=FACT.filter(function(x){return x.estado!=='pagada'});
   var pc={'S/':0,'US$':0}, ven={'S/':0,'US$':0}, nPorVencer=0, nVencidas=0;
   pend.forEach(function(x){var c=curOf(x.moneda);var m=+x.monto||0;pc[c]+=m;var dl=daysLeft(x.fecha_venc);if(x.fecha_venc&&dl<0){ven[c]+=m;nVencidas++;}else if(x.fecha_venc&&dl<=7){nPorVencer++;}});
-  var h='<div class="pmod-head fade"><div><h1 style="font-size:23px;font-weight:700;letter-spacing:-.6px">Cobranza</h1><div style="font-size:13px;color:var(--tmuted);margin-top:4px">Pagos pendientes y vencimientos · '+(EMP?EMP.nombre:'')+'</div></div></div>';
+  var h='<div class="pmod-head fade"><div><h1 style="font-size:23px;font-weight:700;letter-spacing:-.6px">Cobranza</h1><div style="font-size:13px;color:var(--tmuted);margin-top:4px">Pagos pendientes y vencimientos · '+(EMP?EMP.nombre:'')+'</div></div><button class="btn-new" onclick="cobranzaRecordar()">'+icon('send')+'Enviar recordatorio (Telegram)</button></div>';
   h+='<div class="kpis fade" style="margin-bottom:16px"><div class="kpi"><div class="top"><div class="kic">'+icon('wallet')+'</div></div><div class="val mono" style="font-size:17px;color:#f59e0b">'+_dual(pc['S/'],pc['US$'])+'</div><div class="lab">Total por cobrar</div></div>'+
      '<div class="kpi"><div class="top"><div class="kic">'+icon('clock')+'</div></div><div class="val mono" style="font-size:17px;color:#ef4444">'+_dual(ven['S/'],ven['US$'])+'</div><div class="lab">Vencido ('+nVencidas+')</div></div>'+
      '<div class="kpi"><div class="val mono">'+nPorVencer+'</div><div class="lab">Por vencer (7 días)</div></div></div>';
@@ -1393,7 +1395,46 @@ function renderCobranza(){
   h+='</tbody></table></div></div>';
   $('content').innerHTML=h;
 }
+/* ===== Módulo: Trazabilidad (hilo cotización → OC recibida → factura → cobro, por cliente) ===== */
+function _clk(n,ruc){return (ruc||'').trim()||((n||'').trim().toLowerCase());}
+function trazAgg(){
+  var map={};
+  function get(name,ruc){var k=_clk(name,ruc);if(!k)return null;if(!map[k])map[k]={key:k,nombre:name||'(sin cliente)',ruc:ruc||'',cot:0,cotM:0,oc:0,ocM:0,fact:0,factM:0,cobr:0,porc:0};return map[k];}
+  (DASH.hist||[]).forEach(function(c){if(EMP&&c.empresaId&&c.empresaId!==EMP.id)return;var m=get((c.cli&&c.cli.n)||'',(c.cli&&c.cli.ruc)||'');if(!m)return;m.cot++;m.cotM+=(+c.tot||0);if(c.cli&&c.cli.n&&c.cli.n.length>m.nombre.length)m.nombre=c.cli.n;});
+  (OCREC||[]).forEach(function(o){var m=get(o.cliente||'',o.ruc||'');if(!m)return;m.oc++;m.ocM+=(+o.monto||0);if(o.cliente&&o.cliente.length>m.nombre.length)m.nombre=o.cliente;});
+  (FACT||[]).forEach(function(x){var m=get(x.cliente||'',x.ruc||'');if(!m)return;m.fact++;m.factM+=(+x.monto||0);if(x.estado==='pagada')m.cobr+=(+x.monto||0);else m.porc+=(+x.monto||0);});
+  return Object.keys(map).map(function(k){return map[k]}).sort(function(a,b){return (b.cotM+b.ocM+b.factM)-(a.cotM+a.ocM+a.factM)});
+}
+function _trzStage(lb,n,monto,col){return '<div style="flex:1;min-width:0;text-align:center"><div style="font-size:10px;color:var(--tmuted);text-transform:uppercase;letter-spacing:.5px">'+lb+'</div><div style="font-size:20px;font-weight:700;color:'+col+'">'+n+'</div><div style="font-size:11px;color:var(--tmuted)" class="mono">'+(monto?fmtMonto(monto):'—')+'</div></div>';}
+function _trzArrow(){return '<div style="color:var(--tmuted);font-size:18px;align-self:center;padding:0 2px">→</div>';}
+function renderTraza(){
+  $('content').innerHTML='<div class="pmod-head fade"><div><h1 style="font-size:23px;font-weight:700">Trazabilidad</h1><div style="font-size:13px;color:var(--tmuted);margin-top:4px">Cargando…</div></div></div>';
+  loadOCREC(); loadFact();
+  loadDash(function(){
+    var list=trazAgg();
+    var h='<div class="pmod-head fade"><div><h1 style="font-size:23px;font-weight:700;letter-spacing:-.6px">Trazabilidad por cliente</h1><div style="font-size:13px;color:var(--tmuted);margin-top:4px">El recorrido de cada cliente: cotización → OC recibida → factura → cobro · '+(EMP?EMP.nombre:'')+'</div></div></div>';
+    if(!list.length){
+      h+='<div class="empty fade"><div class="ei">'+icon('search',1.5)+'</div><div style="font-size:15px;font-weight:600;color:var(--tprimary);margin-bottom:6px">Aún no hay movimientos</div><div style="font-size:13px;max-width:430px;margin:0 auto;line-height:1.6">Cuando registres cotizaciones, OC recibidas y facturas, aquí verás el hilo completo de cada cliente y dónde está cada venta.</div></div>';
+      $('content').innerHTML=h; return;
+    }
+    h+='<div style="display:flex;flex-direction:column;gap:12px" class="fade">';
+    list.forEach(function(m){
+      var pend=m.factM-m.cobr;
+      h+='<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px"><div><div style="font-weight:600;font-size:14px">'+esc(m.nombre)+'</div>'+(m.ruc?'<div style="font-size:11px;color:var(--tmuted)">RUC '+esc(m.ruc)+'</div>':'')+'</div>'+
+        (m.porc>0?'<span class="badge" style="color:#f59e0b;background:'+bg('#f59e0b',.14)+'">Por cobrar '+fmtMonto(m.porc)+'</span>':(m.cobr>0?'<span class="badge" style="color:#16a34a;background:'+bg('#16a34a',.14)+'">Al día</span>':''))+'</div>'+
+        '<div style="display:flex;align-items:stretch;gap:4px;background:var(--input,#f8fafc);border-radius:12px;padding:12px 8px">'+
+        _trzStage('Cotizaciones',m.cot,m.cotM,'#14b8a6')+_trzArrow()+
+        _trzStage('OC Recibidas',m.oc,m.ocM,'#0ea5e9')+_trzArrow()+
+        _trzStage('Facturado',m.fact,m.factM,'#06b6d4')+_trzArrow()+
+        _trzStage('Cobrado','',m.cobr,'#16a34a')+
+        '</div></div>';
+    });
+    h+='</div><div style="font-size:11px;color:var(--tmuted);margin-top:10px">Montos referenciales (si manejas soles y dólares, revisa cada documento en su módulo).</div>';
+    $('content').innerHTML=h;
+  });
+}
 /* ===== Módulo: Proyectos Públicos < 8 UIT ===== */
+
 
 
 
