@@ -168,13 +168,20 @@ function _daysLeft(f){ if(!f)return null; var d=Math.ceil((new Date(f+'T23:59:59
 function buildAlerts(data){
   var out=[]; if(!data)return out;
   Object.keys(data).forEach(function(key){
-    if(key.indexOf('sproy_')!==0)return;            // proyectos por empresa
     var arr=data[key]; if(!Array.isArray(arr))return;
-    arr.forEach(function(p){
-      var dias=_daysLeft(p.fecha);
-      if(dias===null)return;
-      if(dias<=7){ out.push({nombre:p.n||p.nombre||'(proyecto)',fecha:p.fecha,dias:dias,cliente:p.cl||p.entidad||''}); }
-    });
+    if(key.indexOf('sproy_')===0){            // proyectos: plazo de entrega
+      arr.forEach(function(p){
+        var dias=_daysLeft(p.fecha); if(dias===null)return;
+        if(dias<=7){ out.push({nombre:'Proyecto: '+(p.n||p.nombre||''),fecha:p.fecha,dias:dias,cliente:p.cl||p.entidad||''}); }
+      });
+    } else if(key.indexOf('fact_')===0){      // facturas por cobrar: vencimiento
+      arr.forEach(function(x){
+        if(x.estado==='pagada'||!x.fecha_venc)return;
+        var dias=_daysLeft(x.fecha_venc); if(dias===null||dias>7)return;
+        var mon=(x.moneda==='US$')?'US$ ':'S/ ';
+        out.push({nombre:'Cobro factura '+(x.num||'')+' ('+mon+(x.monto||0)+')',fecha:x.fecha_venc,dias:dias,cliente:x.cliente||''});
+      });
+    }
   });
   out.sort(function(a,b){return a.dias-b.dias;});
   return out;

@@ -595,7 +595,7 @@ var NAV=[
   {cat:'Operaciones'},
   {id:'logistica',ic:'truck',lb:'Logística',soon:true},
   {id:'facturacion',ic:'card',lb:'Facturación'},
-  {id:'cobranza',ic:'wallet',lb:'Cobranza',soon:true},
+  {id:'cobranza',ic:'wallet',lb:'Cobranza'},
   {cat:'Gestión'},
   {id:'boveda',ic:'layers',lb:'Bóveda de Empresa'},
   {id:'historial',ic:'clock',lb:'Historial',tab:'hist'},
@@ -615,7 +615,7 @@ function navClick(it){
   toggleMenu(false);
   if(it.tab){window.location.href='/cotizador?tab='+it.tab;return}
   ACTIVE=it.id;renderNav();
-  if(it.id==='dashboard')refreshDash();else if(it.id==='proyectos')renderProyectos();else if(it.id==='boveda')renderBoveda();else if(it.id==='proveedores')renderProveedores();else if(it.id==='clientes')renderClientes();else if(it.id==='productos')renderProductos();else if(it.id==='ocrec')renderOCRecibidas();else if(it.id==='segcot')renderSegCot();else if(it.id==='facturacion')renderFacturacion();else renderSoon(it);
+  if(it.id==='dashboard')refreshDash();else if(it.id==='proyectos')renderProyectos();else if(it.id==='boveda')renderBoveda();else if(it.id==='proveedores')renderProveedores();else if(it.id==='clientes')renderClientes();else if(it.id==='productos')renderProductos();else if(it.id==='ocrec')renderOCRecibidas();else if(it.id==='segcot')renderSegCot();else if(it.id==='facturacion')renderFacturacion();else if(it.id==='cobranza')renderCobranza();else renderSoon(it);
 }
 
 function selectEmpresa(e){
@@ -1362,7 +1362,39 @@ function agenteGuardarNota(){
       else{if(st){st.textContent='No se pudo guardar. Revisa tu conexión.';st.style.color='#ef4444';}}
     }).catch(function(){if(st){st.textContent='Error de conexión.';st.style.color='#ef4444';}});
 }
+/* ===== Módulo: Cobranza (seguimiento de pagos pendientes por vencimiento) ===== */
+function cobranzaMarcar(id){loadFact();FACT.forEach(function(x){if(x.id===id)x.estado='pagada';});saveFact();renderCobranza();}
+function renderCobranza(){
+  loadFact();
+  var pend=FACT.filter(function(x){return x.estado!=='pagada'});
+  var pc={'S/':0,'US$':0}, ven={'S/':0,'US$':0}, nPorVencer=0, nVencidas=0;
+  pend.forEach(function(x){var c=curOf(x.moneda);var m=+x.monto||0;pc[c]+=m;var dl=daysLeft(x.fecha_venc);if(x.fecha_venc&&dl<0){ven[c]+=m;nVencidas++;}else if(x.fecha_venc&&dl<=7){nPorVencer++;}});
+  var h='<div class="pmod-head fade"><div><h1 style="font-size:23px;font-weight:700;letter-spacing:-.6px">Cobranza</h1><div style="font-size:13px;color:var(--tmuted);margin-top:4px">Pagos pendientes y vencimientos · '+(EMP?EMP.nombre:'')+'</div></div></div>';
+  h+='<div class="kpis fade" style="margin-bottom:16px"><div class="kpi"><div class="top"><div class="kic">'+icon('wallet')+'</div></div><div class="val mono" style="font-size:17px;color:#f59e0b">'+_dual(pc['S/'],pc['US$'])+'</div><div class="lab">Total por cobrar</div></div>'+
+     '<div class="kpi"><div class="top"><div class="kic">'+icon('clock')+'</div></div><div class="val mono" style="font-size:17px;color:#ef4444">'+_dual(ven['S/'],ven['US$'])+'</div><div class="lab">Vencido ('+nVencidas+')</div></div>'+
+     '<div class="kpi"><div class="val mono">'+nPorVencer+'</div><div class="lab">Por vencer (7 días)</div></div></div>';
+  if(!pend.length){
+    h+='<div class="empty fade"><div class="ei">'+icon('check',1.5)+'</div><div style="font-size:15px;font-weight:600;color:var(--tprimary);margin-bottom:6px">¡Sin pagos pendientes!</div><div style="font-size:13px;max-width:430px;margin:0 auto;line-height:1.6">Cuando emitas facturas a crédito aparecerán aquí ordenadas por vencimiento. Recibirás aviso por Telegram de las que están por vencer o vencidas.</div></div>';
+    $('content').innerHTML=h; return;
+  }
+  h+='<div class="card fade"><div class="ptable-wrap"><table class="ptable"><thead><tr><th>Comprobante</th><th>Cliente</th><th>Monto</th><th>Vence</th><th>Estado</th><th></th></tr></thead><tbody>';
+  pend.slice().sort(function(a,b){return (a.fecha_venc||'9999').localeCompare(b.fecha_venc||'9999')}).forEach(function(x){
+    var dl=x.fecha_venc?daysLeft(x.fecha_venc):null;
+    var badge,col;
+    if(dl===null){badge='Contado / sin fecha';col='#94a3b8';}
+    else if(dl<0){badge='Vencido hace '+Math.abs(dl)+'d';col='#ef4444';}
+    else if(dl<=7){badge='Vence en '+dl+'d';col='#f59e0b';}
+    else{badge='Vence en '+dl+'d';col='#16a34a';}
+    h+='<tr><td class="mono">'+esc(x.num||'—')+'<div class="pdl">'+(x.tipo==='boleta'?'Boleta':'Factura')+'</div></td><td>'+esc(x.cliente||'—')+'</td><td class="mono" style="font-weight:600">'+fmtMon(x.monto,x.moneda)+'</td>'+
+      '<td>'+esc(x.fecha_venc||'—')+'<div><span class="badge" style="color:'+col+';background:'+bg(col,.14)+'">'+badge+'</span></div></td>'+
+      '<td style="font-size:11.5px;color:var(--tmuted)">'+(x.forma_pago==='credito'?('Crédito '+(x.dias_credito||0)+'d'):'Contado')+'</td>'+
+      '<td><button class="aibtn" onclick="cobranzaMarcar(\''+x.id+'\')" style="padding:6px 10px;font-size:11.5px;border:1px solid '+bg('#16a34a',.4)+';color:#16a34a">Marcar cobrada</button></td></tr>';
+  });
+  h+='</tbody></table></div></div>';
+  $('content').innerHTML=h;
+}
 /* ===== Módulo: Proyectos Públicos < 8 UIT ===== */
+
 
 
 
