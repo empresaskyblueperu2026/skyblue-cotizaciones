@@ -103,8 +103,35 @@ app.post('/api/config',async function(req,res){
     if(b.usuario!=null)cfg.sunat[emp].usuario=String(b.usuario).slice(0,40);
     if(b.ose!=null)cfg.sunat[emp].ose=String(b.ose).slice(0,60);
     if(b.modo!=null)cfg.sunat[emp].modo=String(b.modo).slice(0,30);
-    await sbPutConfig(cfg);res.json({ok:true,sunat:cfg.sunat[emp]});
+    if(b.clientId!=null)cfg.sunat[emp].clientId=String(b.clientId).slice(0,120);
+    if(b.clientSecret!=null)cfg.sunat[emp].clientSecret=String(b.clientSecret).slice(0,200);
+    if(b.clave!=null)cfg.sunat[emp].clave=String(b.clave).slice(0,80);
+    await sbPutConfig(cfg);
+    var s=cfg.sunat[emp]; res.json({ok:true,sunat:{ruc:s.ruc,usuario:s.usuario,ose:s.ose,modo:s.modo,tieneApi:!!(s.clientId&&s.clientSecret&&s.clave)}});
   }catch(e){res.status(500).json({error:e.message});}
+});
+// ---- SUNAT API (OAuth2): token, validar comprobante, descarga/consulta ----
+async function sunatToken(c,scope){
+  if(!c||!c.clientId||!c.clientSecret||!c.ruc||!c.usuario||!c.clave)throw new Error('Faltan credenciales API SUNAT (Client ID, Client Secret, RUC, usuario y clave). Genéralas en Menú SOL.');
+  var body='grant_type=password&scope='+encodeURIComponent(scope||'https://api-cpe.sunat.gob.pe')+'&client_id='+encodeURIComponent(c.clientId)+'&client_secret='+encodeURIComponent(c.clientSecret)+'&username='+encodeURIComponent(c.ruc+c.usuario)+'&password='+encodeURIComponent(c.clave);
+  var r=await fetch('https://api-seguridad.sunat.gob.pe/v1/clientessol/'+encodeURIComponent(c.clientId)+'/oauth2/token/',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:body});
+  var t=await r.text();var d;try{d=JSON.parse(t);}catch(e){d={};}
+  if(!d.access_token)throw new Error('Token SUNAT: '+((d.error_description||d.error||('HTTP '+r.status))+'').slice(0,150));
+  return d.access_token;
+}
+function _sunatCfgFor(cfg,emp){return (cfg.sunat&&(cfg.sunat[emp]||cfg.sunat['default']))||{};}
+app.get('/api/sunat/test',async function(req,res){
+  if(!sbReady())return proxyCloud(req,res);
+  try{var cfg=await sbGetConfig();var c=_sunatCfgFor(cfg,req.query.emp||'default');var t=await sunatToken(c);res.json({ok:true,mensaje:'Conexión OK con SUNAT (token obtenido).'});}
+  catch(e){res.json({ok:false,error:e.message});}
+});
+app.get('/api/sunat/validar',async function(req,res){
+  if(!sbReady())return proxyCloud(req,res);
+  try{var cfg=await sbGetConfig();var c=_sunatCfgFor(cfg,req.query.emp||'default');var t=await sunatToken(c,'https://api.sunat.gob.pe');
+    var b={numRuc:c.ruc,codComp:req.query.tipo||'01',numeroSerie:req.query.serie||'',numero:req.query.numero||'',fechaEmision:req.query.fecha||'',monto:req.query.monto||''};
+    var r=await fetch('https://api.sunat.gob.pe/v1/contribuyente/contribuyentes/'+c.ruc+'/validarcomprobante',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+t},body:JSON.stringify(b)});
+    var d=await r.json();res.json(d);
+  }catch(e){res.json({ok:false,error:e.message});}
 });
 app.post('/api/aprendizaje',async function(req,res){
   if(!sbReady())return proxyCloud(req,res);
