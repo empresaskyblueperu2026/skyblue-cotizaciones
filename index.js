@@ -229,6 +229,39 @@ app.get('/api/backup/run',async function(req,res){
   if(!sbReady())return proxyCloud(req,res);
   try{ res.json(await runBackup(true)); }catch(e){ res.status(500).json({error:e.message}); }
 });
+
+// ---- SEACE: oportunidades 8 UIT (Vigente, La Libertad, que se pueden cotizar) ----
+async function seaceFetch(){
+  var anio=new Date().getFullYear();
+  var url='https://prod6.seace.gob.pe/v1/s8uit-services/buscadorpublico/contrataciones/buscador?page=1&page_size=50&anio='+anio+'&estado=2&codigo_departamento=13&campo_orden=fecha_publicacion&orden=desc';
+  var r=await fetch(url,{headers:{'Accept':'application/json','User-Agent':'Mozilla/5.0'}});
+  if(!r.ok)throw new Error('SEACE '+r.status);
+  var d=await r.json(); var arr=(d&&d.data)||[];
+  return arr.filter(function(x){return x.cotizar}).map(function(x){return {id:x.idContrato,codigo:x.desContratacion,objeto:x.nomObjetoContrato,desc:x.desObjetoContrato,entidad:x.nomEntidad,fechaFin:x.fecFinCotizacion,fechaPub:x.fecPublica,url:'https://prod6.seace.gob.pe/buscador-publico/contrataciones/'+x.idContrato};});
+}
+app.get('/api/seace',async function(req,res){ try{ var o=await seaceFetch(); res.json({total:o.length,oportunidades:o}); }catch(e){ res.status(502).json({error:e.message}); } });
+async function runSeaceDigest(slot){
+  try{
+    if(!sbReady())return; var cfg=await sbGetConfig(); var hoy=new Date().toISOString().slice(0,10); var key='lastSeace'+slot;
+    if(cfg[key]===hoy)return;
+    var o=await seaceFetch();
+    var top=o.slice(0,8).map(function(x){return '• <b>'+(x.objeto||'')+'</b>: '+(x.desc||'').slice(0,70)+'…\n   '+(x.entidad||'')+' · cierra '+(x.fechaFin||'')}).join('\n');
+    await tgSend('📋 <b>SEACE — Oportunidades 8 UIT</b> (La Libertad, vigentes) ['+slot+']\n'+o.length+' contrataciones que puedes cotizar.\n\n'+top+'\n\nElige en SIGMA → Oportunidades.');
+    cfg[key]=hoy; await sbPutConfig(cfg);
+  }catch(e){console.error('SEACE digest:',e.message);}
+}
+async function runReporteDiario(force){
+  try{
+    if(!sbReady())return {skipped:true}; var cfg=await sbGetConfig(); var hoy=new Date().toISOString().slice(0,10);
+    if(!force&&cfg.lastReporte===hoy)return {skipped:true};
+    var data=await sbGetData()||{}; var hist=Array.isArray(data.hist)?data.hist:[];
+    var ocrec=0,ocrecN=0,fact=0,porc=0;
+    Object.keys(data).forEach(function(k){var a=data[k];if(!Array.isArray(a))return;if(k.indexOf('ocrec_')===0){a.forEach(function(o){ocrec+=(+o.monto||0);ocrecN++;});}if(k.indexOf('fact_')===0){a.forEach(function(x){fact+=(+x.monto||0);if(x.estado!=='pagada')porc+=(+x.monto||0);});}});
+    await tgSend('📊 <b>SIGMA — Reporte diario</b> ('+hoy+')\nCotizaciones: '+hist.length+'\nOC recibidas: '+ocrecN+' (S/ '+ocrec.toFixed(0)+')\nFacturado: S/ '+fact.toFixed(0)+'\nPor cobrar: S/ '+porc.toFixed(0));
+    cfg.lastReporte=hoy; await sbPutConfig(cfg); return {ok:true};
+  }catch(e){console.error('Reporte diario:',e.message);return {error:e.message};}
+}
+app.get('/api/reporte/run',async function(req,res){ if(!sbReady())return proxyCloud(req,res); try{ res.json(await runReporteDiario(true)); }catch(e){ res.status(500).json({error:e.message}); } });
 app.get('/api/alertas/run',async function(req,res){
   if(!sbReady())return proxyCloud(req,res);
   try{ res.json(await runAlertas(true)); }catch(e){ res.status(500).json({error:e.message}); }
@@ -536,10 +569,13 @@ app.listen(PORT,'0.0.0.0',function(){
 if(sbReady()){
   setInterval(function(){
     var h=new Date().getUTCHours();
-    if(h===13){
+    if(h===13){ // 8 AM hora Peru: alertas + digest SEACE matutino
       runAlertas(false).then(function(r){ if(r&&r.ok&&r.enviadas)console.log('Alertas enviadas:',r.enviadas); }).catch(function(e){console.error('Alertas:',e.message);});
+      runSeaceDigest('AM');
     }
-    if(h===23){ // 6 PM hora Peru (UTC-5)
+    if(h===1){ runSeaceDigest('PM'); } // 8 PM hora Peru: digest SEACE nocturno
+    if(h===2){ runReporteDiario(false); } // 9 PM hora Peru: reporte diario a Telegram
+    if(h===23){ // 6 PM hora Peru (UTC-5): respaldo
       runBackup(false).then(function(r){ if(r&&r.ok)console.log('Respaldo nube:',r.fecha); }).catch(function(e){console.error('Backup:',e.message);});
     }
   }, 30*60*1000);
