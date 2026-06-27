@@ -1297,7 +1297,7 @@ function renderFacturacion(){
     FACT.slice().sort(function(a,b){return (b.fecha||'').localeCompare(a.fecha||'')}).forEach(function(x){
       var pag=x.estado==='pagada';
       var pagoTxt=x.forma_pago==='credito'?('Crédito '+(x.dias_credito||0)+'d'+(x.fecha_venc?(' · '+_vencInfo({forma_pago:'credito',fecha_venc:x.fecha_venc})):'')):'Contado';
-      h+='<tr><td class="mono">'+esc(x.num||'—')+'<div class="pdl">'+(x.tipo==='boleta'?'Boleta':'Factura')+'</div></td><td>'+esc(x.cliente||'—')+'</td><td class="mono" style="font-weight:600">'+fmtMon(x.monto,x.moneda)+'</td><td style="font-size:11.5px">'+pagoTxt+'</td><td style="color:var(--tmuted);font-size:11.5px">'+refLabel(x.ref)+'</td>'+
+      h+='<tr><td class="mono"><span onclick="openFact(\''+x.id+'\')" style="cursor:pointer;color:#0ea5e9;font-weight:600">'+esc(x.num||'(ver)')+'</span><div class="pdl">'+(x.tipo==='boleta'?'Boleta':'Factura')+((x.items&&x.items.length)?(' · '+x.items.length+' ítems'):'')+'</div></td><td>'+esc(x.cliente||'—')+'</td><td class="mono" style="font-weight:600">'+fmtMon(x.monto,x.moneda)+'</td><td style="font-size:11.5px">'+pagoTxt+'</td><td style="color:var(--tmuted);font-size:11.5px">'+refLabel(x.ref)+'</td>'+
         '<td><span class="badge" title="Click para cambiar" onclick="toggleFactPagada(\''+x.id+'\')" style="cursor:pointer;color:'+(pag?'#16a34a':'#f59e0b')+';background:'+bg(pag?'#16a34a':'#f59e0b',.14)+'">'+(pag?'Pagada':'Por cobrar')+'</span></td>'+
         '<td style="white-space:nowrap"><button onclick="factEdit(\''+x.id+'\')" style="background:none;border:none;color:#0ea5e9;cursor:pointer;font-size:11.5px;font-weight:600">editar</button> <button onclick="delFact(\''+x.id+'\')" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:16px">×</button></td></tr>';
     });
@@ -1314,12 +1314,24 @@ function addFact(){
   if(!ref)ref=factAutoRef(cli,monto);
   var obj={num:_v('fc_num'),cliente:cli,ruc:_v('fc_ruc'),fecha:fecha,monto:monto,moneda:_v('fc_moneda')||'S/',tipo:_v('fc_tipo')||'factura',forma_pago:pago,dias_credito:dias,fecha_venc:(pago==='credito'?fechaMas(fecha,dias):''),estado:_v('fc_estado')||'emitida',ref:ref};
   if(_factEdit){FACT.forEach(function(x){if(x.id===_factEdit)Object.assign(x,obj);});_factEdit=null;}
-  else{obj.id='FT'+Date.now();FACT.push(obj);}
+  else{obj.id='FT'+Date.now();obj.items=(window._factItems||[]);FACT.push(obj);}
+  window._factItems=null;
   saveFact();toast('Comprobante guardado'+(ref?(' · enlazado a '+refLabel(ref)):''));renderFacturacion();
 }
 function factEdit(id){loadFact();var x=FACT.filter(function(f){return f.id===id})[0];if(!x)return;_factEdit=id;toggleFactForm(false);var f=$('factForm');if(f)f.style.display='block';
   if($('fc_num'))$('fc_num').value=x.num||'';if($('fc_cli'))$('fc_cli').value=x.cliente||'';if($('fc_ruc'))$('fc_ruc').value=x.ruc||'';if($('fc_fecha'))$('fc_fecha').value=x.fecha||'';if($('fc_monto'))$('fc_monto').value=x.monto||0;if($('fc_moneda'))$('fc_moneda').value=curOf(x.moneda);if($('fc_tipo'))$('fc_tipo').value=x.tipo||'factura';if($('fc_pago'))$('fc_pago').value=x.forma_pago||'contado';if($('fc_dias'))$('fc_dias').value=x.dias_credito||0;if($('fc_estado'))$('fc_estado').value=x.estado||'emitida';
   if(f)f.scrollIntoView({behavior:'smooth',block:'center'});}
+function openFact(id){loadFact();var x=FACT.filter(function(f){return f.id===id})[0];if(!x){renderFacturacion();return;}
+  var h='<div class="pmod-head fade"><div><button class="btn-new" onclick="renderFacturacion()" style="margin-bottom:10px">← Facturación</button><h1 style="font-size:21px;font-weight:700">'+esc(x.num||'(sin número)')+'</h1><div style="font-size:13px;color:var(--tmuted);margin-top:4px">'+(x.tipo==='boleta'?'Boleta':'Factura')+' · '+esc(x.cliente||'')+'</div></div></div>';
+  function row(k,v){return v?('<div class="k">'+k+'</div><div>'+v+'</div>'):''}
+  h+='<div class="card fade"><div class="kv">'+row('Monto total','<b>'+fmtMon(x.monto,x.moneda)+'</b>')+row('Moneda',curOf(x.moneda)==='US$'?'Dólares':'Soles')+row('RUC/DNI',x.ruc)+row('Fecha',x.fecha)+row('Forma de pago',x.forma_pago==='credito'?('Crédito '+(x.dias_credito||0)+'d'):'Contado')+(x.fecha_venc?row('Vence',x.fecha_venc):'')+row('Estado',x.estado==='pagada'?'Pagada':'Por cobrar')+row('Enlace',refLabel(x.ref))+'</div></div>';
+  if(x.items&&x.items.length){
+    h+='<div class="card fade"><div class="ct" style="font-weight:600;margin-bottom:10px">Detalle de ítems</div><div class="ptable-wrap"><table class="ptable"><thead><tr><th>Descripción</th><th>Cant.</th><th>P. Unit.</th><th>Subtotal</th></tr></thead><tbody>';
+    x.items.forEach(function(it){var q=+it.qty||0,p=+it.precio||0;h+='<tr><td>'+esc(it.desc||it.descripcion||'')+'</td><td class="mono">'+q+'</td><td class="mono">'+fmtMon(p,x.moneda)+'</td><td class="mono">'+fmtMon(q*p,x.moneda)+'</td></tr>'});
+    h+='</tbody></table></div></div>';
+  } else { h+='<div class="card fade" style="font-size:12.5px;color:var(--tmuted)">Sin ítems detallados. Carga la factura con IA (botón "Cargar con IA") para extraer sus productos.</div>'; }
+  $('content').innerHTML=h;
+}
 function delFact(id){if(!confirm('¿Eliminar este comprobante?'))return;FACT=FACT.filter(function(x){return x.id!==id});saveFact();renderFacturacion();}
 function toggleFactPagada(id){loadFact();FACT.forEach(function(x){if(x.id===id)x.estado=(x.estado==='pagada'?'emitida':'pagada');});saveFact();renderFacturacion();}
 function factAI(file){
@@ -1327,14 +1339,15 @@ function factAI(file){
   var rd=new FileReader();
   rd.onload=function(e){var b64=String(e.target.result).split(',')[1];
     fetch('/api/gemini',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
-      prompt:'Extrae datos de esta FACTURA o BOLETA electronica peruana. Devuelve SOLO JSON: {"num":"serie-numero ej F001-123","cliente":"razon social del cliente","ruc":"ruc o dni del cliente","fecha":"YYYY-MM-DD","monto":total_numero,"moneda":"S/ si soles o US$ si dolares","tipo":"factura o boleta","forma_pago":"contado o credito","dias_credito":dias_si_credito}. Detecta bien la MONEDA (soles S/. o dolares US$/$). Si falta un dato usa "" o 0.',
+      prompt:'Extrae datos de esta FACTURA o BOLETA electronica peruana. Devuelve SOLO JSON: {"num":"serie-numero ej F001-123","cliente":"razon social del cliente","ruc":"ruc o dni del cliente","fecha":"YYYY-MM-DD","monto":TOTAL_FINAL,"moneda":"S/ si soles o US$ si dolares","tipo":"factura o boleta","forma_pago":"contado o credito","dias_credito":dias_si_credito,"items":[{"desc":"descripcion completa del producto/servicio","qty":cantidad,"precio":precio_unitario}]}. monto = TOTAL FINAL impreso (con IGV). Detecta bien la MONEDA (soles S/. o dolares US$/$). Extrae TODOS los items con su nombre completo. Si falta un dato usa "" o 0.',
       imageBase64:b64,mimeType:file.type||'application/pdf'})}).then(function(r){return r.json()}).then(function(d){
       if(d&&d.error){if(st){st.textContent='Error IA';st.style.color='#ef4444';}return;}
       var tx='';if(d&&d.candidates&&d.candidates[0]&&d.candidates[0].content&&d.candidates[0].content.parts)tx=d.candidates[0].content.parts.map(function(p){return p.text||''}).join('');
       var m=tx.replace(/```json/g,'').replace(/```/g,'').match(/\{[\s\S]*\}/);if(!m){if(st){st.textContent='No se pudo leer.';st.style.color='#f59e0b';}return;}
       try{var o=JSON.parse(m[0]);if($('fc_num'))$('fc_num').value=o.num||'';if($('fc_cli'))$('fc_cli').value=o.cliente||'';if($('fc_ruc'))$('fc_ruc').value=(o.ruc||'').replace(/\D/g,'');if(o.fecha&&$('fc_fecha'))$('fc_fecha').value=o.fecha;if($('fc_monto'))$('fc_monto').value=o.monto||0;if($('fc_moneda'))$('fc_moneda').value=curOf(o.moneda);if($('fc_tipo')&&o.tipo)$('fc_tipo').value=(o.tipo+'').indexOf('bol')>=0?'boleta':'factura';if($('fc_pago')&&o.forma_pago)$('fc_pago').value=(o.forma_pago+'').indexOf('cred')>=0?'credito':'contado';if($('fc_dias'))$('fc_dias').value=o.dias_credito||0;
+        window._factItems=Array.isArray(o.items)?o.items:[];
         var rf=factAutoRef(o.cliente||'',o.monto||0);if(rf&&$('fc_ref'))$('fc_ref').value=rf.tipo+':'+(rf.tipo==='oc'?rf.id:rf.num);
-        if(st){st.textContent='✓ Datos extraídos'+(rf?(' · enlazado a '+refLabel(rf)):'')+'. Revisa y guarda.';st.style.color='#16a34a';}}catch(e2){if(st){st.textContent='Error al leer respuesta.';st.style.color='#ef4444';}}
+        if(st){st.textContent='✓ Datos extraídos'+(window._factItems.length?(' ('+window._factItems.length+' ítems)'):'')+(rf?(' · enlazado a '+refLabel(rf)):'')+'. Revisa y guarda.';st.style.color='#16a34a';}}catch(e2){if(st){st.textContent='Error al leer respuesta.';st.style.color='#ef4444';}}
     }).catch(function(){if(st){st.textContent='Error de conexión.';st.style.color='#ef4444';}});
   };rd.readAsDataURL(file);
 }
