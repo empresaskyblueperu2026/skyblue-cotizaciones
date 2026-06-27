@@ -598,6 +598,7 @@ var NAV=[
   {id:'facturacion',ic:'card',lb:'Facturación'},
   {id:'cobranza',ic:'wallet',lb:'Cobranza'},
   {cat:'Gestión'},
+  {id:'contabilidad',ic:'card',lb:'Contabilidad'},
   {id:'boveda',ic:'layers',lb:'Bóveda de Empresa'},
   {id:'historial',ic:'clock',lb:'Historial',tab:'hist'},
   {id:'reportes',ic:'trending',lb:'Reportes'},
@@ -616,7 +617,7 @@ function navClick(it){
   toggleMenu(false);
   if(it.tab){window.location.href='/cotizador?tab='+it.tab;return}
   ACTIVE=it.id;renderNav();
-  if(it.id==='dashboard')refreshDash();else if(it.id==='proyectos')renderProyectos();else if(it.id==='boveda')renderBoveda();else if(it.id==='proveedores')renderProveedores();else if(it.id==='clientes')renderClientes();else if(it.id==='productos')renderProductos();else if(it.id==='ocrec')renderOCRecibidas();else if(it.id==='segcot')renderSegCot();else if(it.id==='facturacion')renderFacturacion();else if(it.id==='cobranza')renderCobranza();else if(it.id==='traza')renderTraza();else if(it.id==='reportes')renderReportes();else if(it.id==='config')renderConfig();else if(it.id==='oportunidades')renderOportunidades();else if(it.id==='logistica')renderLogistica();else renderSoon(it);
+  if(it.id==='dashboard')refreshDash();else if(it.id==='proyectos')renderProyectos();else if(it.id==='boveda')renderBoveda();else if(it.id==='proveedores')renderProveedores();else if(it.id==='clientes')renderClientes();else if(it.id==='productos')renderProductos();else if(it.id==='ocrec')renderOCRecibidas();else if(it.id==='segcot')renderSegCot();else if(it.id==='facturacion')renderFacturacion();else if(it.id==='cobranza')renderCobranza();else if(it.id==='traza')renderTraza();else if(it.id==='contabilidad')renderContabilidad();else if(it.id==='reportes')renderReportes();else if(it.id==='config')renderConfig();else if(it.id==='oportunidades')renderOportunidades();else if(it.id==='logistica')renderLogistica();else renderSoon(it);
 }
 
 function selectEmpresa(e){
@@ -1711,7 +1712,106 @@ function logGuiaAI(file){
 }
 function setLogEst(id,v){LOGIST.forEach(function(x){if(x.id===id)x.estado=v;});saveLogist();renderLogistica();}
 function delLog(id){if(!confirm('¿Eliminar entrega?'))return;LOGIST=LOGIST.filter(function(x){return x.id!==id});saveLogist();renderLogistica();}
+/* ===== Módulo: Contabilidad (departamento contable con IA contador peruano) ===== */
+var _contaTab='resumen', _sunatCfg={};
+function contaData(){
+  try{loadFact()}catch(e){}
+  var fact=FACT||[], oc=DASH.ocHist||[];
+  var now=new Date(), mk=now.getFullYear()*12+now.getMonth();
+  function inMonth(f){var d=_pf(f);return d&&(d.getFullYear()*12+d.getMonth())===mk;}
+  var ventasMes=0,nV=0,ventasAnio=0;
+  fact.forEach(function(x){if(curOf(x.moneda)!=='S/')return;var m=+x.monto||0;var d=_pf(x.fecha);if(d&&d.getFullYear()===now.getFullYear())ventasAnio+=m;if(inMonth(x.fecha)){ventasMes+=m;nV++;}});
+  var comprasMes=0;oc.forEach(function(o){var t=0;(o.items||[]).forEach(function(it){t+=(+it.qty||0)*(+it.precio||0)});if(inMonth(o.fecha))comprasMes+=t;});
+  var baseV=ventasMes/1.18, igvV=ventasMes-baseV;
+  var baseC=comprasMes/1.18, igvC=comprasMes-baseC;
+  var igvPagar=Math.max(0,igvV-igvC);
+  var renta=baseV*0.01;
+  return {ventasMes:ventasMes,nV:nV,comprasMes:comprasMes,baseV:baseV,igvV:igvV,igvC:igvC,igvPagar:igvPagar,renta:renta,ventasAnio:ventasAnio,utilidad:baseV-baseC};
+}
+function rucDigito(){var r=(EMP&&EMP.ruc)||(_sunatCfg.ruc)||'';r=(''+r).replace(/\D/g,'');return r?r.slice(-1):'?';}
+function renderContabilidad(){
+  $('content').innerHTML='<div class="pmod-head fade"><div><h1 style="font-size:23px;font-weight:700">Contabilidad</h1><div style="font-size:13px;color:var(--tmuted);margin-top:4px">Cargando…</div></div></div>';
+  fetch('/api/config').then(function(r){return r.json()}).then(function(c){_sunatCfg=(c&&c.sunat&&(c.sunat[EMP?EMP.id:'default']||c.sunat['default']))||{};}).catch(function(){}).then(function(){
+    loadDash(function(){ _contaPaint(); });
+  });
+}
+function _contaPaint(){
+  var d=contaData();
+  var meses=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+  var h='<div class="pmod-head fade"><div><h1 style="font-size:23px;font-weight:700;letter-spacing:-.6px">Contabilidad</h1><div style="font-size:13px;color:var(--tmuted);margin-top:4px">Departamento contable · Régimen MYPE Tributario · '+(EMP?EMP.nombre:'')+'</div></div><button class="aibtn" onclick="contadorAnalizar()" style="border:1px solid var(--bd,#e2e8f0)">'+icon('bolt')+'Agente Contador IA</button></div>';
+  h+='<div class="seg">'+[['resumen','Resumen'],['igv','IGV y Renta'],['cal','Calendario'],['libros','Libros'],['sunat','Facturación SUNAT']].map(function(t){return '<button class="'+(_contaTab===t[0]?'on':'')+'" onclick="_contaTab=\''+t[0]+'\';_contaPaint()">'+t[1]+'</button>'}).join('')+'</div>';
+  function kpi(lb,val,col,sub){return '<div class="kpi"><div class="val mono" style="font-size:16px'+(col?(';color:'+col):'')+'">'+val+'</div><div class="lab">'+lb+'</div>'+(sub?'<div style="font-size:10px;color:var(--tmuted)">'+sub+'</div>':'')+'</div>';}
+  if(_contaTab==='resumen'){
+    h+='<div class="kpis fade" style="margin-bottom:14px">'+kpi('Ventas del mes',fmtMonto(d.ventasMes),'','sin IGV: '+fmtMonto(d.baseV))+kpi('IGV por pagar',fmtMonto(d.igvPagar),'#f59e0b','débito - crédito')+kpi('Renta (1%)',fmtMonto(d.renta),'#0ea5e9','pago a cuenta')+kpi('Utilidad estim.',fmtMonto(d.utilidad),'#16a34a','ventas - compras')+'</div>';
+    h+='<div class="card fade"><div class="ct" style="font-weight:600;margin-bottom:8px">Estado tributario del mes</div><div class="kv">'+
+      '<div class="k">Compras del mes</div><div>'+fmtMonto(d.comprasMes)+'</div>'+
+      '<div class="k">IGV ventas (débito fiscal)</div><div>'+fmtMonto(d.igvV)+'</div>'+
+      '<div class="k">IGV compras (crédito fiscal)</div><div>'+fmtMonto(d.igvC)+'</div>'+
+      '<div class="k">Total a pagar SUNAT (aprox)</div><div><b>'+fmtMonto(d.igvPagar+d.renta)+'</b></div>'+
+      '<div class="k">Próximo vencimiento</div><div>Según RUC dígito <b>'+rucDigito()+'</b> (15–25 del mes siguiente)</div></div>'+
+      '<div style="font-size:11px;color:var(--tmuted);margin-top:8px">Cálculos referenciales en soles. La IA contadora puede analizarlos en detalle.</div></div>';
+  } else if(_contaTab==='igv'){
+    h+='<div class="card fade"><div class="ct" style="font-weight:600;margin-bottom:10px">Liquidación de IGV del mes</div><div class="kv">'+
+      '<div class="k">Ventas gravadas (base)</div><div>'+fmtMonto(d.baseV)+'</div>'+
+      '<div class="k">IGV de ventas (18%)</div><div>'+fmtMonto(d.igvV)+'</div>'+
+      '<div class="k">Compras gravadas (base)</div><div>'+fmtMonto(d.baseC=d.comprasMes/1.18)+'</div>'+
+      '<div class="k">IGV de compras (crédito)</div><div>'+fmtMonto(d.igvC)+'</div>'+
+      '<div class="k" style="font-weight:700">IGV a pagar</div><div style="font-weight:700;color:#f59e0b">'+fmtMonto(d.igvPagar)+'</div></div></div>';
+    h+='<div class="card fade"><div class="ct" style="font-weight:600;margin-bottom:10px">Impuesto a la Renta (RMT)</div><div class="kv">'+
+      '<div class="k">Ingresos netos del mes</div><div>'+fmtMonto(d.baseV)+'</div>'+
+      '<div class="k">Pago a cuenta (1% si ≤300 UIT)</div><div style="font-weight:700;color:#0ea5e9">'+fmtMonto(d.renta)+'</div>'+
+      '<div class="k">Acumulado ventas del año</div><div>'+fmtMonto(d.ventasAnio)+'</div></div>'+
+      '<div style="font-size:11px;color:var(--tmuted);margin-top:8px">Si superas 300 UIT en el año, la tasa de pago a cuenta sube a 1.5%. La IA te avisa.</div></div>';
+  } else if(_contaTab==='cal'){
+    h+='<div class="card fade"><div class="ct" style="font-weight:600;margin-bottom:10px">Calendario tributario</div>'+
+      '<div style="font-size:13px;line-height:1.8;color:var(--tprimary)">Tu RUC termina en <b>'+rucDigito()+'</b>. Las obligaciones mensuales (IGV‑Renta, PDT 621) vencen entre el <b>15 y 25</b> del mes siguiente según el cronograma SUNAT del año.</div>'+
+      '<ul class="ulist" style="margin-top:10px"><li>Declaración mensual IGV‑Renta (Formulario 621)</li><li>Libros electrónicos: Registro de Ventas y Compras (PLE/SLE)</li><li>Planilla electrónica PLAME y pago de EsSalud/ONP (si tienes trabajadores)</li><li>Pago de detracciones si corresponde</li></ul>'+
+      '<button class="btn-new" style="margin-top:8px" onclick="contaRecordar()">'+icon('send')+'Recordarme por Telegram</button></div>';
+  } else if(_contaTab==='libros'){
+    var fact=FACT||[], oc=DASH.ocHist||[];
+    h+='<div style="display:flex;gap:8px;margin-bottom:10px"><button class="aibtn" onclick="contaExport()" style="border:1px solid var(--bd,#e2e8f0)">'+icon('layers')+'Exportar (CSV)</button></div>';
+    h+='<div class="card fade"><div class="ct" style="font-weight:600;margin-bottom:8px">Registro de Ventas ('+fact.length+')</div><div class="ptable-wrap"><table class="ptable"><thead><tr><th>Comprobante</th><th>Cliente</th><th>Fecha</th><th>Total</th></tr></thead><tbody>';
+    fact.slice(0,50).forEach(function(x){h+='<tr><td class="mono">'+esc(x.num||'—')+'</td><td>'+esc(x.cliente||'')+'</td><td style="color:var(--tmuted)">'+esc(x.fecha||'')+'</td><td class="mono">'+fmtMon(x.monto,x.moneda)+'</td></tr>'});
+    if(!fact.length)h+='<tr><td colspan="4" style="color:var(--tmuted)">Sin ventas registradas (módulo Facturación)</td></tr>';
+    h+='</tbody></table></div></div>';
+    h+='<div class="card fade"><div class="ct" style="font-weight:600;margin-bottom:8px">Registro de Compras ('+oc.length+')</div><div class="ptable-wrap"><table class="ptable"><thead><tr><th>OC</th><th>Proveedor</th><th>Fecha</th><th>Total</th></tr></thead><tbody>';
+    oc.slice(0,50).forEach(function(o){var t=0;(o.items||[]).forEach(function(it){t+=(+it.qty||0)*(+it.precio||0)});h+='<tr><td class="mono">'+esc(o.num||'—')+'</td><td>'+esc((o.prov&&o.prov.n)||'')+'</td><td style="color:var(--tmuted)">'+esc(o.fecha||'')+'</td><td class="mono">'+fmtMonto(t)+'</td></tr>'});
+    if(!oc.length)h+='<tr><td colspan="4" style="color:var(--tmuted)">Sin compras registradas (OC a Proveedores)</td></tr>';
+    h+='</tbody></table></div></div>';
+  } else if(_contaTab==='sunat'){
+    h+='<div class="card fade" style="margin-bottom:12px;border-left:3px solid #f59e0b"><div style="font-size:12.5px;line-height:1.6;color:var(--tprimary)"><b>Facturación electrónica SUNAT.</b> Para emitir comprobantes válidos se necesita: <b>certificado digital</b>, XML <b>UBL 2.1</b> firmado y envío por <b>web service</b> (SEE del Contribuyente con homologación) <u>o</u> un <b>OSE/PSE</b> (ej. Nubefact) <u>o</u> emitir gratis en <b>SEE‑SOL</b>. Aquí guardas la configuración (sin tu contraseña primaria) y preparas los datos; la emisión real se activa al conectar el certificado/OSE.</div></div>';
+    h+='<div class="card fade"><div class="ct" style="font-weight:600;margin-bottom:10px">Configuración SUNAT de '+(EMP?EMP.nombre:'')+'</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">'+
+      ocrecField('su_ruc','RUC',(EMP&&EMP.ruc)||'',_sunatCfg.ruc||((EMP&&EMP.ruc)||''))+
+      ocrecField('su_user','Usuario SOL secundario (facturación)','NO tu usuario principal',_sunatCfg.usuario||'')+
+      ocrecSelect('su_modo','Modo de emisión',[['see_sol','SEE-SOL (manual en portal)'],['ose','OSE/PSE (API externa)'],['propio','SEE del contribuyente (certificado)']])+
+      ocrecField('su_ose','OSE / Proveedor (si aplica)','Ej: Nubefact',_sunatCfg.ose||'')+
+      '</div>'+
+      '<div id="suSt" style="font-size:11.5px;color:var(--tmuted);margin-top:8px"></div>'+
+      '<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap"><button class="btn-new" onclick="sunatGuardar()">Guardar configuración</button>'+
+      '<a class="aibtn" href="https://www.sunat.gob.pe/sol.html" target="_blank" style="border:1px solid var(--bd,#e2e8f0);text-decoration:none">Abrir SEE-SOL ↗</a></div>'+
+      '<div style="font-size:11px;color:#ef4444;margin-top:8px">⚠ Nunca guardes aquí tu contraseña SOL principal. Para emisión automática crea un usuario secundario solo para facturación.</div></div>';
+  }
+  $('content').innerHTML=h;
+}
+function contaExport(){try{var fact=FACT||[];var rows=[['Comprobante','Cliente','RUC','Fecha','Moneda','Total']];fact.forEach(function(x){rows.push([x.num,x.cliente,x.ruc,x.fecha,x.moneda,x.monto])});var csv=rows.map(function(r){return r.map(function(v){return '"'+(''+(v==null?'':v)).replace(/"/g,'""')+'"'}).join(',')}).join('\n');_dl('registro_ventas_'+(new Date().toISOString().slice(0,10))+'.csv',csv);toast('Exportado');}catch(e){toast('No se pudo exportar');}}
+function contaRecordar(){toast('Enviando recordatorio…');fetch('/api/reporte/run').then(function(r){return r.json()}).then(function(){toast('Recordatorio/Reporte enviado a Telegram');}).catch(function(){toast('Error');});}
+function sunatGuardar(){var st=$('suSt');if(st)st.textContent='Guardando…';fetch('/api/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({emp:EMP?EMP.id:'default',ruc:_v('su_ruc'),usuario:_v('su_user'),ose:_v('su_ose'),modo:_v('su_modo')})}).then(function(r){return r.json()}).then(function(d){if(st){st.textContent=d&&d.ok?'✓ Configuración guardada.':'No se pudo guardar.';st.style.color=d&&d.ok?'#16a34a':'#ef4444';}}).catch(function(){if(st){st.textContent='Error.';st.style.color='#ef4444';}});}
+function contadorAnalizar(){
+  var d=contaData();
+  var m=document.getElementById('_agmodal'); if(!m){initAgente();m=document.getElementById('_agmodal');}
+  document.getElementById('_agmod').textContent='· Contador IA';
+  var body=document.getElementById('_agbody'); body.innerHTML='<div style="color:var(--tmuted)">El contador IA está revisando tus números…</div>'; m.style.display='flex';
+  var ctx=JSON.stringify({empresa:EMP?EMP.nombre:'',ruc:(EMP&&EMP.ruc)||_sunatCfg.ruc||'',ventas_mes:d.ventasMes,base_ventas:d.baseV,igv_ventas:d.igvV,compras_mes:d.comprasMes,igv_compras:d.igvC,igv_a_pagar:d.igvPagar,renta_1pct:d.renta,ventas_anio:d.ventasAnio,ruc_digito:rucDigito()});
+  var prompt='Actua como un CONTADOR PUBLICO COLEGIADO experto en tributacion peruana (SUNAT), regimen MYPE Tributario, IGV 18%, Impuesto a la Renta, libros electronicos PLE/SLE, PDT 621, planilla PLAME, detracciones y cronograma de vencimientos por digito de RUC. Analiza estos numeros del mes de la empresa y entrega: (1) diagnostico tributario breve, (2) cuanto y que debe declarar/pagar este mes, (3) 3-5 recomendaciones y alertas (vencimientos, credito fiscal, riesgos, ahorro tributario legal). Se claro y practico, en espanol, vinetas "- ". Datos: '+ctx;
+  fetch('/api/gemini',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt:prompt})}).then(function(r){return r.json()}).then(function(dd){
+    var tx='';if(dd&&dd.candidates&&dd.candidates[0]&&dd.candidates[0].content&&dd.candidates[0].content.parts)tx=dd.candidates[0].content.parts.map(function(p){return p.text||''}).join('');
+    if(dd&&dd.error){body.innerHTML='<div style="color:#ef4444">No se pudo analizar.</div>';return;}
+    var safe=esc(tx).replace(/^- (.*)$/gm,'<div style="display:flex;gap:8px;margin:6px 0"><span style="color:#0ea5e9">•</span><span>$1</span></div>').replace(/\n{2,}/g,'<br>').replace(/\n/g,'<br>');
+    body.innerHTML=safe+'<div style="margin-top:12px;font-size:10.5px;color:var(--tmuted);border-top:1px solid var(--bd,#eef2f7);padding-top:8px">Orientación contable por IA. Valídala con tu contador colegiado.</div>';
+  }).catch(function(){body.innerHTML='<div style="color:#ef4444">Error de conexión.</div>';});
+}
 /* ===== Módulo: Proyectos Públicos < 8 UIT ===== */
+
 
 
 

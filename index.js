@@ -90,6 +90,22 @@ app.get('/api/aprendizaje',async function(req,res){
   if(!sbReady())return proxyCloud(req,res);
   try{res.json({notas:await sbGetAprend()});}catch(e){res.status(500).json({error:e.message});}
 });
+// ---- Config general (datos no sensibles: SUNAT RUC/usuario por empresa, NO contrasena primaria) ----
+app.get('/api/config',async function(req,res){
+  if(!sbReady())return proxyCloud(req,res);
+  try{var cfg=await sbGetConfig();res.json({sunat:cfg.sunat||{}});}catch(e){res.status(500).json({error:e.message});}
+});
+app.post('/api/config',async function(req,res){
+  if(!sbReady())return proxyCloud(req,res);
+  try{var cfg=await sbGetConfig();var b=req.body||{};cfg.sunat=cfg.sunat||{};
+    var emp=b.emp||'default'; cfg.sunat[emp]=cfg.sunat[emp]||{};
+    if(b.ruc!=null)cfg.sunat[emp].ruc=String(b.ruc).slice(0,11);
+    if(b.usuario!=null)cfg.sunat[emp].usuario=String(b.usuario).slice(0,40);
+    if(b.ose!=null)cfg.sunat[emp].ose=String(b.ose).slice(0,60);
+    if(b.modo!=null)cfg.sunat[emp].modo=String(b.modo).slice(0,30);
+    await sbPutConfig(cfg);res.json({ok:true,sunat:cfg.sunat[emp]});
+  }catch(e){res.status(500).json({error:e.message});}
+});
 app.post('/api/aprendizaje',async function(req,res){
   if(!sbReady())return proxyCloud(req,res);
   try{var arr=await sbGetAprend();var b=req.body||{};arr.push({fecha:new Date().toISOString(),modulo:b.modulo||'',empresa:b.empresa||'',texto:(b.texto||'').slice(0,2000)});await sbPutAprend(arr);res.json({ok:true,total:arr.length});}
