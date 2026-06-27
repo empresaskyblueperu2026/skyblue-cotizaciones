@@ -1542,36 +1542,78 @@ function cfgTgGuardar(){var t=_v('cfg_tgtoken'),c=_v('cfg_tgchat'),st=$('cfgTgSt
 function cfgTgProbar(){var st=$('cfgTgSt');if(st)st.textContent='Enviando prueba…';fetch('/api/telegram/test').then(function(r){return r.json()}).then(function(d){if(st){st.textContent=d&&d.ok?'✓ Mensaje de prueba enviado a tu Telegram.':'No se pudo enviar (configura el token y chat).';st.style.color=d&&d.ok?'#16a34a':'#f59e0b';}}).catch(function(){if(st)st.textContent='Error.';});}
 function cfgRespaldar(){toast('Respaldando en la nube…');fetch('/api/backup/run').then(function(r){return r.json()}).then(function(d){toast(d&&d.ok?('Respaldo nube OK ('+d.fecha+')'):'No se pudo respaldar');}).catch(function(){toast('Error');});}
 
-/* ===== Módulo: Oportunidades (pipeline comercial previo a cotizar) ===== */
+/* ===== Módulo: Oportunidades (SEACE 8 UIT La Libertad + manuales) ===== */
 var OPORT=[];
 function oportKey(){return 'sigma_oport_'+(EMP?EMP.id:'x')}
 function loadOport(){try{OPORT=JSON.parse(localStorage.getItem(oportKey())||'[]')}catch(e){OPORT=[]}}
 function saveOport(){try{localStorage.setItem(oportKey(),JSON.stringify(OPORT))}catch(e){}cloudSyncPush()}
-var OPORT_EST=[['prospecto','Prospecto','#0ea5e9'],['cotizando','Cotizando','#14b8a6'],['ganado','Ganado','#16a34a'],['perdido','Perdido','#ef4444']];
+var OPORT_EST=[['nuevo','Nuevo','#0ea5e9'],['pensando','Pensando','#f59e0b'],['participar','Participar','#16a34a'],['descartado','Descartado','#94a3b8']];
 function renderOportunidades(){
   loadOport();
-  var h='<div class="pmod-head fade"><div><h1 style="font-size:23px;font-weight:700;letter-spacing:-.6px">Oportunidades</h1><div style="font-size:13px;color:var(--tmuted);margin-top:4px">Posibles ventas antes de cotizar · '+(EMP?EMP.nombre:'')+'</div></div><button class="btn-new" onclick="toggleOportForm()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" style="width:13px;height:13px"><path d="M12 5v14M5 12h14"/></svg>Nueva oportunidad</button></div>';
+  var h='<div class="pmod-head fade"><div><h1 style="font-size:23px;font-weight:700;letter-spacing:-.6px">Oportunidades</h1><div style="font-size:13px;color:var(--tmuted);margin-top:4px">Contrataciones &le; 8 UIT del Estado (SEACE · La Libertad · vigentes) · '+(EMP?EMP.nombre:'')+'</div></div>'+
+    '<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn-new" onclick="importSeace()">'+icon('search')+'Buscar en SEACE</button><button class="aibtn" onclick="analizarSeaceIA()" style="border:1px solid var(--bd,#e2e8f0)">'+icon('bolt')+'Analizar con IA</button><button class="aibtn" onclick="toggleOportForm()" style="border:1px solid var(--bd,#e2e8f0)">+ Manual</button></div></div>';
   var byE={};OPORT_EST.forEach(function(e){byE[e[0]]=0});OPORT.forEach(function(o){byE[o.estado]=(byE[o.estado]||0)+1});
+  h+='<div id="seaceSt" style="font-size:12px;color:var(--tmuted);margin-bottom:10px"></div>';
   h+='<div class="kpis fade" style="margin-bottom:14px">'+OPORT_EST.map(function(e){return '<div class="kpi"><div class="val mono" style="color:'+e[2]+'">'+(byE[e[0]]||0)+'</div><div class="lab">'+e[1]+'</div></div>'}).join('')+'</div>';
-  h+='<div id="oportForm" class="card fade" style="display:none;margin-bottom:14px"><div class="ct" style="font-weight:600;margin-bottom:10px">Nueva oportunidad</div><div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">'+
-    ocrecField('op_nom','Nombre / objeto','Ej: EPP para GORE')+ocrecField('op_cli','Cliente / Entidad','')+ocrecField('op_monto','Monto estimado','0','','number')+
-    ocrecSelect('op_mon','Moneda',[['S/','Soles (S/)'],['US$','Dólares (US$)']])+ocrecSelect('op_est','Estado',OPORT_EST.map(function(e){return [e[0],e[1]]}))+ocrecField('op_fecha','Fecha','',(new Date()).toISOString().slice(0,10),'date')+
+  h+='<div id="oportForm" class="card fade" style="display:none;margin-bottom:14px"><div class="ct" style="font-weight:600;margin-bottom:10px">Nueva oportunidad manual</div><div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">'+
+    ocrecField('op_nom','Nombre / objeto','')+ocrecField('op_cli','Cliente / Entidad','')+ocrecField('op_monto','Monto estimado','0','','number')+
+    ocrecSelect('op_mon','Moneda',[['S/','Soles (S/)'],['US$','Dólares (US$)']])+ocrecField('op_fecha','Fecha límite','',(new Date()).toISOString().slice(0,10),'date')+
     '</div><div style="margin-top:10px;display:flex;gap:8px"><button class="btn-new" onclick="addOport()">Guardar</button><button class="aibtn" onclick="toggleOportForm(true)">Cancelar</button></div></div>';
-  if(!OPORT.length){h+='<div class="empty fade"><div class="ei">'+icon('search',1.5)+'</div><div style="font-size:15px;font-weight:600;color:var(--tprimary);margin-bottom:6px">Aún no hay oportunidades</div><div style="font-size:13px;max-width:430px;margin:0 auto;line-height:1.6">Registra licitaciones o clientes potenciales. Cuando ganes una, cotiza y se vuelve venta confirmada.</div></div>';$('content').innerHTML=h;return;}
-  h+='<div class="card fade"><div class="ptable-wrap"><table class="ptable"><thead><tr><th>Oportunidad</th><th>Cliente</th><th>Monto est.</th><th>Estado</th><th>Fecha</th><th></th></tr></thead><tbody>';
-  OPORT.slice().sort(function(a,b){return (b.fecha||'').localeCompare(a.fecha||'')}).forEach(function(o){
+  if(!OPORT.length){h+='<div class="empty fade"><div class="ei">'+icon('search',1.5)+'</div><div style="font-size:15px;font-weight:600;color:var(--tprimary);margin-bottom:6px">Sin oportunidades aún</div><div style="font-size:13px;max-width:440px;margin:0 auto;line-height:1.6">Toca <b>Buscar en SEACE</b> para traer las últimas contrataciones &le; 8 UIT vigentes de La Libertad que puedes cotizar. Luego marca cada una como Participar, Pensando o Descartado.</div></div>';$('content').innerHTML=h;return;}
+  var orden={participar:0,nuevo:1,pensando:2,descartado:3};
+  h+='<div style="display:flex;flex-direction:column;gap:10px" class="fade">';
+  OPORT.slice().sort(function(a,b){return (orden[a.estado]||9)-(orden[b.estado]||9)||(a.fecha||'').localeCompare(b.fecha||'')}).forEach(function(o){
     var e=OPORT_EST.filter(function(x){return x[0]===o.estado})[0]||['','',''];
     var sel='<select onchange="setOportEst(\''+o.id+'\',this.value)" style="padding:5px 8px;border-radius:8px;border:1px solid '+bg(e[2],.5)+';background:'+bg(e[2],.12)+';color:'+e[2]+';font-size:12px;font-weight:600">'+OPORT_EST.map(function(x){return '<option value="'+x[0]+'"'+(x[0]===o.estado?' selected':'')+'>'+x[1]+'</option>'}).join('')+'</select>';
-    h+='<tr><td>'+esc(o.nombre||'—')+'</td><td>'+esc(o.cliente||'—')+'</td><td class="mono">'+fmtMon(o.monto,o.moneda)+'</td><td>'+sel+'</td><td style="color:var(--tmuted)">'+esc(o.fecha||'—')+'</td><td><button onclick="delOport(\''+o.id+'\')" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:16px">×</button></td></tr>';
+    h+='<div class="card" style="border-left:3px solid '+e[2]+'"><div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start"><div style="flex:1;min-width:0">'+
+      '<div style="font-weight:600;font-size:13.5px;line-height:1.4">'+esc((o.desc||o.nombre||'').slice(0,160))+'</div>'+
+      '<div style="font-size:11.5px;color:var(--tmuted);margin-top:3px">'+(o.source==='seace'?'<span class="badge" style="color:#0ea5e9;background:'+bg('#0ea5e9',.14)+'">SEACE</span> ':'')+esc(o.cliente||'')+(o.nombre&&o.source==='seace'?(' · '+esc((o.nombre||'').split(' - ')[0])):'')+'</div>'+
+      '<div style="font-size:11.5px;color:var(--tmuted);margin-top:3px">'+(o.fecha?('Cierra: <b style="color:var(--tprimary)">'+esc(o.fecha)+'</b>'):'')+(o.monto?(' · '+fmtMon(o.monto,o.moneda)):'')+'</div></div>'+
+      '<div style="text-align:right;display:flex;flex-direction:column;gap:6px;align-items:flex-end">'+sel+
+      (o.url?'<a href="'+esc(o.url)+'" target="_blank" style="font-size:11px;color:#0ea5e9;text-decoration:none">Ver / descargar requerimiento →</a>':'')+
+      '<button onclick="delOport(\''+o.id+'\')" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:14px">eliminar</button></div></div></div>';
   });
-  h+='</tbody></table></div></div>';
+  h+='</div>';
   $('content').innerHTML=h;
 }
 function toggleOportForm(hide){var f=$('oportForm');if(!f)return;f.style.display=(hide||f.style.display!=='none')?'none':'block';}
-function addOport(){var n=_v('op_nom');if(!n){toast('Falta el nombre');return;}OPORT.push({id:'OP'+Date.now(),nombre:n,cliente:_v('op_cli'),monto:parseFloat(_v('op_monto'))||0,moneda:_v('op_mon')||'S/',estado:_v('op_est')||'prospecto',fecha:_v('op_fecha')});saveOport();toast('Oportunidad creada');renderOportunidades();}
+function addOport(){var n=_v('op_nom');if(!n){toast('Falta el nombre');return;}OPORT.push({id:'OP'+Date.now(),source:'manual',nombre:n,cliente:_v('op_cli'),desc:n,monto:parseFloat(_v('op_monto'))||0,moneda:_v('op_mon')||'S/',estado:'nuevo',fecha:_v('op_fecha')});saveOport();toast('Oportunidad creada');renderOportunidades();}
 function setOportEst(id,v){OPORT.forEach(function(o){if(o.id===id)o.estado=v;});saveOport();renderOportunidades();}
 function delOport(id){if(!confirm('¿Eliminar oportunidad?'))return;OPORT=OPORT.filter(function(o){return o.id!==id});saveOport();renderOportunidades();}
-
+function importSeace(){
+  var st=$('seaceSt'); if(st){st.textContent='Buscando en SEACE (La Libertad, vigentes, cotizables)…';}
+  fetch('/api/seace').then(function(r){return r.json()}).then(function(d){
+    if(!d||!d.oportunidades){if(st){st.textContent='No se pudo consultar SEACE.';st.style.color='#ef4444';}return;}
+    loadOport(); var add=0;
+    d.oportunidades.forEach(function(o){
+      if(OPORT.some(function(x){return x.seaceId===o.id}))return;
+      OPORT.push({id:'SE'+o.id,source:'seace',seaceId:o.id,nombre:(o.codigo||'')+' - '+(o.objeto||''),cliente:o.entidad,desc:o.desc,monto:0,moneda:'S/',estado:'nuevo',fecha:o.fechaFin,url:o.url});
+      add++;
+    });
+    saveOport();
+    if(st){st.textContent='✓ '+add+' nuevas oportunidades importadas (de '+d.total+' vigentes). Total: '+OPORT.length+'.';st.style.color='#16a34a';}
+    renderOportunidades();
+  }).catch(function(){if(st){st.textContent='Error de conexión con SEACE.';st.style.color='#ef4444';}});
+}
+function analizarSeaceIA(){
+  loadOport();
+  var nuevas=OPORT.filter(function(o){return o.estado==='nuevo'||o.estado==='pensando'});
+  if(!nuevas.length){toast('Primero importa oportunidades de SEACE');return;}
+  var m=document.getElementById('_agmodal'); if(!m){initAgente();m=document.getElementById('_agmodal');}
+  document.getElementById('_agmod').textContent='· Oportunidades SEACE';
+  var body=document.getElementById('_agbody'); body.innerHTML='<div style="color:var(--tmuted)">Analizando oportunidades con tu experiencia y catálogo…</div>'; m.style.display='flex';
+  var cat=loadCatalog().slice(0,60).map(function(c){return c.nombre}).join('; ');
+  var provs=consolidateProveedores().slice(0,30).map(function(p){return p.nombre}).join(', ');
+  var lista=nuevas.slice(0,25).map(function(o,i){return (i+1)+'. ['+(o.nombre||'').split(' - ')[0]+'] '+(o.desc||'').slice(0,120)+' (entidad: '+(o.cliente||'')+', cierra '+(o.fecha||'')+')';}).join('\n');
+  var prompt='Eres asesor de licitaciones del Estado peruano (contrataciones <=8 UIT) para una empresa que vende: '+(cat||'productos varios')+'. Proveedores: '+(provs||'varios')+'. Analiza estas oportunidades vigentes de SEACE y recomienda en cuales PARTICIPAR segun nuestra capacidad de oferta y margen, cuales PENSAR y cuales DESCARTAR, con una razon breve por cada una. Prioriza las que calzan con lo que vendemos y con plazo razonable. Responde en espanol, conciso, con vinetas "- ". OPORTUNIDADES:\n'+lista;
+  fetch('/api/gemini',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt:prompt})}).then(function(r){return r.json()}).then(function(d){
+    var tx='';if(d&&d.candidates&&d.candidates[0]&&d.candidates[0].content&&d.candidates[0].content.parts)tx=d.candidates[0].content.parts.map(function(p){return p.text||''}).join('');
+    if(d&&d.error){body.innerHTML='<div style="color:#ef4444">No se pudo analizar.</div>';return;}
+    var safe=esc(tx).replace(/^- (.*)$/gm,'<div style="display:flex;gap:8px;margin:6px 0"><span style="color:#0ea5e9">•</span><span>$1</span></div>').replace(/\n{2,}/g,'<br>').replace(/\n/g,'<br>');
+    body.innerHTML=safe+'<div style="margin-top:12px;font-size:10.5px;color:var(--tmuted);border-top:1px solid var(--bd,#eef2f7);padding-top:8px">Recomendación IA. Tú decides marcando cada una como Participar / Pensando / Descartado.</div>';
+  }).catch(function(){body.innerHTML='<div style="color:#ef4444">Error de conexión.</div>';});
+}
+/* ===== Módulo: Logística (entregas) ===== */
 /* ===== Módulo: Logística (entregas) ===== */
 var LOGIST=[];
 function logistKey(){return 'sigma_logist_'+(EMP?EMP.id:'x')}
