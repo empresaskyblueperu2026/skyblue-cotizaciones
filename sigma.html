@@ -1185,7 +1185,7 @@ function ocrecAI(file){
   rd.onload=function(e){
     var b64=String(e.target.result).split(',')[1];
     fetch('/api/gemini',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
-      prompt:'Eres un extractor de datos de ÓRDENES DE COMPRA que un cliente o entidad del Estado peruano emite a un proveedor. Devuelve SOLO JSON válido sin markdown: {"num":"numero de OC","cliente":"razon social del cliente/entidad","ruc":"RUC 11 digitos","fecha":"YYYY-MM-DD","monto":numero_total,"moneda":"S/ si es soles o US$ si es dolares","rubro":"publico si es entidad del Estado o privado","forma_pago":"contado o credito","dias_credito":numero_de_dias_si_es_credito,"items":[{"desc":"descripcion","qty":numero,"precio":numero}]}. IMPORTANTE: detecta la MONEDA correctamente (soles S/. o dolares US$/$). Si dice contado o pago inmediato usa "contado"; si menciona dias de pago o credito usa "credito" y pon los dias. Si un dato no existe usa "" o 0.',
+      prompt:'Eres un extractor de datos de ÓRDENES DE COMPRA que un cliente o entidad del Estado peruano emite a un proveedor. Devuelve SOLO JSON válido sin markdown: {"num":"numero de OC","cliente":"razon social del cliente/entidad","ruc":"RUC 11 digitos","fecha":"YYYY-MM-DD","monto":TOTAL_FINAL_a_pagar,"moneda":"S/ si es soles o US$ si es dolares","rubro":"publico si es entidad del Estado o privado","forma_pago":"contado o credito","dias_credito":numero_de_dias_si_es_credito,"items":[{"desc":"descripcion","qty":numero,"precio":precio_unitario}]}. CRITICO sobre el MONTO: usa SIEMPRE el TOTAL FINAL impreso en la OC (gran total a pagar, con IGV si lo incluye). NO sumes los items por tu cuenta; toma el total que figura. Si ves Subtotal + IGV + Total, usa el TOTAL. IMPORTANTE: detecta la MONEDA correctamente (soles S/. o dolares US$/$). Si dice contado o pago inmediato usa "contado"; si menciona dias de pago o credito usa "credito" y pon los dias. Si un dato no existe usa "" o 0.',
       imageBase64:b64, mimeType:file.type||'application/pdf'
     })}).then(function(r){return r.json()}).then(function(d){
       if(d&&d.error){if(st){st.textContent='Error IA: '+((d.error.message||JSON.stringify(d.error))+'').slice(0,80);st.style.color='#ef4444';}return;}
@@ -1238,7 +1238,7 @@ function renderSegCot(){
 }
 
 /* ===== Módulo: Facturación (facturas/boletas emitidas = ingreso realizado) ===== */
-var FACT=[];
+var FACT=[],_factEdit=null;
 function factKey(){return 'sigma_fact_'+(EMP?EMP.id:'x')}
 function loadFact(){try{FACT=JSON.parse(localStorage.getItem(factKey())||'[]')}catch(e){FACT=[]}}
 function saveFact(){try{localStorage.setItem(factKey(),JSON.stringify(FACT))}catch(e){}cloudSyncPush()}
@@ -1292,7 +1292,7 @@ function renderFacturacion(){
       var pagoTxt=x.forma_pago==='credito'?('Crédito '+(x.dias_credito||0)+'d'+(x.fecha_venc?(' · '+_vencInfo({forma_pago:'credito',fecha_venc:x.fecha_venc})):'')):'Contado';
       h+='<tr><td class="mono">'+esc(x.num||'—')+'<div class="pdl">'+(x.tipo==='boleta'?'Boleta':'Factura')+'</div></td><td>'+esc(x.cliente||'—')+'</td><td class="mono" style="font-weight:600">'+fmtMon(x.monto,x.moneda)+'</td><td style="font-size:11.5px">'+pagoTxt+'</td><td style="color:var(--tmuted);font-size:11.5px">'+refLabel(x.ref)+'</td>'+
         '<td><span class="badge" title="Click para cambiar" onclick="toggleFactPagada(\''+x.id+'\')" style="cursor:pointer;color:'+(pag?'#16a34a':'#f59e0b')+';background:'+bg(pag?'#16a34a':'#f59e0b',.14)+'">'+(pag?'Pagada':'Por cobrar')+'</span></td>'+
-        '<td><button onclick="delFact(\''+x.id+'\')" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:16px">×</button></td></tr>';
+        '<td style="white-space:nowrap"><button onclick="factEdit(\''+x.id+'\')" style="background:none;border:none;color:#0ea5e9;cursor:pointer;font-size:11.5px;font-weight:600">editar</button> <button onclick="delFact(\''+x.id+'\')" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:16px">×</button></td></tr>';
     });
     h+='</tbody></table></div></div>';
     $('content').innerHTML=h;
@@ -1305,9 +1305,14 @@ function addFact(){
   var refv=_v('fc_ref'), ref=null;
   if(refv){var p=refv.split(':');var arr=p[0]==='oc'?OCREC:(DASH.hist||[]);for(var i=0;i<arr.length;i++){var it=arr[i];if((p[0]==='oc'&&it.id===p[1])||(p[0]==='cot'&&it.num===p[1])){ref={tipo:p[0],id:p[1],num:it.num};break;}}}
   if(!ref)ref=factAutoRef(cli,monto);
-  FACT.push({id:'FT'+Date.now(),num:_v('fc_num'),cliente:cli,ruc:_v('fc_ruc'),fecha:fecha,monto:monto,moneda:_v('fc_moneda')||'S/',tipo:_v('fc_tipo')||'factura',forma_pago:pago,dias_credito:dias,fecha_venc:(pago==='credito'?fechaMas(fecha,dias):''),estado:_v('fc_estado')||'emitida',ref:ref});
-  saveFact();toast('Comprobante registrado'+(ref?(' · enlazado a '+refLabel(ref)):''));renderFacturacion();
+  var obj={num:_v('fc_num'),cliente:cli,ruc:_v('fc_ruc'),fecha:fecha,monto:monto,moneda:_v('fc_moneda')||'S/',tipo:_v('fc_tipo')||'factura',forma_pago:pago,dias_credito:dias,fecha_venc:(pago==='credito'?fechaMas(fecha,dias):''),estado:_v('fc_estado')||'emitida',ref:ref};
+  if(_factEdit){FACT.forEach(function(x){if(x.id===_factEdit)Object.assign(x,obj);});_factEdit=null;}
+  else{obj.id='FT'+Date.now();FACT.push(obj);}
+  saveFact();toast('Comprobante guardado'+(ref?(' · enlazado a '+refLabel(ref)):''));renderFacturacion();
 }
+function factEdit(id){loadFact();var x=FACT.filter(function(f){return f.id===id})[0];if(!x)return;_factEdit=id;toggleFactForm(false);var f=$('factForm');if(f)f.style.display='block';
+  if($('fc_num'))$('fc_num').value=x.num||'';if($('fc_cli'))$('fc_cli').value=x.cliente||'';if($('fc_ruc'))$('fc_ruc').value=x.ruc||'';if($('fc_fecha'))$('fc_fecha').value=x.fecha||'';if($('fc_monto'))$('fc_monto').value=x.monto||0;if($('fc_moneda'))$('fc_moneda').value=curOf(x.moneda);if($('fc_tipo'))$('fc_tipo').value=x.tipo||'factura';if($('fc_pago'))$('fc_pago').value=x.forma_pago||'contado';if($('fc_dias'))$('fc_dias').value=x.dias_credito||0;if($('fc_estado'))$('fc_estado').value=x.estado||'emitida';
+  if(f)f.scrollIntoView({behavior:'smooth',block:'center'});}
 function delFact(id){if(!confirm('¿Eliminar este comprobante?'))return;FACT=FACT.filter(function(x){return x.id!==id});saveFact();renderFacturacion();}
 function toggleFactPagada(id){loadFact();FACT.forEach(function(x){if(x.id===id)x.estado=(x.estado==='pagada'?'emitida':'pagada');});saveFact();renderFacturacion();}
 function factAI(file){
@@ -1428,7 +1433,7 @@ function renderCobranza(){
     h+='<tr><td class="mono">'+esc(x.num||'—')+'<div class="pdl">'+(x.tipo==='boleta'?'Boleta':'Factura')+'</div></td><td>'+esc(x.cliente||'—')+'</td><td class="mono" style="font-weight:600">'+fmtMon(x.monto,x.moneda)+'</td>'+
       '<td>'+esc(x.fecha_venc||'—')+'<div><span class="badge" style="color:'+col+';background:'+bg(col,.14)+'">'+badge+'</span></div></td>'+
       '<td style="font-size:11.5px;color:var(--tmuted)">'+(x.forma_pago==='credito'?('Crédito '+(x.dias_credito||0)+'d'):'Contado')+'</td>'+
-      '<td><button class="aibtn" onclick="cobranzaMarcar(\''+x.id+'\')" style="padding:6px 10px;font-size:11.5px;border:1px solid '+bg('#16a34a',.4)+';color:#16a34a">Marcar cobrada</button></td></tr>';
+      '<td><button class="aibtn" onclick="cobranzaMarcar(\''+x.id+'\')" style="padding:7px 14px;font-size:11.5px;border:none;background:#16a34a;color:#fff;border-radius:8px;cursor:pointer;font-weight:600">Marcar cobrada</button></td></tr>';
   });
   h+='</tbody></table></div></div>';
   $('content').innerHTML=h;
