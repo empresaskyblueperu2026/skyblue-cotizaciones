@@ -861,11 +861,12 @@ function provComprasAgg(){
 function provMargenHTML(q){
   var list=provComprasAgg().filter(function(m){return !q||m.prov.toLowerCase().indexOf(q)>=0});
   if(!list.length)return '<div class="empty-state">'+icon('trending')+'<br>Aún no hay compras registradas.<br>Se llenan al cargar cotizaciones de proveedores (precio de compra) y al registrar OC a proveedores.</div>';
-  var h='<div style="font-size:11.5px;color:var(--tmuted);margin:8px 0">Qué le compras a cada proveedor, cuánto y tu margen al revender. Montos referenciales (S/).</div>';
-  h+='<div class="card"><div class="ptable-wrap"><table class="ptable"><thead><tr><th>Proveedor</th><th>Productos</th><th>Comprado</th><th>Vendido</th><th>Margen</th></tr></thead><tbody>';
+  var h='<div style="font-size:12px;color:var(--tmuted);margin:8px 0;line-height:1.5"><b style="color:var(--tprimary)">Qué le compras a cada proveedor y cuánto ganas al revenderlo.</b><br>"Comprado" = lo que les pagaste · "Vendido" = lo que cobraste por esos mismos productos · "Ganancia" = tu utilidad y % de margen. Montos referenciales en S/.</div>';
+  h+='<div class="card"><div class="ptable-wrap"><table class="ptable"><thead><tr><th>Proveedor</th><th>Productos</th><th>Comprado</th><th>Vendido</th><th>Ganancia</th><th>Margen</th></tr></thead><tbody>';
   list.forEach(function(m){
     var col=m.margen===null?'#94a3b8':(m.margen<10?'#ef4444':m.margen<25?'#f59e0b':'#16a34a');
-    h+='<tr><td>'+esc(m.prov)+'</td><td class="mono">'+m.nprod+'</td><td class="mono">'+fmtMonto(m.compraTot)+'</td><td class="mono">'+(m.ventaTot?fmtMonto(m.ventaTot):'—')+'</td><td><span class="badge" style="color:'+col+';background:'+bg(col,.14)+'">'+(m.margen===null?'sin venta':m.margen.toFixed(0)+'%')+'</span></td></tr>';
+    var gan=m.ventaTot-m.compraTot;
+    h+='<tr><td>'+esc(m.prov)+'</td><td class="mono">'+m.nprod+'</td><td class="mono">'+fmtMonto(m.compraTot)+'</td><td class="mono">'+(m.ventaTot?fmtMonto(m.ventaTot):'—')+'</td><td class="mono" style="color:'+(m.ventaTot?'#16a34a':'var(--tmuted)')+'">'+(m.ventaTot?fmtMonto(gan):'—')+'</td><td><span class="badge" style="color:'+col+';background:'+bg(col,.14)+'">'+(m.margen===null?'sin venta':m.margen.toFixed(0)+'%')+'</span></td></tr>';
   });
   h+='</tbody></table></div></div>';
   return h;
@@ -1099,7 +1100,7 @@ function openProducto(key){
   $('content').innerHTML=h;
 }
 /* ===== Módulo: Órdenes de Compra Recibidas (ventas confirmadas: Estado / B2B) ===== */
-var OCREC=[];
+var OCREC=[],_ocrecEdit=null;
 function ocrecKey(){return 'sigma_ocrec_'+(EMP?EMP.id:'x')}
 function loadOCREC(){try{OCREC=JSON.parse(localStorage.getItem(ocrecKey())||'[]')}catch(e){OCREC=[]}}
 function saveOCREC(){try{localStorage.setItem(ocrecKey(),JSON.stringify(OCREC))}catch(e){}cloudSyncPush()}
@@ -1143,7 +1144,7 @@ function renderOCRecibidas(){
       h+='<tr style="cursor:pointer" onclick="openOCRec(\''+o.id+'\')"><td class="mono">'+esc(o.num||'—')+'</td><td>'+esc(o.cliente||'—')+(o.ruc?'<div class="pdl">RUC '+esc(o.ruc)+'</div>':'')+'</td>'+
         '<td><span class="badge" style="color:'+(o.rubro==='publico'?'#0ea5e9':'#8b5cf6')+';background:'+bg(o.rubro==='publico'?'#0ea5e9':'#8b5cf6',.14)+'">'+(o.rubro==='publico'?'Estado':'Privado')+'</span></td>'+
         '<td class="mono" style="font-weight:600">'+fmtMon(o.monto,o.moneda)+'</td><td>'+(o.forma_pago==='credito'?('Crédito '+(o.dias_credito||0)+'d '+_vencInfo(o)):'Contado')+'</td><td style="color:var(--tmuted)">'+esc(o.fecha||'—')+'</td>'+
-        '<td><button onclick="event.stopPropagation();delOCRec(\''+o.id+'\')" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:16px">×</button></td></tr>';
+        '<td style="white-space:nowrap"><button onclick="event.stopPropagation();ocrecEdit(\''+o.id+'\')" style="background:none;border:none;color:#0ea5e9;cursor:pointer;font-size:11.5px;font-weight:600">editar</button> <button onclick="event.stopPropagation();delOCRec(\''+o.id+'\')" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:16px">×</button></td></tr>';
     });
     h+='</tbody></table></div></div>';
   }
@@ -1174,10 +1175,16 @@ function _v(id){var e=$(id);return e?e.value.trim():'';}
 function addOCRec(){
   var cli=_v('ocr_cli'); if(!cli){toast('Falta el cliente');return;}
   var pago=_v('ocr_pago')||'contado', dias=parseInt(_v('ocr_dias'),10)||0, fecha=_v('ocr_fecha');
-  OCREC.push({id:'OR'+Date.now(),num:_v('ocr_num'),cliente:cli,ruc:_v('ocr_ruc'),fecha:fecha,monto:parseFloat(_v('ocr_monto'))||0,moneda:_v('ocr_moneda')||'S/',rubro:_v('ocr_rubro')||'publico',forma_pago:pago,dias_credito:dias,fecha_venc:(pago==='credito'?fechaMas(fecha,dias):''),proyecto:_v('ocr_proy'),estado:'recibida',items:(window._ocrecItems||[])});
+  var obj={num:_v('ocr_num'),cliente:cli,ruc:_v('ocr_ruc'),fecha:fecha,monto:parseFloat(_v('ocr_monto'))||0,moneda:_v('ocr_moneda')||'S/',rubro:_v('ocr_rubro')||'publico',forma_pago:pago,dias_credito:dias,fecha_venc:(pago==='credito'?fechaMas(fecha,dias):''),proyecto:_v('ocr_proy'),estado:'recibida'};
+  if(_ocrecEdit){OCREC.forEach(function(o){if(o.id===_ocrecEdit)Object.assign(o,obj);});_ocrecEdit=null;}
+  else{obj.id='OR'+Date.now();obj.items=(window._ocrecItems||[]);OCREC.push(obj);}
   window._ocrecItems=null;
-  saveOCREC();toast('OC recibida registrada');renderOCRecibidas();
+  saveOCREC();toast('OC recibida guardada');renderOCRecibidas();
 }
+function ocrecEdit(id){loadOCREC();var o=OCREC.filter(function(x){return x.id===id})[0];if(!o)return;_ocrecEdit=id;toggleOcrecForm(false);var f=$('ocrecForm');if(f)f.style.display='block';
+  ['num','cli','ruc','fecha','monto','proy'].forEach(function(k){});
+  if($('ocr_num'))$('ocr_num').value=o.num||'';if($('ocr_cli'))$('ocr_cli').value=o.cliente||'';if($('ocr_ruc'))$('ocr_ruc').value=o.ruc||'';if($('ocr_fecha'))$('ocr_fecha').value=o.fecha||'';if($('ocr_monto'))$('ocr_monto').value=o.monto||0;if($('ocr_moneda'))$('ocr_moneda').value=curOf(o.moneda);if($('ocr_rubro'))$('ocr_rubro').value=o.rubro||'publico';if($('ocr_pago'))$('ocr_pago').value=o.forma_pago||'contado';if($('ocr_dias'))$('ocr_dias').value=o.dias_credito||0;if($('ocr_proy'))$('ocr_proy').value=o.proyecto||'';
+  if(f)f.scrollIntoView({behavior:'smooth',block:'center'});}
 function delOCRec(id){if(!confirm('¿Eliminar esta OC recibida?'))return;OCREC=OCREC.filter(function(o){return o.id!==id});saveOCREC();renderOCRecibidas();}
 function ocrecAI(file){
   if(!file)return; var st=$('ocrecAiSt'); if(st){st.textContent='Leyendo y analizando con IA…';st.style.color='var(--tmuted)';}
@@ -1463,7 +1470,7 @@ function renderTraza(){
     h+='<div style="display:flex;flex-direction:column;gap:12px" class="fade">';
     list.forEach(function(m){
       var pend=m.factM-m.cobr;
-      h+='<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px"><div><div style="font-weight:600;font-size:14px">'+esc(m.nombre)+'</div>'+(m.ruc?'<div style="font-size:11px;color:var(--tmuted)">RUC '+esc(m.ruc)+'</div>':'')+'</div>'+
+      h+='<div class="card" style="cursor:pointer" onclick="openTraza(\''+m.key.replace(/\\/g,"").replace(/'/g,"")+'\')"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px"><div><div style="font-weight:600;font-size:14px">'+esc(m.nombre)+' <span style="font-size:11px;color:#0ea5e9">ver detalle →</span></div>'+(m.ruc?'<div style="font-size:11px;color:var(--tmuted)">RUC '+esc(m.ruc)+'</div>':'')+'</div>'+
         (m.porc>0?'<span class="badge" style="color:#f59e0b;background:'+bg('#f59e0b',.14)+'">Por cobrar '+fmtMonto(m.porc)+'</span>':(m.cobr>0?'<span class="badge" style="color:#16a34a;background:'+bg('#16a34a',.14)+'">Al día</span>':''))+'</div>'+
         '<div style="display:flex;align-items:stretch;gap:4px;background:var(--input,#f8fafc);border-radius:12px;padding:12px 8px">'+
         _trzStage('Cotizaciones',m.cot,m.cotM,'#14b8a6')+_trzArrow()+
@@ -1473,6 +1480,26 @@ function renderTraza(){
         '</div></div>';
     });
     h+='</div><div style="font-size:11px;color:var(--tmuted);margin-top:10px">Montos referenciales (si manejas soles y dólares, revisa cada documento en su módulo).</div>';
+    $('content').innerHTML=h;
+  });
+}
+function openTraza(key){
+  $('content').innerHTML='<div class="pmod-head fade"><div><h1 style="font-size:21px;font-weight:700">Trazabilidad</h1><div style="font-size:13px;color:var(--tmuted);margin-top:4px">Cargando…</div></div></div>';
+  loadOCREC(); loadFact();
+  loadDash(function(){
+    function mk(name,ruc){return (ruc||'').trim()||((name||'').trim().toLowerCase());}
+    var cots=(DASH.hist||[]).filter(function(c){return !(EMP&&c.empresaId&&c.empresaId!==EMP.id)&&mk((c.cli&&c.cli.n),(c.cli&&c.cli.ruc))===key});
+    var ocs=(OCREC||[]).filter(function(o){return mk(o.cliente,o.ruc)===key});
+    var fcs=(FACT||[]).filter(function(x){return mk(x.cliente,x.ruc)===key});
+    var nombre=(ocs[0]&&ocs[0].cliente)||(cots[0]&&cots[0].cli&&cots[0].cli.n)||(fcs[0]&&fcs[0].cliente)||key;
+    var h='<div class="pmod-head fade"><div><button class="btn-new" onclick="renderTraza()" style="margin-bottom:10px">← Trazabilidad</button><h1 style="font-size:21px;font-weight:700">'+esc(nombre)+'</h1><div style="font-size:13px;color:var(--tmuted);margin-top:4px">Documentos y estado en tiempo real</div></div></div>';
+    function bloque(titulo,color,rows){return '<div class="card fade" style="margin-bottom:12px"><div class="ct" style="font-weight:600;color:'+color+';margin-bottom:8px">'+titulo+'</div>'+(rows||'<div style="font-size:12px;color:var(--tmuted)">Sin documentos</div>')+'</div>';}
+    var rc=cots.map(function(c){return '<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--bd,#f1f5f9)"><span>COT-'+esc(c.num||'')+' · '+esc(c.fecha||'')+'</span><span class="mono">'+fmtMon(c.tot,c.mon)+'</span></div>'}).join('');
+    var ro=ocs.map(function(o){return '<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--bd,#f1f5f9)"><span>OC '+esc(o.num||'')+' · '+esc(o.fecha||'')+(o.url?(' · <a href="'+esc(o.url)+'" target="_blank" style="color:#0ea5e9">SEACE</a>'):'')+'</span><span class="mono">'+fmtMon(o.monto,o.moneda)+'</span></div>'}).join('');
+    var rf=fcs.map(function(x){var pag=x.estado==='pagada';return '<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--bd,#f1f5f9)"><span>'+esc(x.num||'(s/n)')+' · '+esc(x.fecha||'')+' <span class="badge" style="color:'+(pag?'#16a34a':'#f59e0b')+';background:'+bg(pag?'#16a34a':'#f59e0b',.14)+'">'+(pag?'Pagada':'Por cobrar')+'</span></span><span class="mono">'+fmtMon(x.monto,x.moneda)+'</span></div>'}).join('');
+    h+=bloque('1. Cotizaciones ('+cots.length+')','#14b8a6',rc);
+    h+=bloque('2. Órdenes de compra recibidas ('+ocs.length+')','#0ea5e9',ro);
+    h+=bloque('3. Facturas ('+fcs.length+')','#06b6d4',rf);
     $('content').innerHTML=h;
   });
 }
@@ -1494,13 +1521,13 @@ function renderReportes(){
     var margen=tv>0?((tv-tc)/tv*100):null;
     var cl=(typeof cliAgg==='function')?cliAgg():[];
     var pr=(typeof prodAgg==='function')?prodAgg():[];
-    function kpi(lb,val,col){return '<div class="kpi"><div class="val mono" style="font-size:16px'+(col?(';color:'+col):'')+'">'+val+'</div><div class="lab">'+lb+'</div></div>';}
-    var h='<div class="pmod-head fade"><div><h1 style="font-size:23px;font-weight:700;letter-spacing:-.6px">Reportes</h1><div style="font-size:13px;color:var(--tmuted);margin-top:4px">Resumen del negocio · '+(EMP?EMP.nombre:'')+'</div></div><button class="btn-new" onclick="exportReporteCSV()">'+icon('layers')+'Exportar CSV</button></div>';
+    function kpi(lb,val,col,go){return '<div class="kpi"'+(go?(' style="cursor:pointer" onclick="navClick({id:\''+go+'\'})"'):'')+'><div class="val mono" style="font-size:16px'+(col?(';color:'+col):'')+'">'+val+'</div><div class="lab">'+lb+(go?' ›':'')+'</div></div>';}
+    var h='<div class="pmod-head fade"><div><h1 style="font-size:23px;font-weight:700;letter-spacing:-.6px">Reportes</h1><div style="font-size:13px;color:var(--tmuted);margin-top:4px">Resumen del negocio · '+(EMP?EMP.nombre:'')+'</div></div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="aibtn" onclick="reporteTelegram()" style="border:1px solid var(--bd,#e2e8f0)">'+icon('send')+'Enviar a Telegram</button><button class="btn-new" onclick="exportReporteCSV()">'+icon('layers')+'Exportar CSV</button></div></div>';
     h+='<div class="kpis fade" style="margin-bottom:14px">'+
-      kpi('Ventas confirmadas',_dual(ventasConf['S/'],ventasConf['US$']))+
-      kpi('Facturado',_dual(ft.fS,ft.fD))+
-      kpi('Cobrado',_dual(ft.cS,ft.cD),'#16a34a')+
-      kpi('Por cobrar',_dual(ft.pS,ft.pD),'#f59e0b')+'</div>';
+      kpi('Ventas confirmadas',_dual(ventasConf['S/'],ventasConf['US$']),'','ocrec')+
+      kpi('Facturado',_dual(ft.fS,ft.fD),'','facturacion')+
+      kpi('Cobrado',_dual(ft.cS,ft.cD),'#16a34a','cobranza')+
+      kpi('Por cobrar',_dual(ft.pS,ft.pD),'#f59e0b','cobranza')+'</div>';
     h+='<div class="kpis fade" style="margin-bottom:16px">'+
       kpi('Compras a proveedores',fmtMonto(comprasOC+tc))+
       kpi('Margen promedio',margen===null?'—':margen.toFixed(0)+'%',(margen!==null&&margen<15?'#ef4444':'#16a34a'))+
@@ -1518,6 +1545,7 @@ function renderReportes(){
     $('content').innerHTML=h;
   });
 }
+function reporteTelegram(){toast('Enviando reporte a Telegram…');fetch('/api/reporte/run').then(function(r){return r.json()}).then(function(d){toast(d&&d.ok?'Reporte enviado a tu Telegram':'No se pudo enviar');}).catch(function(){toast('Error');});}
 function exportReporteCSV(){
   try{
     var cl=(typeof cliAgg==='function')?cliAgg():[];
@@ -1626,11 +1654,15 @@ function loadLogist(){try{LOGIST=JSON.parse(localStorage.getItem(logistKey())||'
 function saveLogist(){try{localStorage.setItem(logistKey(),JSON.stringify(LOGIST))}catch(e){}cloudSyncPush()}
 var LOG_EST=[['preparando','Preparando','#f59e0b'],['camino','En camino','#0ea5e9'],['entregado','Entregado','#16a34a']];
 function renderLogistica(){
-  loadLogist();
+  loadLogist(); try{loadProy()}catch(e){} try{loadOCREC()}catch(e){}
   var h='<div class="pmod-head fade"><div><h1 style="font-size:23px;font-weight:700;letter-spacing:-.6px">Logística</h1><div style="font-size:13px;color:var(--tmuted);margin-top:4px">Entregas a clientes · '+(EMP?EMP.nombre:'')+'</div></div><button class="btn-new" onclick="toggleLogForm()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" style="width:13px;height:13px"><path d="M12 5v14M5 12h14"/></svg>Nueva entrega</button></div>';
   var pend=LOGIST.filter(function(x){return x.estado!=='entregado'}).length;
   h+='<div class="kpis fade" style="margin-bottom:14px"><div class="kpi"><div class="val mono">'+LOGIST.length+'</div><div class="lab">Entregas</div></div><div class="kpi"><div class="val mono" style="color:#f59e0b">'+pend+'</div><div class="lab">Pendientes</div></div></div>';
-  h+='<div id="logForm" class="card fade" style="display:none;margin-bottom:14px"><div class="ct" style="font-weight:600;margin-bottom:10px">Nueva entrega</div><div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">'+
+  h+='<div id="logForm" class="card fade" style="display:none;margin-bottom:14px">'+
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px"><div class="ct" style="font-weight:600">Nueva entrega</div><label class="aibtn" style="cursor:pointer">'+icon('bolt')+' Cargar guía (IA)<input type="file" accept="application/pdf,image/*" style="display:none" onchange="logGuiaAI(this.files[0])"></label></div>'+
+    '<div style="margin-bottom:10px"><div style="font-size:9.5px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--tmuted);margin-bottom:3px">Elegir proyecto o cliente (autocompleta)</div><select id="lg_src" onchange="logFillFrom(this.value)" style="width:100%;padding:8px 10px;border:1px solid var(--bd,#e2e8f0);border-radius:8px;font-size:13px;background:var(--input,#fff);color:var(--tprimary)">'+logOrigenOpts()+'</select></div>'+
+    '<div id="logAiSt" style="font-size:11.5px;color:var(--tmuted);margin-bottom:8px"></div>'+
+    '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">'+
     ocrecField('lg_cli','Cliente / Proyecto','')+ocrecField('lg_desc','Descripción','Qué se entrega')+ocrecField('lg_fecha','Fecha entrega','',(new Date()).toISOString().slice(0,10),'date')+
     ocrecField('lg_guia','N° Guía remisión','')+ocrecSelect('lg_est','Estado',LOG_EST.map(function(e){return [e[0],e[1]]}))+
     '</div><div style="margin-top:10px;display:flex;gap:8px"><button class="btn-new" onclick="addLog()">Guardar</button><button class="aibtn" onclick="toggleLogForm(true)">Cancelar</button></div></div>';
@@ -1646,6 +1678,24 @@ function renderLogistica(){
 }
 function toggleLogForm(hide){var f=$('logForm');if(!f)return;f.style.display=(hide||f.style.display!=='none')?'none':'block';}
 function addLog(){var c=_v('lg_cli');if(!c){toast('Falta el cliente/proyecto');return;}LOGIST.push({id:'LG'+Date.now(),cliente:c,desc:_v('lg_desc'),fecha:_v('lg_fecha'),guia:_v('lg_guia'),estado:_v('lg_est')||'preparando'});saveLogist();toast('Entrega registrada');renderLogistica();}
+function logOrigenOpts(){
+  var o='<option value="">— Elegir proyecto o cliente —</option>';
+  try{(PROY||[]).forEach(function(p){o+='<option value="proy:'+p.id+'">Proyecto: '+esc((p.nombre||'').slice(0,50))+(p.entidad?(' · '+esc(p.entidad)):'')+'</option>';});}catch(e){}
+  var seen={};try{(OCREC||[]).forEach(function(x){var c=(x.cliente||'').trim();if(c&&!seen[c]){seen[c]=1;o+='<option value="cli:'+esc(c)+'">Cliente: '+esc(c)+'</option>';}});}catch(e){}
+  return o;
+}
+function logFillFrom(v){if(!v)return;var p=v.split(':');if(p[0]==='proy'){var pr=(PROY||[]).filter(function(x){return x.id===p[1]})[0];if(pr){if($('lg_cli'))$('lg_cli').value=(pr.entidad||pr.nombre||'');if($('lg_desc'))$('lg_desc').value=(pr.nombre||'');}}else if(p[0]==='cli'){if($('lg_cli'))$('lg_cli').value=v.slice(4);}}
+function logGuiaAI(file){
+  if(!file)return;var st=$('logAiSt');if(st){st.textContent='Leyendo guía con IA…';st.style.color='var(--tmuted)';}
+  var rd=new FileReader();rd.onload=function(e){var b64=String(e.target.result).split(',')[1];
+    fetch('/api/gemini',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt:'Extrae datos de esta GUIA DE REMISION peruana. Devuelve SOLO JSON: {"guia":"serie-numero de la guia","cliente":"razon social del destinatario","fecha":"YYYY-MM-DD de traslado/emision","desc":"breve descripcion de lo que se traslada"}. Si falta un dato usa "".',imageBase64:b64,mimeType:file.type||'application/pdf'})}).then(function(r){return r.json()}).then(function(d){
+      if(d&&d.error){if(st){st.textContent='Error IA';st.style.color='#ef4444';}return;}
+      var tx='';if(d&&d.candidates&&d.candidates[0]&&d.candidates[0].content&&d.candidates[0].content.parts)tx=d.candidates[0].content.parts.map(function(p){return p.text||''}).join('');
+      var m=tx.replace(/```json/g,'').replace(/```/g,'').match(/\{[\s\S]*\}/);if(!m){if(st){st.textContent='No se pudo leer la guía.';st.style.color='#f59e0b';}return;}
+      try{var o=JSON.parse(m[0]);if($('lg_guia'))$('lg_guia').value=o.guia||'';if(o.cliente&&$('lg_cli')&&!$('lg_cli').value)$('lg_cli').value=o.cliente;if(o.fecha&&$('lg_fecha'))$('lg_fecha').value=o.fecha;if(o.desc&&$('lg_desc'))$('lg_desc').value=o.desc;if(st){st.textContent='✓ Guía leída. Revisa y guarda.';st.style.color='#16a34a';}}catch(e2){if(st){st.textContent='Error al leer.';st.style.color='#ef4444';}}
+    }).catch(function(){if(st){st.textContent='Error de conexión.';st.style.color='#ef4444';}});
+  };rd.readAsDataURL(file);
+}
 function setLogEst(id,v){LOGIST.forEach(function(x){if(x.id===id)x.estado=v;});saveLogist();renderLogistica();}
 function delLog(id){if(!confirm('¿Eliminar entrega?'))return;LOGIST=LOGIST.filter(function(x){return x.id!==id});saveLogist();renderLogistica();}
 /* ===== Módulo: Proyectos Públicos < 8 UIT ===== */
