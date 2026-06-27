@@ -233,7 +233,7 @@ app.get('/api/backup/run',async function(req,res){
 // ---- SEACE: oportunidades 8 UIT (Vigente, La Libertad, que se pueden cotizar) ----
 async function seaceFetch(){
   var anio=new Date().getFullYear();
-  var url='https://prod6.seace.gob.pe/v1/s8uit-services/buscadorpublico/contrataciones/buscador?page=1&page_size=50&anio='+anio+'&estado=2&codigo_departamento=13&campo_orden=fecha_publicacion&orden=desc';
+  var url='https://prod6.seace.gob.pe/v1/s8uit-services/buscadorpublico/contrataciones/buscador?page=1&page_size=50&anio='+anio+'&estado=2&codigo_departamento=13';
   var r=await fetch(url,{headers:{'Accept':'application/json','User-Agent':'Mozilla/5.0'}});
   if(!r.ok)throw new Error('SEACE '+r.status);
   var d=await r.json(); var arr=(d&&d.data)||[];
