@@ -133,6 +133,24 @@ app.get('/api/sunat/validar',async function(req,res){
     var d=await r.json();res.json(d);
   }catch(e){res.json({ok:false,error:e.message});}
 });
+// ---- Certificado digital (.pfx) guardado en Storage privado para firmar comprobantes ----
+async function sbPutCert(emp,b64){await sbEnsureBucket();await fetch(SB_URL+'/storage/v1/object/'+SB_BUCKET+'/cert_'+emp+'.b64',{method:'POST',headers:{'Authorization':'Bearer '+SB_KEY,'apikey':SB_KEY,'Content-Type':'text/plain','cache-control':'no-cache','x-upsert':'true'},body:b64});}
+async function sbGetCert(emp){await sbEnsureBucket();var r=await fetch(SB_URL+'/storage/v1/object/'+SB_BUCKET+'/cert_'+emp+'.b64?t='+Date.now(),{headers:{'Authorization':'Bearer '+SB_KEY,'apikey':SB_KEY,'cache-control':'no-cache'}});if(!r.ok)return null;return await r.text();}
+app.post('/api/sunat/cert',async function(req,res){
+  if(!sbReady())return proxyCloud(req,res);
+  try{var b=req.body||{};var emp=b.emp||'default';if(!b.pfxBase64)return res.status(400).json({error:'Falta el archivo del certificado'});
+    await sbPutCert(emp,b.pfxBase64);
+    var cfg=await sbGetConfig();cfg.sunat=cfg.sunat||{};cfg.sunat[emp]=cfg.sunat[emp]||{};
+    if(b.certClave!=null)cfg.sunat[emp].certClave=String(b.certClave).slice(0,80);
+    cfg.sunat[emp].tieneCert=true; await sbPutConfig(cfg);
+    res.json({ok:true,bytes:b.pfxBase64.length});
+  }catch(e){res.status(500).json({error:e.message});}
+});
+app.get('/api/sunat/cert/status',async function(req,res){
+  if(!sbReady())return proxyCloud(req,res);
+  try{var c=await sbGetCert(req.query.emp||'default');var cfg=await sbGetConfig();var s=_sunatCfgFor(cfg,req.query.emp||'default');res.json({tiene:!!c,tieneClave:!!(s&&s.certClave)});}
+  catch(e){res.json({tiene:false});}
+});
 app.post('/api/aprendizaje',async function(req,res){
   if(!sbReady())return proxyCloud(req,res);
   try{var arr=await sbGetAprend();var b=req.body||{};arr.push({fecha:new Date().toISOString(),modulo:b.modulo||'',empresa:b.empresa||'',texto:(b.texto||'').slice(0,2000)});await sbPutAprend(arr);res.json({ok:true,total:arr.length});}
