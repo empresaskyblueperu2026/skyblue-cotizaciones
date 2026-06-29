@@ -1271,6 +1271,7 @@ function renderFacturacion(){
     hist.forEach(function(c){refOpts+='<option value="cot:'+c.num+'">COT-'+esc(c.num||'')+' · '+esc((c.cli&&c.cli.n)||'')+' · '+fmtMon(c.tot,c.mon)+'</option>';});
     var h='<div class="pmod-head fade"><div><h1 style="font-size:23px;font-weight:700;letter-spacing:-.6px">Facturación</h1><div style="font-size:13px;color:var(--tmuted);margin-top:4px">Facturas y boletas emitidas · '+(EMP?EMP.nombre:'')+'</div></div>'+
       '<button class="btn-new" onclick="toggleFactForm()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" style="width:13px;height:13px"><path d="M12 5v14M5 12h14"/></svg>Nueva factura</button></div>';
+    h+='<div class="card fade" style="margin-bottom:14px;padding:12px;display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap"><div style="font-size:12.5px;color:var(--tmuted);line-height:1.45">Descarga tus comprobantes en PDF y prepara la emision electronica desde la configuracion SUNAT.</div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="aibtn" onclick="factPDFMasivo()" style="border:1px solid var(--bd,#e2e8f0)">'+icon('download')+' Descarga masiva PDF</button><button class="btn-new" onclick="emitirFactForm()">'+icon('bolt')+' Emitir desde SIGMA</button></div><div id="emitSt" style="font-size:12px;color:var(--tmuted);width:100%"></div></div>';
     h+='<div class="kpis fade" style="margin-bottom:16px"><div class="kpi"><div class="top"><div class="kic">'+icon('card')+'</div></div><div class="val mono" style="font-size:17px">'+_dual(t.fS,t.fD)+'</div><div class="lab">Facturado</div></div>'+
        '<div class="kpi"><div class="top"><div class="kic">'+icon('check')+'</div></div><div class="val mono" style="font-size:17px;color:#16a34a">'+_dual(t.cS,t.cD)+'</div><div class="lab">Cobrado</div></div>'+
        '<div class="kpi"><div class="top"><div class="kic">'+icon('wallet')+'</div></div><div class="val mono" style="font-size:17px;color:#f59e0b">'+_dual(t.pS,t.pD)+'</div><div class="lab">Por cobrar</div></div></div>';
@@ -1300,7 +1301,7 @@ function renderFacturacion(){
       var pagoTxt=x.forma_pago==='credito'?('Crédito '+(x.dias_credito||0)+'d'+(x.fecha_venc?(' · '+_vencInfo({forma_pago:'credito',fecha_venc:x.fecha_venc})):'')):'Contado';
       h+='<tr><td class="mono"><span onclick="openFact(\''+x.id+'\')" style="cursor:pointer;color:#0ea5e9;font-weight:600">'+esc(x.num||'(ver)')+'</span><div class="pdl">'+(x.tipo==='boleta'?'Boleta':'Factura')+((x.items&&x.items.length)?(' · '+x.items.length+' ítems'):'')+'</div></td><td>'+esc(x.cliente||'—')+'</td><td class="mono" style="font-weight:600">'+fmtMon(x.monto,x.moneda)+'</td><td style="font-size:11.5px">'+pagoTxt+'</td><td style="color:var(--tmuted);font-size:11.5px">'+refLabel(x.ref)+'</td>'+
         '<td><span class="badge" title="Click para cambiar" onclick="toggleFactPagada(\''+x.id+'\')" style="cursor:pointer;color:'+(pag?'#16a34a':'#f59e0b')+';background:'+bg(pag?'#16a34a':'#f59e0b',.14)+'">'+(pag?'Pagada':'Por cobrar')+'</span></td>'+
-        '<td style="white-space:nowrap"><button onclick="factEdit(\''+x.id+'\')" style="background:none;border:none;color:#0ea5e9;cursor:pointer;font-size:11.5px;font-weight:600">editar</button> <button onclick="delFact(\''+x.id+'\')" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:16px">×</button></td></tr>';
+        '<td style="white-space:nowrap"><button onclick="factPDF(\''+x.id+'\')" style="background:none;border:none;color:#0f766e;cursor:pointer;font-size:11.5px;font-weight:600">PDF</button> <button onclick="factEdit(\''+x.id+'\')" style="background:none;border:none;color:#0ea5e9;cursor:pointer;font-size:11.5px;font-weight:600">editar</button> <button onclick="delFact(\''+x.id+'\')" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:16px">×</button></td></tr>';
     });
     h+='</tbody></table></div></div>';
     $('content').innerHTML=h;
@@ -1324,6 +1325,7 @@ function factEdit(id){loadFact();var x=FACT.filter(function(f){return f.id===id}
   if(f)f.scrollIntoView({behavior:'smooth',block:'center'});}
 function openFact(id){loadFact();var x=FACT.filter(function(f){return f.id===id})[0];if(!x){renderFacturacion();return;}
   var h='<div class="pmod-head fade"><div><button class="btn-new" onclick="renderFacturacion()" style="margin-bottom:10px">← Facturación</button><h1 style="font-size:21px;font-weight:700">'+esc(x.num||'(sin número)')+'</h1><div style="font-size:13px;color:var(--tmuted);margin-top:4px">'+(x.tipo==='boleta'?'Boleta':'Factura')+' · '+esc(x.cliente||'')+'</div></div></div>';
+  h+='<div class="card fade" style="margin-bottom:12px;display:flex;gap:8px;flex-wrap:wrap"><button class="aibtn" onclick="factPDF(\''+x.id+'\')" style="border:1px solid var(--bd,#e2e8f0)">'+icon('download')+' Descargar PDF</button><button class="btn-new" onclick="emitirFactId(\''+x.id+'\')">'+icon('bolt')+' Emitir desde SIGMA</button><div id="emitSt" style="font-size:12px;color:var(--tmuted);width:100%;margin-top:4px"></div></div>';
   function row(k,v){return v?('<div class="k">'+k+'</div><div>'+v+'</div>'):''}
   h+='<div class="card fade"><div class="kv">'+row('Monto total','<b>'+fmtMon(x.monto,x.moneda)+'</b>')+row('Moneda',curOf(x.moneda)==='US$'?'Dólares':'Soles')+row('RUC/DNI',x.ruc)+row('Fecha',x.fecha)+row('Forma de pago',x.forma_pago==='credito'?('Crédito '+(x.dias_credito||0)+'d'):'Contado')+(x.fecha_venc?row('Vence',x.fecha_venc):'')+row('Estado',x.estado==='pagada'?'Pagada':'Por cobrar')+row('Enlace',refLabel(x.ref))+'</div></div>';
   if(x.items&&x.items.length){
@@ -1351,6 +1353,50 @@ function factAI(file){
         if(st){st.textContent='✓ Datos extraídos'+(window._factItems.length?(' ('+window._factItems.length+' ítems)'):'')+(rf?(' · enlazado a '+refLabel(rf)):'')+'. Revisa y guarda.';st.style.color='#16a34a';}}catch(e2){if(st){st.textContent='Error al leer respuesta.';st.style.color='#ef4444';}}
     }).catch(function(){if(st){st.textContent='Error de conexión.';st.style.color='#ef4444';}});
   };rd.readAsDataURL(file);
+}
+function pdfDownload(name,blob){
+  var a=document.createElement('a'),url=URL.createObjectURL(blob);
+  a.href=url;a.download=name||'sigma.pdf';document.body.appendChild(a);a.click();
+  setTimeout(function(){URL.revokeObjectURL(url);if(a.parentNode)a.parentNode.removeChild(a);},600);
+}
+function postPDF(url,body,name){
+  return fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body||{})}).then(function(r){
+    if(!r.ok)return r.json().then(function(d){throw new Error((d&&d.error)||'No se pudo generar PDF')});
+    return r.blob();
+  }).then(function(b){pdfDownload(name,b);});
+}
+function factFormObj(){
+  var pago=_v('fc_pago')||'contado',dias=parseInt(_v('fc_dias'),10)||0,fecha=_v('fc_fecha');
+  return {num:_v('fc_num'),cliente:_v('fc_cli'),ruc:_v('fc_ruc'),fecha:fecha,monto:parseFloat(_v('fc_monto'))||0,moneda:_v('fc_moneda')||'S/',tipo:_v('fc_tipo')||'factura',forma_pago:pago,dias_credito:dias,fecha_venc:(pago==='credito'?fechaMas(fecha,dias):''),estado:_v('fc_estado')||'emitida',items:(window._factItems||[])};
+}
+function factPDF(id){
+  loadFact();var x=(FACT||[]).filter(function(f){return f.id===id})[0];
+  if(!x){toast('No se encontro el comprobante');return;}
+  postPDF('/api/pdf/comprobantes',{items:[x],empresa:EMP||{},filename:(x.num||'comprobante')+'.pdf'},(x.num||'comprobante')+'.pdf').catch(function(e){toast(e.message||'No se pudo descargar');});
+}
+function factPDFMasivo(){
+  loadFact();if(!FACT.length){toast('No hay comprobantes para descargar');return;}
+  var name='comprobantes_sigma_'+(new Date().toISOString().slice(0,10))+'.pdf';
+  postPDF('/api/pdf/comprobantes',{items:FACT,empresa:EMP||{},filename:name},name).then(function(){toast('PDF masivo generado');}).catch(function(e){toast(e.message||'No se pudo descargar');});
+}
+function emitirFactObj(x){
+  var st=$('emitSt');if(st){st.textContent='Preparando emision electronica...';st.style.color='var(--tmuted)';}
+  fetch('/api/sunat/emitir',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({emp:EMP?EMP.id:'default',empresa:EMP||{},comprobante:x})}).then(function(r){return r.json()}).then(function(d){
+    var msg=d&&d.ok?'Comprobante emitido correctamente.':((d&&d.error)||'No se pudo emitir.');
+    if(d&&d.manual)msg+=' Puedes abrir SEE-SOL desde Contabilidad > Facturacion SUNAT.';
+    if(st){st.textContent=msg;st.style.color=d&&d.ok?'#16a34a':'#f59e0b';}
+    toast(msg);
+  }).catch(function(){if(st){st.textContent='Error de conexion.';st.style.color='#ef4444';}toast('Error de conexion');});
+}
+function emitirFactForm(){
+  var x=factFormObj();
+  if(!x.cliente||!x.monto){toast('Abre Nueva factura y completa cliente/monto antes de emitir');var f=$('factForm');if(f)f.style.display='block';return;}
+  emitirFactObj(x);
+}
+function emitirFactId(id){
+  loadFact();var x=(FACT||[]).filter(function(f){return f.id===id})[0];
+  if(!x){toast('No se encontro el comprobante');return;}
+  emitirFactObj(x);
 }
 /* ===== Agente IA (analiza el módulo actual y sugiere mejoras) ===== */
 function initAgente(){
@@ -1796,8 +1842,8 @@ function _contaPaint(){
       '<div style="font-size:11px;color:#ef4444;margin-top:8px">⚠ Usa un <b>usuario SOL secundario</b> dedicado a facturación, nunca tu clave principal. El Client ID/Secret se generan en Menú SOL → "Credenciales de API".</div></div>'+
       '<div class="card fade" style="margin-top:12px"><div class="ct" style="font-weight:600;margin-bottom:8px">Validar comprobante en SUNAT</div><div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">'+
       ocrecSelect('vc_tipo','Tipo',[['01','Factura'],['03','Boleta'],['07','N. Crédito'],['08','N. Débito'],['09','Guía remisión']])+ocrecField('vc_serie','Serie','F001')+ocrecField('vc_num','Número','123','','number')+ocrecField('vc_fecha','Fecha emisión','dd/mm/aaaa')+ocrecField('vc_monto','Monto total','0.00','','number')+
-      '</div><div style="margin-top:8px"><button class="btn-new" onclick="sunatValidar()">Validar en SUNAT</button></div><div id="vcSt" style="font-size:12px;margin-top:8px"></div></div>'+
-      '<div class="card fade" style="margin-top:12px"><div class="ct" style="font-weight:600;margin-bottom:6px">Descarga y consulta masiva (SIRE)</div><div style="font-size:12.5px;color:var(--tmuted);line-height:1.6">Con las credenciales API podrás descargar masivamente tus comprobantes de Ventas (RVIE) y Compras (RCE) desde SIRE. Se activa al confirmar la conexión API.</div></div>'+
+      '</div><div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap"><button class="btn-new" onclick="sunatValidar()">Validar en SUNAT</button><button class="aibtn" onclick="sunatValidarPDF()" style="border:1px solid var(--bd,#e2e8f0)">'+icon('download')+' Descargar PDF validacion</button></div><div id="vcSt" style="font-size:12px;margin-top:8px"></div></div>'+
+      '<div class="card fade" style="margin-top:12px"><div class="ct" style="font-weight:600;margin-bottom:6px">Descarga masiva SUNAT / SIRE</div><div style="font-size:12.5px;color:var(--tmuted);line-height:1.6;margin-bottom:10px">Descarga desde SUNAT la propuesta de tus comprobantes emitidos (RVIE) o recibidos (RCE) por periodo. SUNAT puede devolver un ticket/archivo; SIGMA lo registra y genera PDF de control.</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">'+ocrecField('sire_periodo','Periodo','YYYYMM',(new Date()).toISOString().slice(0,7).replace('-',''))+ocrecSelect('sire_libro','Libro',[['rvie','Ventas emitidas (RVIE)'],['rce','Compras recibidas (RCE)']])+'</div><div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap"><button class="btn-new" onclick="sireSincronizar()">'+icon('download')+' Sincronizar SUNAT</button><button class="aibtn" onclick="sirePDF()" style="border:1px solid var(--bd,#e2e8f0)">'+icon('card')+' Descargar PDF</button></div><div id="sireSt" style="font-size:12px;color:var(--tmuted);margin-top:8px"></div></div>'+
       '<div class="card fade" style="margin-top:12px;border-left:3px solid #16a34a"><div class="ct" style="font-weight:600;margin-bottom:6px">Certificado digital (para EMITIR facturas/guías)</div>'+
       '<div style="font-size:12.5px;color:var(--tmuted);line-height:1.6;margin-bottom:8px">Sube tu <b>certificado digital (.pfx / .p12)</b> y su clave. Se guarda cifrado en tu bóveda privada (nunca en el código). Con esto firmaremos los XML UBL 2.1 y emitiremos <b>primero en BETA</b> de SUNAT para validar, antes de producción.</div>'+
       '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px"><div><div style="font-size:9.5px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--tmuted);margin-bottom:3px">Archivo .pfx / .p12</div><input id="su_pfx" type="file" accept=".pfx,.p12" style="width:100%;font-size:12px"></div>'+ocrecField('su_certclave','Clave del certificado','','','password')+'</div>'+
@@ -1811,7 +1857,40 @@ function contaRecordar(){toast('Enviando recordatorio…');fetch('/api/reporte/r
 function sunatGuardar(){var st=$('suSt');if(st)st.textContent='Guardando…';var b={emp:EMP?EMP.id:'default',ruc:_v('su_ruc'),usuario:_v('su_user'),ose:_v('su_ose'),modo:_v('su_modo'),clientId:_v('su_cid')};var sec=_v('su_csec');if(sec)b.clientSecret=sec;var cl=_v('su_clave');if(cl)b.clave=cl;fetch('/api/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)}).then(function(r){return r.json()}).then(function(d){if(st){st.textContent=d&&d.ok?('✓ Configuración guardada.'+(d.sunat&&d.sunat.tieneApi?' API SUNAT lista para probar.':' Falta Client ID/Secret/Clave para la API.')):'No se pudo guardar.';st.style.color=d&&d.ok?'#16a34a':'#ef4444';}}).catch(function(){if(st){st.textContent='Error.';st.style.color='#ef4444';}});}
 function certSubir(){var st=$('certSt');var fi=$('su_pfx');var file=fi&&fi.files&&fi.files[0];if(!file){if(st){st.textContent='Selecciona el archivo .pfx primero.';st.style.color='#f59e0b';}return;}if(st){st.textContent='Subiendo y cifrando…';st.style.color='var(--tmuted)';}var rd=new FileReader();rd.onload=function(e){var b64=String(e.target.result).split(',')[1];fetch('/api/sunat/cert',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({emp:EMP?EMP.id:'default',pfxBase64:b64,certClave:_v('su_certclave')})}).then(function(r){return r.json()}).then(function(d){if(st){st.textContent=d&&d.ok?'✓ Certificado guardado de forma segura. Listo para emitir en BETA.':('No se pudo: '+(d.error||''));st.style.color=d&&d.ok?'#16a34a':'#ef4444';}}).catch(function(){if(st){st.textContent='Error de conexión.';st.style.color='#ef4444';}});};rd.readAsDataURL(file);}
 function sunatProbar(){var st=$('suSt');if(st){st.textContent='Probando conexión con SUNAT…';st.style.color='var(--tmuted)';}fetch('/api/sunat/test?emp='+(EMP?EMP.id:'default')).then(function(r){return r.json()}).then(function(d){if(st){st.textContent=d&&d.ok?('✓ '+d.mensaje):('✗ '+(d.error||'No se pudo conectar'));st.style.color=d&&d.ok?'#16a34a':'#ef4444';}}).catch(function(){if(st){st.textContent='Error de conexión.';st.style.color='#ef4444';}});}
-function sunatValidar(){var st=$('vcSt');if(st){st.textContent='Consultando a SUNAT…';st.style.color='var(--tmuted)';}var q='?emp='+(EMP?EMP.id:'default')+'&tipo='+encodeURIComponent(_v('vc_tipo'))+'&serie='+encodeURIComponent(_v('vc_serie'))+'&numero='+encodeURIComponent(_v('vc_num'))+'&fecha='+encodeURIComponent(_v('vc_fecha'))+'&monto='+encodeURIComponent(_v('vc_monto'));fetch('/api/sunat/validar'+q).then(function(r){return r.json()}).then(function(d){if(!st)return;if(d&&d.error){st.textContent='✗ '+d.error;st.style.color='#ef4444';return;}var estado=(d&&(d.data&&d.data.estadoCp||d.estadoCp||d.estado))||JSON.stringify(d).slice(0,150);st.textContent='Resultado SUNAT: '+estado;st.style.color='#16a34a';}).catch(function(){if(st){st.textContent='Error de conexión.';st.style.color='#ef4444';}});}
+var _lastSireDescarga=null;
+function sireSincronizar(){
+  var st=$('sireSt'),periodo=(_v('sire_periodo')||'').replace(/D/g,''),libro=_v('sire_libro')||'rvie';
+  if(!/^d{6}$/.test(periodo)){if(st){st.textContent='Coloca el periodo en formato YYYYMM. Ejemplo: 202606';st.style.color='#f59e0b';}return;}
+  if(st){st.textContent='Consultando SUNAT/SIRE...';st.style.color='var(--tmuted)';}
+  fetch('/api/sunat/sire/propuesta?emp='+(EMP?EMP.id:'default')+'&periodo='+encodeURIComponent(periodo)+'&libro='+encodeURIComponent(libro)).then(function(r){return r.json()}).then(function(d){
+    _lastSireDescarga={query:{periodo:periodo,libro:libro},result:d};
+    var raw=d&&d.data?JSON.stringify(d.data):'';
+    var ticket=(raw.match(/[A-Z]{4}d{8,}/)||[])[0]||'';
+    if(st){st.textContent=d&&d.ok?('Solicitud enviada a SUNAT/SIRE'+(ticket?(' ? ticket '+ticket):'. Revisa el PDF de control.')):('SUNAT/SIRE no completo la descarga: '+((d&&d.error)||(d&&d.status)||'sin detalle'));st.style.color=d&&d.ok?'#16a34a':'#ef4444';}
+  }).catch(function(){if(st){st.textContent='Error de conexion con SUNAT/SIRE.';st.style.color='#ef4444';}});
+}
+function sirePDF(){
+  if(!_lastSireDescarga){toast('Primero sincroniza SUNAT/SIRE');return;}
+  var q=_lastSireDescarga.query||{},name='sire_'+(q.libro||'rvie')+'_'+(q.periodo||'periodo')+'.pdf';
+  postPDF('/api/pdf/sire',{empresa:EMP||{},query:q,result:_lastSireDescarga.result||{}},name).then(function(){toast('PDF SIRE descargado');}).catch(function(e){toast(e.message||'No se pudo descargar');});
+}
+var _lastSunatValidacion=null;
+function sunatValidar(){
+  var st=$('vcSt');if(st){st.textContent='Consultando a SUNAT...';st.style.color='var(--tmuted)';}
+  var query={tipo:_v('vc_tipo'),serie:_v('vc_serie'),numero:_v('vc_num'),fecha:_v('vc_fecha'),monto:_v('vc_monto')};
+  var q='?emp='+(EMP?EMP.id:'default')+'&tipo='+encodeURIComponent(query.tipo)+'&serie='+encodeURIComponent(query.serie)+'&numero='+encodeURIComponent(query.numero)+'&fecha='+encodeURIComponent(query.fecha)+'&monto='+encodeURIComponent(query.monto);
+  fetch('/api/sunat/validar'+q).then(function(r){return r.json()}).then(function(d){
+    _lastSunatValidacion={query:query,result:d};
+    if(!st)return;if(d&&d.error){st.textContent='Error: '+d.error;st.style.color='#ef4444';return;}
+    var estado=(d&&(d.data&&d.data.estadoCp||d.estadoCp||d.estado))||JSON.stringify(d).slice(0,150);
+    st.textContent='Resultado SUNAT: '+estado;st.style.color='#16a34a';
+  }).catch(function(){if(st){st.textContent='Error de conexion.';st.style.color='#ef4444';}});
+}
+function sunatValidarPDF(){
+  if(!_lastSunatValidacion){toast('Primero valida el comprobante en SUNAT');return;}
+  var q=_lastSunatValidacion.query||{},name='validacion_'+(q.serie||'serie')+'-'+(q.numero||'numero')+'.pdf';
+  postPDF('/api/pdf/validacion',{empresa:EMP||{},query:q,result:_lastSunatValidacion.result||{}},name).then(function(){toast('PDF de validacion descargado');}).catch(function(e){toast(e.message||'No se pudo descargar');});
+}
 function contadorAnalizar(){
   var d=contaData();
   var m=document.getElementById('_agmodal'); if(!m){initAgente();m=document.getElementById('_agmodal');}

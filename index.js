@@ -133,6 +133,124 @@ app.get('/api/sunat/validar',async function(req,res){
     var d=await r.json();res.json(d);
   }catch(e){res.json({ok:false,error:e.message});}
 });
+app.get('/api/sunat/sire/propuesta',async function(req,res){
+  if(!sbReady())return proxyCloud(req,res);
+  try{
+    var cfg=await sbGetConfig(),c=_sunatCfgFor(cfg,req.query.emp||'default');
+    var per=String(req.query.periodo||'').replace(/\D/g,'').slice(0,6);
+    if(!/^\d{6}$/.test(per))return res.status(400).json({ok:false,error:'Periodo invalido. Usa formato YYYYMM.'});
+    var libro=req.query.libro==='rce'?'rce':'rvie';
+    var token=await sunatToken(c,'https://api-sire.sunat.gob.pe');
+    var url;
+    if(libro==='rvie'){
+      url='https://api-sire.sunat.gob.pe/v1/contribuyente/migeigv/libros/rvie/propuesta/web/propuesta/'+per+'/exportapropuesta?codTipoArchivo='+(req.query.codTipoArchivo||'046');
+    }else{
+      url='https://api-sire.sunat.gob.pe/v1/contribuyente/migeigv/libros/rce/propuesta/web/propuesta/'+per+'/exportapropuesta?codTipoArchivo='+(req.query.codTipoArchivo||'046');
+    }
+    var r=await fetch(url,{headers:{'Accept':'application/json','Authorization':'Bearer '+token}});
+    var txt=await r.text(),d;try{d=JSON.parse(txt);}catch(e){d={raw:txt.slice(0,1000)};}
+    res.status(r.ok?200:502).json({ok:r.ok,periodo:per,libro:libro,endpoint:url,status:r.status,data:d});
+  }catch(e){res.status(500).json({ok:false,error:e.message});}
+});
+// ---- PDFs simples del sistema: comprobantes y constancias de validacion ----
+function pdfEsc(s){return String(s==null?'':s).replace(/[\\()]/g,function(m){return '\\'+m}).replace(/[^\x09\x0A\x0D\x20-\x7E]/g,function(ch){return ch.normalize?ch.normalize('NFD').replace(/[\u0300-\u036f]/g,''):'';});}
+function pdfMoney(v,mon){var n=Number(v)||0;return (mon||'S/')+' '+n.toLocaleString('es-PE',{minimumFractionDigits:2,maximumFractionDigits:2});}
+function buildSimplePDF(pages){
+  pages=(pages&&pages.length)?pages:[['SIGMA','Sin datos']];
+  var objs=[],kids=[],pageW=595,pageH=842;
+  function add(s){objs.push(s);return objs.length;}
+  var fontId=add('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>');
+  pages.forEach(function(lines){
+    var content='BT\n/F1 11 Tf\n50 790 Td\n14 TL\n';
+    (lines||[]).forEach(function(line,idx){
+      var txt=pdfEsc(line);
+      if(idx===0)content+='/F1 16 Tf ('+txt+') Tj /F1 11 Tf T*\n';
+      else content+='('+txt+') Tj T*\n';
+    });
+    content+='ET';
+    var streamId=add('<< /Length '+Buffer.byteLength(content,'binary')+' >>\nstream\n'+content+'\nendstream');
+    var pageId=add('<< /Type /Page /Parent 0 0 R /MediaBox [0 0 '+pageW+' '+pageH+'] /Resources << /Font << /F1 '+fontId+' 0 R >> >> /Contents '+streamId+' 0 R >>');
+    kids.push(pageId);
+  });
+  var pagesId=add('<< /Type /Pages /Kids ['+kids.map(function(id){return id+' 0 R'}).join(' ')+'] /Count '+kids.length+' >>');
+  kids.forEach(function(id){objs[id-1]=objs[id-1].replace('/Parent 0 0 R','/Parent '+pagesId+' 0 R')});
+  var catalogId=add('<< /Type /Catalog /Pages '+pagesId+' 0 R >>');
+  var out='%PDF-1.4\n',xref=[0];
+  objs.forEach(function(o,i){xref.push(Buffer.byteLength(out,'binary'));out+=(i+1)+' 0 obj\n'+o+'\nendobj\n'});
+  var start=Buffer.byteLength(out,'binary');
+  out+='xref\n0 '+(objs.length+1)+'\n0000000000 65535 f \n';
+  xref.slice(1).forEach(function(pos){out+=String(pos).padStart(10,'0')+' 00000 n \n'});
+  out+='trailer\n<< /Size '+(objs.length+1)+' /Root '+catalogId+' 0 R >>\nstartxref\n'+start+'\n%%EOF';
+  return Buffer.from(out,'binary');
+}
+function comprobanteLines(x,empresa){
+  var tipo=(x.tipo||'factura').toUpperCase();
+  var lines=['COMPROBANTE DE PAGO - '+tipo,''];
+  lines.push('Empresa emisora: '+((empresa&&empresa.nombre)||'SKY BLUE PERU S.A.C.'));
+  if(empresa&&empresa.ruc)lines.push('RUC emisor: '+empresa.ruc);
+  lines.push('Numero: '+(x.num||'(sin numero)'));
+  lines.push('Fecha emision: '+(x.fecha||''));
+  lines.push('Cliente: '+(x.cliente||''));
+  lines.push('RUC/DNI cliente: '+(x.ruc||''));
+  lines.push('Moneda: '+(x.moneda||'S/'));
+  lines.push('Total: '+pdfMoney(x.monto,x.moneda));
+  lines.push('Forma de pago: '+(x.forma_pago==='credito'?'Credito '+(x.dias_credito||0)+' dias':'Contado'));
+  if(x.fecha_venc)lines.push('Vencimiento: '+x.fecha_venc);
+  lines.push('Estado interno: '+(x.estado==='pagada'?'Pagada':'Por cobrar'));
+  lines.push('');
+  lines.push('Detalle:');
+  if(x.items&&x.items.length){
+    x.items.slice(0,28).forEach(function(it,i){lines.push((i+1)+'. '+(it.desc||it.descripcion||'Item')+' | Cant. '+(it.qty||'')+' | P.Unit '+pdfMoney(it.precio,x.moneda));});
+  }else lines.push('Sin items detallados.');
+  lines.push('');
+  lines.push('Documento generado por SIGMA. Para validez tributaria debe estar aceptado por SUNAT/OSE.');
+  return lines;
+}
+app.post('/api/pdf/comprobantes',function(req,res){
+  try{
+    var b=req.body||{},items=Array.isArray(b.items)?b.items:[],empresa=b.empresa||{};
+    if(!items.length)return res.status(400).json({error:'No hay comprobantes para generar PDF'});
+    var pdf=buildSimplePDF(items.map(function(x){return comprobanteLines(x,empresa)}));
+    res.setHeader('Content-Type','application/pdf');
+    res.setHeader('Content-Disposition','attachment; filename="'+(b.filename||'comprobantes_sigma.pdf')+'"');
+    res.send(pdf);
+  }catch(e){res.status(500).json({error:e.message});}
+});
+app.post('/api/pdf/validacion',function(req,res){
+  try{
+    var b=req.body||{},q=b.query||{},r=b.result||{};
+    var lines=['CONSTANCIA DE VALIDACION SUNAT','','Empresa: '+((b.empresa&&b.empresa.nombre)||''),'RUC empresa: '+((b.empresa&&b.empresa.ruc)||''),'Tipo: '+(q.tipo||''),'Serie: '+(q.serie||''),'Numero: '+(q.numero||''),'Fecha emision: '+(q.fecha||''),'Monto: '+(q.monto||''),'','Resultado: '+JSON.stringify(r).slice(0,1200),'','Generado por SIGMA: '+new Date().toISOString()];
+    var pdf=buildSimplePDF([lines]);
+    res.setHeader('Content-Type','application/pdf');
+    res.setHeader('Content-Disposition','attachment; filename="validacion_sunat.pdf"');
+    res.send(pdf);
+  }catch(e){res.status(500).json({error:e.message});}
+});
+app.post('/api/pdf/sire',function(req,res){
+  try{
+    var b=req.body||{},q=b.query||{},r=b.result||{};
+    var lines=['DESCARGA MASIVA SUNAT / SIRE','','Empresa: '+((b.empresa&&b.empresa.nombre)||''),'RUC empresa: '+((b.empresa&&b.empresa.ruc)||''),'Periodo: '+(q.periodo||''),'Libro: '+((q.libro||'rvie').toUpperCase()),'','Estado: '+(r.ok?'Solicitud aceptada por SUNAT/SIRE':'No completado'),'HTTP: '+(r.status||''),'Ticket/Respuesta: '+JSON.stringify((r.data||r)).slice(0,1400),'','Nota: SUNAT/SIRE entrega propuesta o archivo por ticket. Si SUNAT no expone el PDF original de SEE-SOL, SIGMA genera esta representacion de control.','Generado por SIGMA: '+new Date().toISOString()];
+    var pdf=buildSimplePDF([lines]);
+    res.setHeader('Content-Type','application/pdf');
+    res.setHeader('Content-Disposition','attachment; filename="descarga_sire.pdf"');
+    res.send(pdf);
+  }catch(e){res.status(500).json({error:e.message});}
+});
+app.post('/api/sunat/emitir',async function(req,res){
+  if(!sbReady())return proxyCloud(req,res);
+  try{
+    var b=req.body||{},cfg=await sbGetConfig(),c=_sunatCfgFor(cfg,b.emp||'default');
+    if(!c||!c.modo)return res.status(400).json({ok:false,error:'Falta configurar el modo de emision SUNAT.'});
+    if(c.modo==='see_sol')return res.json({ok:false,manual:true,error:'SEE-SOL es emision manual desde el portal SUNAT. SIGMA preparo el comprobante; abre SEE-SOL para emitirlo oficialmente.'});
+    if(c.modo==='ose'&&!c.ose)return res.status(400).json({ok:false,error:'Falta configurar el proveedor OSE/PSE para emitir por API.'});
+    if(c.modo==='propio'){
+      var cert=await sbGetCert(b.emp||'default');
+      if(!cert||!c.certClave)return res.status(400).json({ok:false,error:'Falta certificado digital y clave para firmar XML UBL.'});
+      return res.json({ok:false,beta:true,error:'Motor UBL/firma listo para activar en el siguiente paso: falta homologar endpoint SUNAT/OSE de envio.'});
+    }
+    res.json({ok:false,error:'Modo de emision no soportado aun.'});
+  }catch(e){res.status(500).json({ok:false,error:e.message});}
+});
 // ---- Certificado digital (.pfx) guardado en Storage privado para firmar comprobantes ----
 async function sbPutCert(emp,b64){await sbEnsureBucket();await fetch(SB_URL+'/storage/v1/object/'+SB_BUCKET+'/cert_'+emp+'.b64',{method:'POST',headers:{'Authorization':'Bearer '+SB_KEY,'apikey':SB_KEY,'Content-Type':'text/plain','cache-control':'no-cache','x-upsert':'true'},body:b64});}
 async function sbGetCert(emp){await sbEnsureBucket();var r=await fetch(SB_URL+'/storage/v1/object/'+SB_BUCKET+'/cert_'+emp+'.b64?t='+Date.now(),{headers:{'Authorization':'Bearer '+SB_KEY,'apikey':SB_KEY,'cache-control':'no-cache'}});if(!r.ok)return null;return await r.text();}
