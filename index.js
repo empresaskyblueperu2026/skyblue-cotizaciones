@@ -135,11 +135,27 @@ function _periodosRango(desde,hasta){
 async function _sirePropuesta(c,periodo,libro,codTipoArchivo){
   var token=await sunatToken(c,'https://api-sire.sunat.gob.pe');
   var url;
-  if(libro==='rvie')url='https://api-sire.sunat.gob.pe/v1/contribuyente/migeigv/libros/rvie/propuesta/web/propuesta/'+periodo+'/exportapropuesta?codTipoArchivo='+(codTipoArchivo||'046');
-  else url='https://api-sire.sunat.gob.pe/v1/contribuyente/migeigv/libros/rce/propuesta/web/propuesta/'+periodo+'/exportapropuesta?codTipoArchivo='+(codTipoArchivo||'046');
+  if(libro==='rvie')url='https://api-sire.sunat.gob.pe/v1/contribuyente/migeigv/libros/rvie/propuesta/web/propuesta/'+periodo+'/exportapropuesta?codTipoArchivo='+(codTipoArchivo||'0');
+  else url='https://api-sire.sunat.gob.pe/v1/contribuyente/migeigv/libros/rce/propuesta/web/propuesta/'+periodo+'/exportapropuesta?codTipoArchivo='+(codTipoArchivo||'0');
   var r=await fetch(url,{headers:{'Accept':'application/json','Authorization':'Bearer '+token}});
   var txt=await r.text(),d;try{d=JSON.parse(txt);}catch(e){d={raw:txt.slice(0,1000)};}
   return {ok:r.ok,periodo:periodo,libro:libro,endpoint:url,status:r.status,data:d};
+}
+function _sireCodLibro(libro){return libro==='rce'?'080000':'140000';}
+async function _sireTicketEstado(c,desde,hasta,libro,numTicket){
+  var token=await sunatToken(c,'https://api-sire.sunat.gob.pe'),codLibro=_sireCodLibro(libro);
+  var url='https://api-sire.sunat.gob.pe/v1/contribuyente/migeigv/libros/rvierce/gestionprocesosmasivos/web/masivo/consultaestadotickets?perIni='+encodeURIComponent(desde)+'&perFin='+encodeURIComponent(hasta)+'&page=1&perPage=20&codLibro='+codLibro+'&codOrigenEnvio=2';
+  if(numTicket)url+='&numTicket='+encodeURIComponent(numTicket);
+  var r=await fetch(url,{headers:{'Accept':'application/json','Authorization':'Bearer '+token}});
+  var txt=await r.text(),d;try{d=JSON.parse(txt);}catch(e){d={raw:txt.slice(0,1000)};}
+  return {ok:r.ok,status:r.status,libro:libro,desde:desde,hasta:hasta,data:d};
+}
+async function _sireArchivo(c,libro,nomArchivoReporte,codTipoArchivoReporte){
+  var token=await sunatToken(c,'https://api-sire.sunat.gob.pe'),codLibro=_sireCodLibro(libro);
+  var url='https://api-sire.sunat.gob.pe/v1/contribuyente/migeigv/libros/rvierce/gestionprocesosmasivos/web/masivo/archivoreporte?nomArchivoReporte='+encodeURIComponent(nomArchivoReporte)+'&codTipoArchivoReporte='+encodeURIComponent(codTipoArchivoReporte==null?'null':codTipoArchivoReporte)+'&codLibro='+codLibro;
+  var r=await fetch(url,{headers:{'Accept':'application/octet-stream','Authorization':'Bearer '+token}});
+  var ab=await r.arrayBuffer();
+  return {ok:r.ok,status:r.status,headers:r.headers,buffer:Buffer.from(ab),url:url};
 }
 app.get('/api/sunat/test',async function(req,res){
   if(!sbReady())return proxyCloud(req,res);
@@ -175,6 +191,27 @@ app.get('/api/sunat/sire/rango',async function(req,res){
       catch(e){items.push({ok:false,periodo:periodos[i],libro:libro,error:e.message});}
     }
     res.json({ok:items.some(function(x){return x.ok}),libro:libro,desde:periodos[0],hasta:periodos[periodos.length-1],total:items.length,items:items});
+  }catch(e){res.status(500).json({ok:false,error:e.message});}
+});
+app.get('/api/sunat/sire/tickets',async function(req,res){
+  if(!sbReady())return proxyCloud(req,res);
+  try{
+    var cfg=await sbGetConfig(),c=_sunatCfgFor(cfg,req.query.emp||'default'),periodos=_periodosRango(req.query.desde,req.query.hasta);
+    var libro=req.query.libro==='rce'?'rce':'rvie';
+    var out=await _sireTicketEstado(c,periodos[0],periodos[periodos.length-1],libro,req.query.numTicket||'');
+    res.status(out.ok?200:502).json(out);
+  }catch(e){res.status(500).json({ok:false,error:e.message});}
+});
+app.get('/api/sunat/sire/archivo',async function(req,res){
+  if(!sbReady())return proxyCloud(req,res);
+  try{
+    var cfg=await sbGetConfig(),c=_sunatCfgFor(cfg,req.query.emp||'default'),libro=req.query.libro==='rce'?'rce':'rvie';
+    if(!req.query.nomArchivoReporte)return res.status(400).json({ok:false,error:'Falta nomArchivoReporte del ticket terminado.'});
+    var out=await _sireArchivo(c,libro,req.query.nomArchivoReporte,req.query.codTipoArchivoReporte);
+    if(!out.ok)return res.status(502).type('text/plain').send(out.buffer.toString('utf8').slice(0,1000));
+    res.setHeader('Content-Type',out.headers.get('content-type')||'application/zip');
+    res.setHeader('Content-Disposition','attachment; filename="'+String(req.query.nomArchivoReporte).replace(/"/g,'')+'"');
+    res.send(out.buffer);
   }catch(e){res.status(500).json({ok:false,error:e.message});}
 });
 // ---- PDFs simples del sistema: comprobantes y constancias de validacion ----
