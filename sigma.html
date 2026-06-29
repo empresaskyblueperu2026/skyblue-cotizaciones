@@ -1843,7 +1843,7 @@ function _contaPaint(){
       '<div class="card fade" style="margin-top:12px"><div class="ct" style="font-weight:600;margin-bottom:8px">Validar comprobante en SUNAT</div><div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">'+
       ocrecSelect('vc_tipo','Tipo',[['01','Factura'],['03','Boleta'],['07','N. Crédito'],['08','N. Débito'],['09','Guía remisión']])+ocrecField('vc_serie','Serie','F001')+ocrecField('vc_num','Número','123','','number')+ocrecField('vc_fecha','Fecha emisión','dd/mm/aaaa')+ocrecField('vc_monto','Monto total','0.00','','number')+
       '</div><div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap"><button class="btn-new" onclick="sunatValidar()">Validar en SUNAT</button><button class="aibtn" onclick="sunatValidarPDF()" style="border:1px solid var(--bd,#e2e8f0)">'+icon('download')+' Descargar PDF validacion</button></div><div id="vcSt" style="font-size:12px;margin-top:8px"></div></div>'+
-      '<div class="card fade" style="margin-top:12px"><div class="ct" style="font-weight:600;margin-bottom:6px">Descarga masiva SUNAT / SIRE</div><div style="font-size:12.5px;color:var(--tmuted);line-height:1.6;margin-bottom:10px">Descarga desde SUNAT la propuesta de tus comprobantes emitidos (RVIE) o recibidos (RCE) por periodo. SUNAT puede devolver un ticket/archivo; SIGMA lo registra y genera PDF de control.</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">'+ocrecField('sire_periodo','Periodo','YYYYMM',(new Date()).toISOString().slice(0,7).replace('-',''))+ocrecSelect('sire_libro','Libro',[['rvie','Ventas emitidas (RVIE)'],['rce','Compras recibidas (RCE)']])+'</div><div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap"><button class="btn-new" onclick="sireSincronizar()">'+icon('download')+' Sincronizar SUNAT</button><button class="aibtn" onclick="sirePDF()" style="border:1px solid var(--bd,#e2e8f0)">'+icon('card')+' Descargar PDF</button></div><div id="sireSt" style="font-size:12px;color:var(--tmuted);margin-top:8px"></div></div>'+
+      '<div class="card fade" style="margin-top:12px"><div class="ct" style="font-weight:600;margin-bottom:6px">Descarga masiva SUNAT / SIRE</div><div style="font-size:12.5px;color:var(--tmuted);line-height:1.6;margin-bottom:10px">Sincroniza tus comprobantes por rango de periodos. Para todos los a?os usa desde el primer mes de actividad hasta el mes actual. SUNAT/SIRE devuelve propuesta/ticket; SIGMA genera PDF de control y seguimiento.</div><div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">'+ocrecField('sire_desde','Desde','YYYYMM','202001')+ocrecField('sire_hasta','Hasta','YYYYMM',(new Date()).toISOString().slice(0,7).replace('-',''))+ocrecSelect('sire_libro','Libro',[['rvie','Ventas emitidas (RVIE)'],['rce','Compras recibidas (RCE)']])+'</div><div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap"><button class="btn-new" onclick="sireSincronizar()">'+icon('download')+' Sincronizar rango</button><button class="aibtn" onclick="sireTodoActual()" style="border:1px solid var(--bd,#e2e8f0)">Todos los periodos</button><button class="aibtn" onclick="sirePDF()" style="border:1px solid var(--bd,#e2e8f0)">'+icon('card')+' Descargar PDF</button></div><div id="sireSt" style="font-size:12px;color:var(--tmuted);margin-top:8px"></div></div>'+
       '<div class="card fade" style="margin-top:12px;border-left:3px solid #16a34a"><div class="ct" style="font-weight:600;margin-bottom:6px">Certificado digital (para EMITIR facturas/guías)</div>'+
       '<div style="font-size:12.5px;color:var(--tmuted);line-height:1.6;margin-bottom:8px">Sube tu <b>certificado digital (.pfx / .p12)</b> y su clave. Se guarda cifrado en tu bóveda privada (nunca en el código). Con esto firmaremos los XML UBL 2.1 y emitiremos <b>primero en BETA</b> de SUNAT para validar, antes de producción.</div>'+
       '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px"><div><div style="font-size:9.5px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--tmuted);margin-bottom:3px">Archivo .pfx / .p12</div><input id="su_pfx" type="file" accept=".pfx,.p12" style="width:100%;font-size:12px"></div>'+ocrecField('su_certclave','Clave del certificado','','','password')+'</div>'+
@@ -1858,20 +1858,29 @@ function sunatGuardar(){var st=$('suSt');if(st)st.textContent='Guardando…';var
 function certSubir(){var st=$('certSt');var fi=$('su_pfx');var file=fi&&fi.files&&fi.files[0];if(!file){if(st){st.textContent='Selecciona el archivo .pfx primero.';st.style.color='#f59e0b';}return;}if(st){st.textContent='Subiendo y cifrando…';st.style.color='var(--tmuted)';}var rd=new FileReader();rd.onload=function(e){var b64=String(e.target.result).split(',')[1];fetch('/api/sunat/cert',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({emp:EMP?EMP.id:'default',pfxBase64:b64,certClave:_v('su_certclave')})}).then(function(r){return r.json()}).then(function(d){if(st){st.textContent=d&&d.ok?'✓ Certificado guardado de forma segura. Listo para emitir en BETA.':('No se pudo: '+(d.error||''));st.style.color=d&&d.ok?'#16a34a':'#ef4444';}}).catch(function(){if(st){st.textContent='Error de conexión.';st.style.color='#ef4444';}});};rd.readAsDataURL(file);}
 function sunatProbar(){var st=$('suSt');if(st){st.textContent='Probando conexión con SUNAT…';st.style.color='var(--tmuted)';}fetch('/api/sunat/test?emp='+(EMP?EMP.id:'default')).then(function(r){return r.json()}).then(function(d){if(st){st.textContent=d&&d.ok?('✓ '+d.mensaje):('✗ '+(d.error||'No se pudo conectar'));st.style.color=d&&d.ok?'#16a34a':'#ef4444';}}).catch(function(){if(st){st.textContent='Error de conexión.';st.style.color='#ef4444';}});}
 var _lastSireDescarga=null;
+function _sirePeriodo(id){return (_v(id)||'').replace(/\D/g,'').slice(0,6);}
+function sireTodoActual(){
+  var y=(new Date()).getFullYear(),m=String((new Date()).getMonth()+1).padStart(2,'0');
+  if($('sire_desde'))$('sire_desde').value='202001';
+  if($('sire_hasta'))$('sire_hasta').value=String(y)+m;
+  sireSincronizar();
+}
 function sireSincronizar(){
-  var st=$('sireSt'),periodo=(_v('sire_periodo')||'').replace(/D/g,''),libro=_v('sire_libro')||'rvie';
-  if(!/^d{6}$/.test(periodo)){if(st){st.textContent='Coloca el periodo en formato YYYYMM. Ejemplo: 202606';st.style.color='#f59e0b';}return;}
-  if(st){st.textContent='Consultando SUNAT/SIRE...';st.style.color='var(--tmuted)';}
-  fetch('/api/sunat/sire/propuesta?emp='+(EMP?EMP.id:'default')+'&periodo='+encodeURIComponent(periodo)+'&libro='+encodeURIComponent(libro)).then(function(r){return r.json()}).then(function(d){
-    _lastSireDescarga={query:{periodo:periodo,libro:libro},result:d};
-    var raw=d&&d.data?JSON.stringify(d.data):'';
-    var ticket=(raw.match(/[A-Z]{4}d{8,}/)||[])[0]||'';
-    if(st){st.textContent=d&&d.ok?('Solicitud enviada a SUNAT/SIRE'+(ticket?(' ? ticket '+ticket):'. Revisa el PDF de control.')):('SUNAT/SIRE no completo la descarga: '+((d&&d.error)||(d&&d.status)||'sin detalle'));st.style.color=d&&d.ok?'#16a34a':'#ef4444';}
+  var st=$('sireSt'),desde=_sirePeriodo('sire_desde'),hasta=_sirePeriodo('sire_hasta'),libro=_v('sire_libro')||'rvie';
+  if(!/^d{6}$/.test(desde)||!/^d{6}$/.test(hasta)){if(st){st.textContent='Coloca los periodos en formato YYYYMM. Ejemplo: 202501 hasta 202512';st.style.color='#f59e0b';}return;}
+  if(st){st.textContent='Consultando SUNAT/SIRE por rango '+desde+' - '+hasta+'...';st.style.color='var(--tmuted)';}
+  fetch('/api/sunat/sire/rango?emp='+(EMP?EMP.id:'default')+'&desde='+encodeURIComponent(desde)+'&hasta='+encodeURIComponent(hasta)+'&libro='+encodeURIComponent(libro)).then(function(r){return r.json()}).then(function(d){
+    _lastSireDescarga={query:{desde:desde,hasta:hasta,libro:libro},result:d};
+    var ok=(d.items||[]).filter(function(x){return x.ok}).length,err=(d.items||[]).length-ok;
+    var unauthorized=(d.items||[]).some(function(x){return x.status===401||/unauthorized/i.test(JSON.stringify(x.data||x.error||''));});
+    var msg=d&&d.ok?('SUNAT/SIRE procesado: '+ok+' periodo(s) OK, '+err+' con alerta. Ya puedes descargar PDF de control.'):('SUNAT/SIRE no autorizo la descarga: '+((d&&d.error)||'sin detalle'));
+    if(unauthorized)msg+=' Revisa que tu usuario secundario tenga habilitado SIRE/RVIE en Credenciales API SUNAT.';
+    if(st){st.textContent=msg;st.style.color=d&&d.ok?'#16a34a':'#ef4444';}
   }).catch(function(){if(st){st.textContent='Error de conexion con SUNAT/SIRE.';st.style.color='#ef4444';}});
 }
 function sirePDF(){
   if(!_lastSireDescarga){toast('Primero sincroniza SUNAT/SIRE');return;}
-  var q=_lastSireDescarga.query||{},name='sire_'+(q.libro||'rvie')+'_'+(q.periodo||'periodo')+'.pdf';
+  var q=_lastSireDescarga.query||{},name='sire_'+(q.libro||'rvie')+'_'+(q.desde||'desde')+'_'+(q.hasta||'hasta')+'.pdf';
   postPDF('/api/pdf/sire',{empresa:EMP||{},query:q,result:_lastSireDescarga.result||{}},name).then(function(){toast('PDF SIRE descargado');}).catch(function(e){toast(e.message||'No se pudo descargar');});
 }
 var _lastSunatValidacion=null;

@@ -120,6 +120,27 @@ async function sunatToken(c,scope){
   return d.access_token;
 }
 function _sunatCfgFor(cfg,emp){return (cfg.sunat&&(cfg.sunat[emp]||cfg.sunat['default']))||{};}
+function _periodosRango(desde,hasta){
+  desde=String(desde||'').replace(/\D/g,'').slice(0,6);hasta=String(hasta||'').replace(/\D/g,'').slice(0,6);
+  if(!/^\d{6}$/.test(desde)||!/^\d{6}$/.test(hasta))throw new Error('Usa periodos en formato YYYYMM.');
+  var y=+desde.slice(0,4),m=+desde.slice(4,6),yh=+hasta.slice(0,4),mh=+hasta.slice(4,6),out=[];
+  if(m<1||m>12||mh<1||mh>12)throw new Error('Mes invalido en el periodo.');
+  while(y<yh||(y===yh&&m<=mh)){
+    out.push(String(y)+String(m).padStart(2,'0'));
+    m++;if(m>12){m=1;y++;}
+    if(out.length>180)throw new Error('Rango demasiado amplio. Usa maximo 180 meses por descarga.');
+  }
+  return out;
+}
+async function _sirePropuesta(c,periodo,libro,codTipoArchivo){
+  var token=await sunatToken(c,'https://api-sire.sunat.gob.pe');
+  var url;
+  if(libro==='rvie')url='https://api-sire.sunat.gob.pe/v1/contribuyente/migeigv/libros/rvie/propuesta/web/propuesta/'+periodo+'/exportapropuesta?codTipoArchivo='+(codTipoArchivo||'046');
+  else url='https://api-sire.sunat.gob.pe/v1/contribuyente/migeigv/libros/rce/propuesta/web/propuesta/'+periodo+'/exportapropuesta?codTipoArchivo='+(codTipoArchivo||'046');
+  var r=await fetch(url,{headers:{'Accept':'application/json','Authorization':'Bearer '+token}});
+  var txt=await r.text(),d;try{d=JSON.parse(txt);}catch(e){d={raw:txt.slice(0,1000)};}
+  return {ok:r.ok,periodo:periodo,libro:libro,endpoint:url,status:r.status,data:d};
+}
 app.get('/api/sunat/test',async function(req,res){
   if(!sbReady())return proxyCloud(req,res);
   try{var cfg=await sbGetConfig();var c=_sunatCfgFor(cfg,req.query.emp||'default');var t=await sunatToken(c);res.json({ok:true,mensaje:'Conexión OK con SUNAT (token obtenido).'});}
@@ -140,16 +161,20 @@ app.get('/api/sunat/sire/propuesta',async function(req,res){
     var per=String(req.query.periodo||'').replace(/\D/g,'').slice(0,6);
     if(!/^\d{6}$/.test(per))return res.status(400).json({ok:false,error:'Periodo invalido. Usa formato YYYYMM.'});
     var libro=req.query.libro==='rce'?'rce':'rvie';
-    var token=await sunatToken(c,'https://api-sire.sunat.gob.pe');
-    var url;
-    if(libro==='rvie'){
-      url='https://api-sire.sunat.gob.pe/v1/contribuyente/migeigv/libros/rvie/propuesta/web/propuesta/'+per+'/exportapropuesta?codTipoArchivo='+(req.query.codTipoArchivo||'046');
-    }else{
-      url='https://api-sire.sunat.gob.pe/v1/contribuyente/migeigv/libros/rce/propuesta/web/propuesta/'+per+'/exportapropuesta?codTipoArchivo='+(req.query.codTipoArchivo||'046');
+    var out=await _sirePropuesta(c,per,libro,req.query.codTipoArchivo);
+    res.status(out.ok?200:502).json(out);
+  }catch(e){res.status(500).json({ok:false,error:e.message});}
+});
+app.get('/api/sunat/sire/rango',async function(req,res){
+  if(!sbReady())return proxyCloud(req,res);
+  try{
+    var cfg=await sbGetConfig(),c=_sunatCfgFor(cfg,req.query.emp||'default');
+    var libro=req.query.libro==='rce'?'rce':'rvie',periodos=_periodosRango(req.query.desde,req.query.hasta),items=[];
+    for(var i=0;i<periodos.length;i++){
+      try{items.push(await _sirePropuesta(c,periodos[i],libro,req.query.codTipoArchivo));}
+      catch(e){items.push({ok:false,periodo:periodos[i],libro:libro,error:e.message});}
     }
-    var r=await fetch(url,{headers:{'Accept':'application/json','Authorization':'Bearer '+token}});
-    var txt=await r.text(),d;try{d=JSON.parse(txt);}catch(e){d={raw:txt.slice(0,1000)};}
-    res.status(r.ok?200:502).json({ok:r.ok,periodo:per,libro:libro,endpoint:url,status:r.status,data:d});
+    res.json({ok:items.some(function(x){return x.ok}),libro:libro,desde:periodos[0],hasta:periodos[periodos.length-1],total:items.length,items:items});
   }catch(e){res.status(500).json({ok:false,error:e.message});}
 });
 // ---- PDFs simples del sistema: comprobantes y constancias de validacion ----
@@ -229,7 +254,17 @@ app.post('/api/pdf/validacion',function(req,res){
 app.post('/api/pdf/sire',function(req,res){
   try{
     var b=req.body||{},q=b.query||{},r=b.result||{};
-    var lines=['DESCARGA MASIVA SUNAT / SIRE','','Empresa: '+((b.empresa&&b.empresa.nombre)||''),'RUC empresa: '+((b.empresa&&b.empresa.ruc)||''),'Periodo: '+(q.periodo||''),'Libro: '+((q.libro||'rvie').toUpperCase()),'','Estado: '+(r.ok?'Solicitud aceptada por SUNAT/SIRE':'No completado'),'HTTP: '+(r.status||''),'Ticket/Respuesta: '+JSON.stringify((r.data||r)).slice(0,1400),'','Nota: SUNAT/SIRE entrega propuesta o archivo por ticket. Si SUNAT no expone el PDF original de SEE-SOL, SIGMA genera esta representacion de control.','Generado por SIGMA: '+new Date().toISOString()];
+    var lines=['DESCARGA MASIVA SUNAT / SIRE','','Empresa: '+((b.empresa&&b.empresa.nombre)||''),'RUC empresa: '+((b.empresa&&b.empresa.ruc)||''),'Periodo: '+(q.periodo||((q.desde||'')+' - '+(q.hasta||''))),'Libro: '+((q.libro||'rvie').toUpperCase()),'','Estado: '+(r.ok?'Solicitud aceptada por SUNAT/SIRE':'No completado')];
+    if(Array.isArray(r.items)){
+      lines.push('Periodos procesados: '+r.items.length);
+      r.items.slice(0,60).forEach(function(it){lines.push((it.periodo||'')+' | '+(it.ok?'OK':'ERROR')+' | HTTP '+(it.status||'')+' | '+JSON.stringify(it.data||it.error||'').slice(0,160));});
+    }else{
+      lines.push('HTTP: '+(r.status||''));
+      lines.push('Ticket/Respuesta: '+JSON.stringify((r.data||r)).slice(0,1400));
+    }
+    lines.push('');
+    lines.push('Nota: SUNAT/SIRE entrega propuesta o archivo por ticket. Si SUNAT no expone el PDF original de SEE-SOL, SIGMA genera esta representacion de control.');
+    lines.push('Generado por SIGMA: '+new Date().toISOString());
     var pdf=buildSimplePDF([lines]);
     res.setHeader('Content-Type','application/pdf');
     res.setHeader('Content-Disposition','attachment; filename="descarga_sire.pdf"');
