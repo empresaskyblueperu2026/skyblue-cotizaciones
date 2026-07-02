@@ -807,7 +807,7 @@ app.get('/api/drive/status',async function(req,res){
 
 app.get('/',function(req,res){
   var p=path.join(__dirname,'sigma.html');
-  fs.access(p,function(e){ if(e){res.setHeader('Content-Type','text/html; charset=utf-8');res.send(APP_HTML);} else {res.sendFile(p);} });
+  fs.access(p,function(e){ res.setHeader('Content-Type','text/html; charset=utf-8'); if(e){res.send(APP_HTML);} else {res.send(fs.readFileSync(p));} });
 });
 app.get('*',function(req,res){res.setHeader('Content-Type','text/html; charset=utf-8');res.send(APP_HTML);});
 var PORT=process.env.PORT||3000;
