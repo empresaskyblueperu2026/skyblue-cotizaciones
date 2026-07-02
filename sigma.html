@@ -584,6 +584,7 @@ var NAV=[
   {id:'oportunidades',ic:'search',lb:'Oportunidades'},
   {id:'proyectos',ic:'clipboard',lb:'Proyectos PÃºblicos'},
   {id:'cotizaciones',ic:'chat',lb:'Cotizaciones',tab:'cot'},
+  {id:'conformidad',ic:'check',lb:'Conformidad'},
   {id:'segcot',ic:'check',lb:'Seguim. Ventas'},
   {id:'ocrec',ic:'cart',lb:'OC Recibidas'},
   {id:'solicitudes',ic:'send',lb:'Solicitud Cotiz.',tab:'sc'},
@@ -617,7 +618,7 @@ function navClick(it){
   toggleMenu(false);
   if(it.tab){window.location.href='/cotizador?tab='+it.tab;return}
   ACTIVE=it.id;renderNav();
-  if(it.id==='dashboard')refreshDash();else if(it.id==='proyectos')renderProyectos();else if(it.id==='boveda')renderBoveda();else if(it.id==='proveedores')renderProveedores();else if(it.id==='clientes')renderClientes();else if(it.id==='productos')renderProductos();else if(it.id==='ocrec')renderOCRecibidas();else if(it.id==='segcot')renderSegCot();else if(it.id==='facturacion')renderFacturacion();else if(it.id==='cobranza')renderCobranza();else if(it.id==='traza')renderTraza();else if(it.id==='contabilidad')renderContabilidad();else if(it.id==='reportes')renderReportes();else if(it.id==='config')renderConfig();else if(it.id==='oportunidades')renderOportunidades();else if(it.id==='logistica')renderLogistica();else renderSoon(it);
+  if(it.id==='dashboard')refreshDash();else if(it.id==='proyectos')renderProyectos();else if(it.id==='boveda')renderBoveda();else if(it.id==='proveedores')renderProveedores();else if(it.id==='clientes')renderClientes();else if(it.id==='productos')renderProductos();else if(it.id==='ocrec')renderOCRecibidas();else if(it.id==='segcot')renderSegCot();else if(it.id==='facturacion')renderFacturacion();else if(it.id==='cobranza')renderCobranza();else if(it.id==='traza')renderTraza();else if(it.id==='contabilidad')renderContabilidad();else if(it.id==='reportes')renderReportes();else if(it.id==='config')renderConfig();else if(it.id==='oportunidades')renderOportunidades();else if(it.id==='logistica')renderLogistica();else if(it.id==='conformidad')renderConformidad();else renderSoon(it);
 }
 
 function selectEmpresa(e){
@@ -2048,6 +2049,7 @@ function cloudSyncPush(){
     payload['cotstat_'+EMP.id]=JSON.parse(localStorage.getItem(cotstatKey())||'{}');
     payload['fact_'+EMP.id]=JSON.parse(localStorage.getItem(factKey())||'[]');
     payload['oport_'+EMP.id]=JSON.parse(localStorage.getItem(oportKey())||'[]');
+    payload['conf_'+EMP.id]=JSON.parse(localStorage.getItem(confKey())||'[]');
     payload['logist_'+EMP.id]=JSON.parse(localStorage.getItem(logistKey())||'[]');
     fetch('/api/data',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
   }catch(e){}
@@ -2062,6 +2064,7 @@ function cloudSyncPull(cb){
       if(d&&d['ocrec_'+EMP.id])localStorage.setItem(ocrecKey(),JSON.stringify(d['ocrec_'+EMP.id]));
       if(d&&d['cotstat_'+EMP.id])localStorage.setItem(cotstatKey(),JSON.stringify(d['cotstat_'+EMP.id]));
       if(d&&d['fact_'+EMP.id])localStorage.setItem(factKey(),JSON.stringify(d['fact_'+EMP.id]));
+      if(d&&d['conf_'+EMP.id])localStorage.setItem(confKey(),JSON.stringify(d['conf_'+EMP.id]));
       if(d&&d['oport_'+EMP.id])localStorage.setItem(oportKey(),JSON.stringify(d['oport_'+EMP.id]));
       if(d&&d['logist_'+EMP.id])localStorage.setItem(logistKey(),JSON.stringify(d['logist_'+EMP.id]));
     }catch(e){}
@@ -2214,6 +2217,85 @@ function renderMaster(d,st,p){
   h+='</div>';return h;
 }
 
+/* ===== Modulo: Conformidad (Acta de conformidad desde factura/contrato) ===== */
+var CONF=[],_confEdit=null;
+function confKey(){return 'sigma_conf_'+(EMP?EMP.id:'x')}
+function loadConf(){try{CONF=JSON.parse(localStorage.getItem(confKey())||'[]')}catch(e){CONF=[]}}
+function saveConf(){try{localStorage.setItem(confKey(),JSON.stringify(CONF))}catch(e){}cloudSyncPush()}
+function renderConformidad(){
+  loadConf();
+  var pend=CONF.filter(function(x){return x.estado!=='conforme'}).length;
+  var h='<div class="pmod-head fade"><div><h1 style="font-size:23px;font-weight:700;letter-spacing:-.6px">Conformidad</h1><div style="font-size:13px;color:var(--tmuted);margin-top:4px">Actas de conformidad de bienes/servicios &middot; '+(EMP?EMP.nombre:'')+'</div></div><button class="btn-new" onclick="toggleConfForm()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" style="width:13px;height:13px"><path d="M12 5v14M5 12h14"/></svg>Nueva conformidad</button></div>';
+  h+='<div class="kpis fade" style="margin-bottom:14px"><div class="kpi"><div class="val mono">'+CONF.length+'</div><div class="lab">Actas</div></div><div class="kpi"><div class="val mono" style="color:#f59e0b">'+pend+'</div><div class="lab">Pendientes</div></div><div class="kpi"><div class="val mono" style="color:#16a34a">'+(CONF.length-pend)+'</div><div class="lab">Conformes</div></div></div>';
+  h+='<div id="confForm" class="card fade" style="display:none;margin-bottom:14px">'+
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px"><div class="ct" style="font-weight:600">Registrar conformidad</div>'+
+    '<label class="aibtn" style="cursor:pointer">'+icon('bolt')+' Cargar factura/contrato (IA)<input type="file" accept="application/pdf,image/*" style="display:none" onchange="confAI(this.files[0])"></label></div>'+
+    '<div id="confAiSt" style="font-size:11.5px;color:var(--tmuted);margin-bottom:10px"></div>'+
+    '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">'+
+      ocrecField('cf_cli','Cliente / Entidad','')+ocrecField('cf_ruc','RUC','')+
+      ocrecSelect('cf_tipo','Documento base',[['factura','Factura'],['contrato','Contrato'],['oc','Orden de Compra'],['guia','Guia de Remision']])+
+      ocrecField('cf_num','N documento','Ej: F001-123 / Contrato N')+ocrecField('cf_fecha','Fecha del documento','',(new Date()).toISOString().slice(0,10),'date')+
+      ocrecField('cf_monto','Monto','0.00','','number')+ocrecSelect('cf_mon','Moneda',[['S/','Soles (S/)'],['US$','Dolares (US$)']])+
+      ocrecField('cf_fconf','Fecha de conformidad','',(new Date()).toISOString().slice(0,10),'date')+ocrecField('cf_resp','Responsable/Area que da conformidad','Ej: Jefe de Logistica')+
+    '</div>'+
+    '<div style="margin-top:10px"><div style="font-size:9.5px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--tmuted);margin-bottom:3px">Descripcion del bien / servicio entregado</div><textarea id="cf_desc" rows="3" style="width:100%;padding:10px;border:1px solid var(--bd,#e2e8f0);border-radius:10px;font-size:13px;background:var(--input,#fff);color:var(--tprimary);resize:vertical" placeholder="Detalle de lo entregado / ejecutado"></textarea></div>'+
+    '<div style="margin-top:8px"><div style="font-size:9.5px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--tmuted);margin-bottom:3px">Observaciones (opcional)</div><input id="cf_obs" style="width:100%;padding:8px 10px;border:1px solid var(--bd,#e2e8f0);border-radius:8px;font-size:13px;background:var(--input,#fff);color:var(--tprimary)"></div>'+
+    '<div style="margin-top:12px;display:flex;gap:8px"><button class="btn-new" onclick="addConf()">Guardar</button><button class="aibtn" onclick="toggleConfForm(true)">Cancelar</button></div></div>';
+  if(!CONF.length){h+='<div class="empty fade"><div class="ei">'+icon('check',1.5)+'</div><div style="font-size:15px;font-weight:600;color:var(--tprimary);margin-bottom:6px">Aun no hay conformidades</div><div style="font-size:13px;max-width:440px;margin:0 auto;line-height:1.6">Registra el Acta de Conformidad que algunos clientes (sobre todo del Estado) piden al recibir el bien/servicio. Puedes cargar la factura o contrato con IA y se llena solo, luego generas el acta lista para firmar.</div></div>';$('content').innerHTML=h;return;}
+  h+='<div class="card fade"><div class="ptable-wrap"><table class="ptable"><thead><tr><th>Cliente</th><th>Documento</th><th>Monto</th><th>Fecha conf.</th><th>Estado</th><th></th></tr></thead><tbody>';
+  CONF.slice().sort(function(a,b){return (b.fconf||'').localeCompare(a.fconf||'')}).forEach(function(x){
+    var conforme=x.estado==='conforme';
+    h+='<tr><td>'+esc(x.cliente||'-')+'</td><td class="mono">'+esc((x.tipo||'')+' '+(x.num||''))+'</td><td class="mono">'+fmtMon(x.monto,x.moneda)+'</td><td style="color:var(--tmuted)">'+esc(x.fconf||'-')+'</td>'+
+      '<td><span class="badge" onclick="confToggle(\''+x.id+'\')" title="Click para cambiar" style="cursor:pointer;color:'+(conforme?'#16a34a':'#f59e0b')+';background:'+bg(conforme?'#16a34a':'#f59e0b',.14)+'">'+(conforme?'Conforme':'Pendiente')+'</span></td>'+
+      '<td style="white-space:nowrap"><button onclick="openConf(\''+x.id+'\')" style="background:none;border:none;color:#0ea5e9;cursor:pointer;font-size:11.5px;font-weight:600">acta</button> <button onclick="confEdit(\''+x.id+'\')" style="background:none;border:none;color:#0ea5e9;cursor:pointer;font-size:11.5px">editar</button> <button onclick="delConf(\''+x.id+'\')" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:16px">x</button></td></tr>';
+  });
+  h+='</tbody></table></div></div>';
+  $('content').innerHTML=h;
+}
+function toggleConfForm(hide){var f=$('confForm');if(!f)return;f.style.display=(hide||f.style.display!=='none')?'none':'block';}
+function _tv(id){var e=$(id);return e?e.value.trim():'';}
+function addConf(){
+  var cli=_v('cf_cli');if(!cli){toast('Falta el cliente');return;}
+  var obj={cliente:cli,ruc:_v('cf_ruc'),tipo:_v('cf_tipo')||'factura',num:_v('cf_num'),fecha:_v('cf_fecha'),monto:parseFloat(_v('cf_monto'))||0,moneda:_v('cf_mon')||'S/',fconf:_v('cf_fconf'),resp:_v('cf_resp'),desc:_tv('cf_desc'),obs:_tv('cf_obs'),estado:'pendiente'};
+  if(_confEdit){CONF.forEach(function(c){if(c.id===_confEdit){obj.estado=c.estado;Object.assign(c,obj);}});_confEdit=null;}
+  else{obj.id='CF'+Date.now();CONF.push(obj);}
+  saveConf();toast('Conformidad guardada');renderConformidad();
+}
+function confEdit(id){loadConf();var x=CONF.filter(function(c){return c.id===id})[0];if(!x)return;_confEdit=id;toggleConfForm(false);var f=$('confForm');if(f)f.style.display='block';
+  if($('cf_cli'))$('cf_cli').value=x.cliente||'';if($('cf_ruc'))$('cf_ruc').value=x.ruc||'';if($('cf_tipo'))$('cf_tipo').value=x.tipo||'factura';if($('cf_num'))$('cf_num').value=x.num||'';if($('cf_fecha'))$('cf_fecha').value=x.fecha||'';if($('cf_monto'))$('cf_monto').value=x.monto||0;if($('cf_mon'))$('cf_mon').value=curOf(x.moneda);if($('cf_fconf'))$('cf_fconf').value=x.fconf||'';if($('cf_resp'))$('cf_resp').value=x.resp||'';if($('cf_desc'))$('cf_desc').value=x.desc||'';if($('cf_obs'))$('cf_obs').value=x.obs||'';
+  if(f)f.scrollIntoView({behavior:'smooth',block:'center'});}
+function delConf(id){if(!confirm('Eliminar esta conformidad?'))return;CONF=CONF.filter(function(c){return c.id!==id});saveConf();renderConformidad();}
+function confToggle(id){loadConf();CONF.forEach(function(c){if(c.id===id)c.estado=(c.estado==='conforme'?'pendiente':'conforme');});saveConf();renderConformidad();}
+function _acta(x){
+  var tdoc={factura:'Factura',contrato:'Contrato',oc:'Orden de Compra',guia:'Guia de Remision'}[x.tipo]||'Documento';
+  return '<div style="max-width:720px;margin:0 auto;background:#fff;color:#111;padding:40px 44px;font-family:Georgia,serif;line-height:1.7">'+
+    '<div style="text-align:center;border-bottom:2px solid #111;padding-bottom:10px;margin-bottom:20px"><div style="font-size:15px;font-weight:bold">'+esc((EMP&&EMP.nombre)||'')+'</div>'+((EMP&&EMP.ruc)?'<div style="font-size:12px">RUC: '+esc(EMP.ruc)+'</div>':'')+((EMP&&EMP.direccion)?'<div style="font-size:11px">'+esc(EMP.direccion)+'</div>':'')+'</div>'+
+    '<h2 style="text-align:center;font-size:18px;letter-spacing:1px;margin:18px 0">ACTA DE CONFORMIDAD</h2>'+
+    '<p style="text-align:justify;font-size:13.5px">Por medio del presente documento, <b>'+esc(x.cliente||'____________')+'</b>'+(x.ruc?' (RUC '+esc(x.ruc)+')':'')+' deja constancia de su <b>CONFORMIDAD</b> respecto a los bienes/servicios entregados por <b>'+esc((EMP&&EMP.nombre)||'')+'</b>, segun '+tdoc+' N <b>'+esc(x.num||'________')+'</b>'+(x.fecha?' de fecha '+esc(x.fecha):'')+', por un monto de <b>'+fmtMon(x.monto,x.moneda)+'</b>.</p>'+
+    '<p style="text-align:justify;font-size:13.5px"><b>Descripcion:</b> '+esc(x.desc||'____________________________________________')+'</p>'+
+    (x.obs?'<p style="text-align:justify;font-size:13.5px"><b>Observaciones:</b> '+esc(x.obs)+'</p>':'')+
+    '<p style="text-align:justify;font-size:13.5px">Se deja constancia que los bienes/servicios fueron recibidos a entera satisfaccion, cumpliendo con las condiciones y especificaciones requeridas.</p>'+
+    '<p style="font-size:13.5px;margin-top:6px">Fecha de conformidad: <b>'+esc(x.fconf||'____________')+'</b></p>'+
+    '<div style="display:flex;justify-content:space-around;margin-top:70px;text-align:center;font-size:12px"><div style="border-top:1px solid #111;padding-top:6px;width:220px">'+esc(x.resp||'Responsable')+'<br>'+esc(x.cliente||'')+'</div><div style="border-top:1px solid #111;padding-top:6px;width:220px">'+esc((EMP&&EMP.nombre)||'')+'<br>Proveedor</div></div>'+
+    '</div>';
+}
+function openConf(id){loadConf();var x=CONF.filter(function(c){return c.id===id})[0];if(!x){renderConformidad();return;}
+  var h='<div class="pmod-head fade"><div><button class="btn-new" onclick="renderConformidad()" style="margin-bottom:10px">&larr; Conformidad</button><h1 style="font-size:21px;font-weight:700">Acta de Conformidad</h1></div><button class="btn-new" onclick="confImprimir(\''+id+'\')">'+icon('layers')+'Imprimir / PDF</button></div>';
+  h+='<div class="card fade" style="padding:0;overflow:auto">'+_acta(x)+'</div>';
+  $('content').innerHTML=h;
+}
+function confImprimir(id){loadConf();var x=CONF.filter(function(c){return c.id===id})[0];if(!x)return;var w=window.open('','_blank');if(!w){toast('Permite ventanas emergentes');return;}w.document.write('<html><head><title>Acta de Conformidad</title></head><body>'+_acta(x)+'<scr'+'ipt>window.onload=function(){window.print();}</scr'+'ipt></body></html>');w.document.close();}
+function confAI(file){
+  if(!file)return;var st=$('confAiSt');if(st){st.textContent='Leyendo el documento con IA...';st.style.color='var(--tmuted)';}
+  var rd=new FileReader();rd.onload=function(e){var b64=String(e.target.result).split(',')[1];
+    fetch('/api/gemini',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt:'Extrae datos de esta FACTURA, CONTRATO u ORDEN DE COMPRA peruana para generar un acta de conformidad. Devuelve SOLO JSON: {"cliente":"razon social del CLIENTE/entidad que compra o contrata","ruc":"RUC del cliente","tipo":"factura, contrato, oc o guia","num":"numero del documento","fecha":"YYYY-MM-DD","monto":total_numero,"moneda":"S/ o US$","desc":"descripcion breve del bien o servicio contratado"}. Si falta un dato usa "" o 0.',imageBase64:b64,mimeType:file.type||'application/pdf'})}).then(function(r){return r.json()}).then(function(d){
+      if(d&&d.error){if(st){st.textContent='Error IA';st.style.color='#ef4444';}return;}
+      var tx='';if(d&&d.candidates&&d.candidates[0]&&d.candidates[0].content&&d.candidates[0].content.parts)tx=d.candidates[0].content.parts.map(function(p){return p.text||''}).join('');
+      var m=tx.replace(/```json/g,'').replace(/```/g,'').match(/\{[\s\S]*\}/);if(!m){if(st){st.textContent='No se pudo leer.';st.style.color='#f59e0b';}return;}
+      try{var o=JSON.parse(m[0]);if($('cf_cli'))$('cf_cli').value=o.cliente||'';if($('cf_ruc'))$('cf_ruc').value=(o.ruc||'').replace(/\D/g,'');if($('cf_tipo')&&o.tipo){var tl=(o.tipo+'').toLowerCase();$('cf_tipo').value=tl.indexOf('contra')>=0?'contrato':(tl.indexOf('guia')>=0?'guia':(tl.indexOf('oc')>=0||tl.indexOf('orden')>=0?'oc':'factura'));}if($('cf_num'))$('cf_num').value=o.num||'';if(o.fecha&&$('cf_fecha'))$('cf_fecha').value=o.fecha;if($('cf_monto'))$('cf_monto').value=o.monto||0;if($('cf_mon'))$('cf_mon').value=curOf(o.moneda);if($('cf_desc'))$('cf_desc').value=o.desc||'';if(st){st.textContent='Datos extraidos. Revisa y guarda.';st.style.color='#16a34a';}}catch(e2){if(st){st.textContent='Error al leer.';st.style.color='#ef4444';}}
+    }).catch(function(){if(st){st.textContent='Error de conexion.';st.style.color='#ef4444';}});
+  };rd.readAsDataURL(file);
+}
 function renderProyectos(){
   loadProy();
   var h='<div class="pmod-head fade"><div><h1 style="font-size:23px;font-weight:700;letter-spacing:-.6px">Proyectos PÃºblicos &lt; 8 UIT</h1>'+
