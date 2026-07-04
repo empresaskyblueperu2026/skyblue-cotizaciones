@@ -558,15 +558,26 @@ app.get('/api/data',async function(req,res){
   }catch(e){}
   res.json(readData());
 });
+// Guardian anti-perdida: nunca reemplazar un array/objeto con datos por uno vacio
+function smartMerge(base,inc){
+  var out=Object.assign({},base);
+  Object.keys(inc||{}).forEach(function(k){
+    var nv=inc[k], ov=base?base[k]:undefined;
+    if(Array.isArray(nv)&&nv.length===0&&Array.isArray(ov)&&ov.length>0)return; // proteger
+    if(nv&&typeof nv==='object'&&!Array.isArray(nv)&&Object.keys(nv).length===0&&ov&&typeof ov==='object'&&!Array.isArray(ov)&&Object.keys(ov).length>0)return; // proteger
+    out[k]=nv;
+  });
+  return out;
+}
 app.post('/api/data',async function(req,res){
   try{
     if(!sbReady()){
-      try{writeData(Object.assign(readData(),req.body||{}));}catch(e){}
+      try{writeData(smartMerge(readData(),req.body||{}));}catch(e){}
       return proxyCloud(req,res);
     }
     var base=readData();
     if(sbReady()){try{var d=await sbGetData();if(d)base=d;}catch(e){console.error('SB read:',e.message);}}
-    var m=Object.assign(base,req.body||{});
+    var m=smartMerge(base,req.body||{});
     writeData(m);
     if(sbReady()){try{await sbPutData(m);}catch(e){console.error('SB put:',e.message);}}
     res.json({ok:true,cloud:sbReady()});
