@@ -571,6 +571,29 @@ function $(id){return document.getElementById(id)}
 function initials(n){return (n||'?').replace(/S\.A\.C\.?|E\.I\.R\.L\.?|S\.R\.L\.?/gi,'').trim().split(/\s+/).slice(0,2).map(function(w){return w[0]}).join('').toUpperCase()||'?'}
 function accentFor(i){return ACCENTS[i%ACCENTS.length]}
 function bg(hex,a){return hex+(''+Math.round(a*255).toString(16)).padStart(2,'0')}
+/* Detecta el tipo real de archivo por sus bytes (el navegador a veces reporta mal o vacio el tipo, ej. camara movil) */
+function _sniffMime(b64){
+  try{
+    var bin=atob(b64.slice(0,40));var b=[];for(var i=0;i<bin.length;i++)b.push(bin.charCodeAt(i));
+    function eq(off,arr){for(var j=0;j<arr.length;j++){if(b[off+j]!==arr[j])return false;}return true;}
+    if(eq(0,[0x25,0x50,0x44,0x46]))return 'application/pdf';
+    if(eq(0,[0xFF,0xD8,0xFF]))return 'image/jpeg';
+    if(eq(0,[0x89,0x50,0x4E,0x47]))return 'image/png';
+    if(eq(0,[0x47,0x49,0x46,0x38]))return 'image/gif';
+    if(eq(8,[0x57,0x45,0x42,0x50]))return 'image/webp';
+    if(eq(4,[0x66,0x74,0x79,0x70])){
+      var brand=String.fromCharCode(b[8]||0,b[9]||0,b[10]||0,b[11]||0);
+      if(['heic','heix','hevc','heim','heis','mif1','msf1'].indexOf(brand)>=0)return 'image/heic';
+    }
+    return null;
+  }catch(e){return null;}
+}
+/* Valida un archivo antes de mandarlo a la IA: devuelve {ok,mimeType} o {ok:false,msg} si no se puede leer */
+function _prepararArchivoIA(b64,fileType){
+  var real=_sniffMime(b64);
+  if(real==='image/heic')return {ok:false,msg:'Esta foto es formato HEIC (típico de iPhone) y la IA no puede leerla. Ábrela y compártela/guárdala como JPG o PNG, o toma una captura de pantalla, y vuelve a subirla.'};
+  return {ok:true,mimeType:real||fileType||'application/pdf'};
+}
 function toast(m){var t=$('toast');t.textContent=m;t.classList.add('show');clearTimeout(t._t);t._t=setTimeout(function(){t.classList.remove('show')},2200)}
 
 function applyTheme(th){document.documentElement.setAttribute('data-theme',th);localStorage.setItem('sigma_theme2',th);$('themebtn').textContent=th==='dark'?'☀':'◑'}
@@ -1193,9 +1216,10 @@ function ocrecAI(file){
   var rd=new FileReader();
   rd.onload=function(e){
     var b64=String(e.target.result).split(',')[1];
+    var _chk=_prepararArchivoIA(b64,file.type);if(!_chk.ok){if(st){st.textContent=_chk.msg;st.style.color='#ef4444';}return;}
     fetch('/api/gemini',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
       prompt:'Eres un extractor de datos de ÓRDENES DE COMPRA que un cliente o entidad del Estado peruano emite a un proveedor. Devuelve SOLO JSON válido sin markdown: {"num":"numero de OC","cliente":"razon social del cliente/entidad","ruc":"RUC 11 digitos","fecha":"YYYY-MM-DD","monto":TOTAL_FINAL_a_pagar,"moneda":"S/ si es soles o US$ si es dolares","rubro":"publico si es entidad del Estado o privado","forma_pago":"contado o credito","dias_credito":numero_de_dias_si_es_credito,"items":[{"desc":"descripcion","qty":numero,"precio":precio_unitario}]}. CRITICO sobre el MONTO: usa SIEMPRE el TOTAL FINAL impreso en la OC (gran total a pagar, con IGV si lo incluye). NO sumes los items por tu cuenta; toma el total que figura. Si ves Subtotal + IGV + Total, usa el TOTAL. IMPORTANTE: detecta la MONEDA correctamente (soles S/. o dolares US$/$). Si dice contado o pago inmediato usa "contado"; si menciona dias de pago o credito usa "credito" y pon los dias. Si un dato no existe usa "" o 0.',
-      imageBase64:b64, mimeType:file.type||'application/pdf'
+      imageBase64:b64, mimeType:_chk.mimeType
     })}).then(function(r){return r.json()}).then(function(d){
       if(d&&d.error){if(st){st.textContent='Error IA: '+((d.error.message||JSON.stringify(d.error))+'').slice(0,80);st.style.color='#ef4444';}return;}
       var tx=''; if(d&&d.candidates&&d.candidates[0]&&d.candidates[0].content&&d.candidates[0].content.parts)tx=d.candidates[0].content.parts.map(function(p){return p.text||''}).join('');
@@ -1342,9 +1366,10 @@ function factAI(file){
   if(!file)return; var st=$('factAiSt'); if(st){st.textContent='Leyendo con IA…';st.style.color='var(--tmuted)';}
   var rd=new FileReader();
   rd.onload=function(e){var b64=String(e.target.result).split(',')[1];
+    var _chk=_prepararArchivoIA(b64,file.type);if(!_chk.ok){if(st){st.textContent=_chk.msg;st.style.color='#ef4444';}return;}
     fetch('/api/gemini',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
       prompt:'Extrae datos de esta FACTURA o BOLETA electronica peruana. Devuelve SOLO JSON: {"num":"serie-numero ej F001-123","cliente":"razon social del cliente","ruc":"ruc o dni del cliente","fecha":"YYYY-MM-DD","monto":TOTAL_FINAL,"moneda":"S/ si soles o US$ si dolares","tipo":"factura o boleta","forma_pago":"contado o credito","dias_credito":dias_si_credito,"items":[{"desc":"descripcion completa del producto/servicio","qty":cantidad,"precio":precio_unitario}]}. monto = TOTAL FINAL impreso (con IGV). Detecta bien la MONEDA (soles S/. o dolares US$/$). Extrae TODOS los items con su nombre completo. Si falta un dato usa "" o 0.',
-      imageBase64:b64,mimeType:file.type||'application/pdf'})}).then(function(r){return r.json()}).then(function(d){
+      imageBase64:b64,mimeType:_chk.mimeType})}).then(function(r){return r.json()}).then(function(d){
       if(d&&d.error){if(st){st.textContent='Error IA';st.style.color='#ef4444';}return;}
       var tx='';if(d&&d.candidates&&d.candidates[0]&&d.candidates[0].content&&d.candidates[0].content.parts)tx=d.candidates[0].content.parts.map(function(p){return p.text||''}).join('');
       var m=tx.replace(/```json/g,'').replace(/```/g,'').match(/\{[\s\S]*\}/);if(!m){if(st){st.textContent='No se pudo leer.';st.style.color='#f59e0b';}return;}
@@ -1749,7 +1774,8 @@ function logFillFrom(v){if(!v)return;var p=v.split(':');if(p[0]==='proy'){var pr
 function logGuiaAI(file){
   if(!file)return;var st=$('logAiSt');if(st){st.textContent='Leyendo guía con IA…';st.style.color='var(--tmuted)';}
   var rd=new FileReader();rd.onload=function(e){var b64=String(e.target.result).split(',')[1];
-    fetch('/api/gemini',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt:'Extrae datos de esta GUIA DE REMISION peruana. Devuelve SOLO JSON: {"guia":"serie-numero de la guia","cliente":"razon social del destinatario","fecha":"YYYY-MM-DD de traslado/emision","desc":"breve descripcion de lo que se traslada"}. Si falta un dato usa "".',imageBase64:b64,mimeType:file.type||'application/pdf'})}).then(function(r){return r.json()}).then(function(d){
+    var _chk=_prepararArchivoIA(b64,file.type);if(!_chk.ok){if(st){st.textContent=_chk.msg;st.style.color='#ef4444';}return;}
+    fetch('/api/gemini',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt:'Extrae datos de esta GUIA DE REMISION peruana. Devuelve SOLO JSON: {"guia":"serie-numero de la guia","cliente":"razon social del destinatario","fecha":"YYYY-MM-DD de traslado/emision","desc":"breve descripcion de lo que se traslada"}. Si falta un dato usa "".',imageBase64:b64,mimeType:_chk.mimeType})}).then(function(r){return r.json()}).then(function(d){
       if(d&&d.error){if(st){st.textContent='Error IA';st.style.color='#ef4444';}return;}
       var tx='';if(d&&d.candidates&&d.candidates[0]&&d.candidates[0].content&&d.candidates[0].content.parts)tx=d.candidates[0].content.parts.map(function(p){return p.text||''}).join('');
       var m=tx.replace(/```json/g,'').replace(/```/g,'').match(/\{[\s\S]*\}/);if(!m){if(st){st.textContent='No se pudo leer la guía.';st.style.color='#f59e0b';}return;}
@@ -2288,7 +2314,8 @@ function confImprimir(id){loadConf();var x=CONF.filter(function(c){return c.id==
 function confAI(file){
   if(!file)return;var st=$('confAiSt');if(st){st.textContent='Leyendo el documento con IA...';st.style.color='var(--tmuted)';}
   var rd=new FileReader();rd.onload=function(e){var b64=String(e.target.result).split(',')[1];
-    fetch('/api/gemini',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt:'Extrae datos de esta FACTURA, CONTRATO u ORDEN DE COMPRA peruana para generar un acta de conformidad. Devuelve SOLO JSON: {"cliente":"razon social del CLIENTE/entidad que compra o contrata","ruc":"RUC del cliente","tipo":"factura, contrato, oc o guia","num":"numero del documento","fecha":"YYYY-MM-DD","monto":total_numero,"moneda":"S/ o US$","desc":"descripcion breve del bien o servicio contratado"}. Si falta un dato usa "" o 0.',imageBase64:b64,mimeType:file.type||'application/pdf'})}).then(function(r){return r.json()}).then(function(d){
+    var _chk=_prepararArchivoIA(b64,file.type);if(!_chk.ok){if(st){st.textContent=_chk.msg;st.style.color='#ef4444';}return;}
+    fetch('/api/gemini',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt:'Extrae datos de esta FACTURA, CONTRATO u ORDEN DE COMPRA peruana para generar un acta de conformidad. Devuelve SOLO JSON: {"cliente":"razon social del CLIENTE/entidad que compra o contrata","ruc":"RUC del cliente","tipo":"factura, contrato, oc o guia","num":"numero del documento","fecha":"YYYY-MM-DD","monto":total_numero,"moneda":"S/ o US$","desc":"descripcion breve del bien o servicio contratado"}. Si falta un dato usa "" o 0.',imageBase64:b64,mimeType:_chk.mimeType})}).then(function(r){return r.json()}).then(function(d){
       if(d&&d.error){if(st){st.textContent='Error IA';st.style.color='#ef4444';}return;}
       var tx='';if(d&&d.candidates&&d.candidates[0]&&d.candidates[0].content&&d.candidates[0].content.parts)tx=d.candidates[0].content.parts.map(function(p){return p.text||''}).join('');
       var m=tx.replace(/```json/g,'').replace(/```/g,'').match(/\{[\s\S]*\}/);if(!m){if(st){st.textContent='No se pudo leer.';st.style.color='#f59e0b';}return;}
