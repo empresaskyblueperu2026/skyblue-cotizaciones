@@ -491,7 +491,7 @@ aside.rpanel{width:284px;flex-shrink:0;background:linear-gradient(180deg,var(--c
 <div id="portal">
   <div class="brandbig">
     <div class="logomark"><svg viewBox="0 0 24 24" fill="none"><path d="M4 7l8-4 8 4-8 4-8-4z" stroke="#fff" stroke-width="1.7" stroke-linejoin="round"/><path d="M4 12l8 4 8-4M4 17l8 4 8-4" stroke="#fff" stroke-width="1.7" stroke-linejoin="round" opacity=".72"/></svg></div>
-    <div><div class="brandname">SIGMA <span class="vtag">2.2</span></div><div class="brandsub">Plataforma ERP · IA</div></div>
+    <div><div class="brandname">SIGMA <span class="vtag">2.3</span></div><div class="brandsub">Plataforma ERP · IA</div></div>
   </div>
   <div class="portal-title">Selecciona la empresa con la que vas a trabajar</div>
   <div class="cards" id="ecards"><div style="grid-column:1/-1;text-align:center;color:var(--tmuted);font-size:13px;padding:30px">Cargando empresas…</div></div>
@@ -505,7 +505,7 @@ aside.rpanel{width:284px;flex-shrink:0;background:linear-gradient(180deg,var(--c
   <aside class="side" id="sidebar">
     <div class="side-logo">
       <div class="lm"><svg viewBox="0 0 24 24" fill="none"><path d="M4 7l8-4 8 4-8 4-8-4z" stroke="#fff" stroke-width="1.7" stroke-linejoin="round"/><path d="M4 12l8 4 8-4M4 17l8 4 8-4" stroke="#fff" stroke-width="1.7" stroke-linejoin="round" opacity=".72"/></svg></div>
-      <div><div class="nm">SIGMA</div><div class="sb">ERP · 2.2</div></div>
+      <div><div class="nm">SIGMA</div><div class="sb">ERP · 2.3</div></div>
     </div>
     <nav class="navlist" id="navlist"></nav>
     <div class="side-user">
@@ -1701,6 +1701,25 @@ function exportReporteCSV(){
 /* ===== Módulo: Configuración ===== */
 function renderConfig(){
   var h='<div class="pmod-head fade"><div><h1 style="font-size:23px;font-weight:700;letter-spacing:-.6px">Configuración</h1><div style="font-size:13px;color:var(--tmuted);margin-top:4px">Ajustes del sistema · '+(EMP?EMP.nombre:'')+'</div></div></div>';
+  /* ── Agente de Ventas IA (Telegram) ── */
+  h+='<div class="card fade" style="margin-bottom:14px;border-left:3px solid #14b8a6"><div class="ct" style="font-weight:600;margin-bottom:6px">🤖 Agente de Ventas IA (Telegram)</div>'+
+    '<div id="vbEstado" style="font-size:12px;color:var(--tmuted);margin-bottom:10px">Consultando estado…</div>'+
+    '<div style="font-size:11.5px;color:var(--tmuted);line-height:1.6;margin-bottom:8px;background:var(--input,#f8fafc);border-radius:10px;padding:10px">📌 <b>Cómo activarlo:</b> 1) Abre <b>@BotFather</b> en Telegram → /newbot → ponle nombre (ej: SkyBlue Ventas) y usuario (ej: @SkyBluePeruVentasBot). 2) Copia el <b>token</b> que te da. 3) Pégalo aquí y toca Activar. ¡Listo! Comparte el link del bot con tus clientes.</div>'+
+    ocrecField('vb_token','Token del bot de VENTAS (de @BotFather)','123456:ABC…','','password')+
+    '<div style="margin-top:8px"><div style="font-size:9.5px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--tmuted);margin-bottom:3px">Conocimiento de la empresa (lo que el agente debe saber: horarios, zonas de entrega, formas de pago, garantías, qué hacemos…)</div>'+
+    '<textarea id="vb_info" rows="4" style="width:100%;padding:10px;border:1px solid var(--bd,#e2e8f0);border-radius:10px;font-size:12.5px;background:var(--input,#fff);color:var(--tprimary);resize:vertical" placeholder="Ej: Somos SKY BLUE PERU, vendemos EPP, equipos y suministros en Trujillo y todo el Perú. Entregas 24-72h. Pagos: transferencia Interbank, Yape empresarial. Facturación electrónica. Garantía 12 meses…"></textarea></div>'+
+    '<div id="vbSt" style="font-size:11.5px;color:var(--tmuted);margin-top:8px"></div>'+
+    '<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap"><button class="btn-new" style="background:#14b8a6" onclick="vbActivar()">🚀 Guardar / Activar bot</button><button class="aibtn" onclick="vbSimAbrir()" style="border:1px solid var(--bd,#e2e8f0)">🧪 Probar agente (simulador)</button></div>'+
+    '<div id="vbSim" style="display:none;margin-top:12px;border-top:1px solid var(--bd,#e2e8f0);padding-top:10px">'+
+      '<div style="font-size:11px;color:var(--tmuted);margin-bottom:6px">Simula ser un cliente — así responde el agente (usa tu catálogo real):</div>'+
+      '<div id="vbSimLog" style="max-height:220px;overflow-y:auto;font-size:12.5px;line-height:1.5;margin-bottom:8px"></div>'+
+      '<div style="display:flex;gap:6px"><input id="vbSimTxt" placeholder="Escribe como cliente… (ej: hola, necesito 50 cascos)" style="flex:1;padding:9px 12px;border:1px solid var(--bd,#e2e8f0);border-radius:10px;font-size:13px;background:var(--input,#fff);color:var(--tprimary)" onkeydown="if(event.key===\'Enter\')vbSimEnviar()"><button class="btn-new" onclick="vbSimEnviar()">Enviar</button></div></div>'+
+    '<div style="margin-top:10px;border-top:1px solid var(--bd,#e2e8f0);padding-top:10px"><div style="font-size:11px;font-weight:700;color:var(--tmuted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">🔁 Agente de Retención (probar ahora → te llega a tu Telegram)</div>'+
+    '<div style="display:flex;gap:6px;flex-wrap:wrap">'+
+    '<button class="aibtn" style="border:1px solid var(--bd,#e2e8f0);font-size:11.5px" onclick="vbRet(\'postventa\')">🙏 Post-venta</button>'+
+    '<button class="aibtn" style="border:1px solid var(--bd,#e2e8f0);font-size:11.5px" onclick="vbRet(\'remarketing\')">📢 Remarketing</button>'+
+    '<button class="aibtn" style="border:1px solid var(--bd,#e2e8f0);font-size:11.5px" onclick="vbRet(\'rescate\')">🧊 Rescate de fríos</button></div>'+
+    '<div style="font-size:10.5px;color:var(--tmuted);margin-top:6px">Automáticos: post-venta diario 10am · remarketing día 1 de cada mes · rescate cada lunes.</div></div></div>';
   h+='<div class="card fade" style="margin-bottom:14px"><div class="ct" style="font-weight:600;margin-bottom:10px">'+icon('bolt')+' Telegram (alertas)</div>'+
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">'+ocrecField('cfg_tgtoken','Token del bot','Pega el token de @BotFather')+ocrecField('cfg_tgchat','Chat ID (opcional)','Se detecta solo si le escribes al bot')+'</div>'+
     '<div id="cfgTgSt" style="font-size:11.5px;color:var(--tmuted);margin-top:8px"></div>'+
@@ -1711,6 +1730,48 @@ function renderConfig(){
   h+='<div class="card fade"><div class="ct" style="font-weight:600;margin-bottom:10px">'+icon('building')+' Empresa</div>'+
     '<div class="kv"><div class="k">Nombre</div><div>'+esc(EMP?EMP.nombre:'')+'</div><div class="k">RUC</div><div>'+esc(EMP&&EMP.ruc||'—')+'</div><div class="k">Margen sugerido al cotizar</div><div>25% (editable en cada cotización)</div></div></div>';
   $('content').innerHTML=h;
+  vbCargarEstado();
+}
+/* ── Agente de Ventas IA: configuración y simulador ── */
+function vbCargarEstado(){
+  fetch('/api/ventasbot/estado').then(function(r){return r.json()}).then(function(d){
+    var e=$('vbEstado'); if(!e)return;
+    if(d&&d.activo){e.innerHTML='🟢 <b>ACTIVO</b> — bot: <a href="https://t.me/'+esc(d.botUser)+'" target="_blank" style="color:#14b8a6;font-weight:700">@'+esc(d.botUser)+'</a> · '+(d.conversaciones||0)+' conversación(es). Comparte ese link con tus clientes.';}
+    else{e.innerHTML='⚪ Aún no activado — crea el bot en @BotFather y pega el token abajo.';}
+    if(d&&d.info&&$('vb_info'))$('vb_info').value=d.info;
+  }).catch(function(){var e=$('vbEstado');if(e)e.textContent='No se pudo consultar el estado.';});
+}
+function vbActivar(){
+  var st=$('vbSt'); if(st){st.textContent='Activando…';st.style.color='var(--tmuted)';}
+  var b={empId:EMP?EMP.id:'',info:_v('vb_info')};
+  var tok=_v('vb_token'); if(tok)b.token=tok;
+  fetch('/api/ventasbot/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)})
+  .then(function(r){return r.json()}).then(function(d){
+    if(st){ if(d&&d.ok){st.textContent='✓ Guardado.'+(d.botUser?(' Bot @'+d.botUser+' ACTIVO y escuchando clientes.'):' (falta el token para activar el bot)');st.style.color='#16a34a';} else {st.textContent='✗ '+((d&&d.error)||'No se pudo activar');st.style.color='#ef4444';} }
+    vbCargarEstado();
+  }).catch(function(){if(st){st.textContent='Error de conexión.';st.style.color='#ef4444';}});
+}
+var _vbSesion='S'+Date.now();
+function vbSimAbrir(){var s=$('vbSim');if(!s)return;s.style.display=s.style.display==='none'?'block':'none';if(s.style.display==='block'&&$('vbSimTxt'))$('vbSimTxt').focus();}
+function vbSimEnviar(){
+  var inp=$('vbSimTxt'); var txt=(inp&&inp.value||'').trim(); if(!txt)return;
+  var log=$('vbSimLog'); if(!log)return;
+  log.innerHTML+='<div style="text-align:right;margin:4px 0"><span style="background:#14b8a6;color:#fff;padding:6px 10px;border-radius:12px 12px 2px 12px;display:inline-block;max-width:85%">'+esc(txt)+'</span></div>';
+  inp.value=''; log.scrollTop=log.scrollHeight;
+  log.innerHTML+='<div id="vbTyping" style="margin:4px 0;color:var(--tmuted);font-size:11px">Sky está escribiendo…</div>';
+  fetch('/api/ventasbot/simular',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({texto:txt,sesion:_vbSesion,nombre:'Cliente Prueba'})})
+  .then(function(r){return r.json()}).then(function(d){
+    var t=$('vbTyping'); if(t)t.remove();
+    log.innerHTML+='<div style="margin:4px 0"><span style="background:var(--input,#f1f5f9);color:var(--tprimary);padding:6px 10px;border-radius:12px 12px 12px 2px;display:inline-block;max-width:85%">🤖 '+esc((d&&d.respuesta)||'(sin respuesta)')+'</span></div>'+
+      ((d&&d.lead)?'<div style="font-size:10px;color:#f59e0b;margin:2px 0">🔥 detectado como LEAD ('+esc(d.motivo||'')+')</div>':'');
+    log.scrollTop=log.scrollHeight;
+  }).catch(function(){var t=$('vbTyping');if(t)t.remove();log.innerHTML+='<div style="color:#ef4444;font-size:11px">Error de conexión</div>';});
+}
+function vbRet(tipo){
+  toast('Generando '+tipo+'… (puede tardar unos segundos)');
+  fetch('/api/retencion/run?tipo='+tipo).then(function(r){return r.json()}).then(function(d){
+    toast(d&&d.ok?('✓ '+(d.generados||0)+' mensajes enviados a tu Telegram'):(d&&d.skipped?'Sin candidatos hoy':'No se pudo: '+((d&&d.error)||'')));
+  }).catch(function(){toast('Error de conexión');});
 }
 function cfgTgGuardar(){var t=_v('cfg_tgtoken'),c=_v('cfg_tgchat'),st=$('cfgTgSt');if(!t&&!c){if(st)st.textContent='Pega el token primero.';return;}if(st){st.textContent='Conectando…';}var body={};if(t)body.token=t;if(c)body.chatId=c;fetch('/api/telegram/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}).then(function(r){return r.json()}).then(function(d){if(st){st.textContent=d&&d.configured?('✓ Conectado. Chat ID: '+d.chatId):(d&&d.tieneToken?'Token guardado. Escríbele algo al bot y vuelve a tocar Conectar para detectar tu chat.':'No se pudo conectar.');st.style.color=d&&d.configured?'#16a34a':'#f59e0b';}}).catch(function(){if(st){st.textContent='Error de conexión.';st.style.color='#ef4444';}});}
 function cfgTgProbar(){var st=$('cfgTgSt');if(st)st.textContent='Enviando prueba…';fetch('/api/telegram/test').then(function(r){return r.json()}).then(function(d){if(st){st.textContent=d&&d.ok?'✓ Mensaje de prueba enviado a tu Telegram.':'No se pudo enviar (configura el token y chat).';st.style.color=d&&d.ok?'#16a34a':'#f59e0b';}}).catch(function(){if(st)st.textContent='Error.';});}

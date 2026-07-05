@@ -603,6 +603,234 @@ async function runCrmRecordatorios(){
   }catch(e){console.error('CRM recordatorios:',e.message);return {error:e.message};}
 }
 app.get('/api/crm/recordatorios',async function(req,res){ if(!sbReady())return proxyCloud(req,res); try{ res.json(await runCrmRecordatorios()); }catch(e){ res.status(500).json({error:e.message}); } });
+
+// ============================================================
+// AGENTE DE VENTAS IA (Telegram) + AGENTE DE RETENCION
+// ============================================================
+var SKYBLUE_EMPID='ea38482b-f5a5-4a1b-b167-0d779aecd758';
+
+async function vbCfg(){var cfg=await sbGetConfig();cfg.ventasBot=cfg.ventasBot||{};return cfg;}
+async function vbSend(token,chatId,text){
+  var r=await fetch('https://api.telegram.org/bot'+token+'/sendMessage',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({chat_id:chatId,text:text,parse_mode:'HTML',disable_web_page_preview:true})});
+  return await r.json();
+}
+async function sbGetChats(){try{await sbEnsureBucket();var r=await fetch(SB_URL+'/storage/v1/object/'+SB_BUCKET+'/ventas_chats.json?t='+Date.now(),{headers:{'Authorization':'Bearer '+SB_KEY,'apikey':SB_KEY,'cache-control':'no-cache'}});if(!r.ok)return {chats:{}};var d=JSON.parse(await r.text());return d&&d.chats?d:{chats:{}};}catch(e){return {chats:{}};}}
+async function sbPutChats(obj){await sbEnsureBucket();await fetch(SB_URL+'/storage/v1/object/'+SB_BUCKET+'/ventas_chats.json',{method:'POST',headers:{'Authorization':'Bearer '+SB_KEY,'apikey':SB_KEY,'Content-Type':'application/json','cache-control':'no-cache','x-upsert':'true'},body:JSON.stringify(obj)});}
+
+// Catalogo + contexto de empresa para el cerebro del agente
+async function vbContexto(){
+  var cfg=await vbCfg(); var data=await sbGetData()||{};
+  var empId=cfg.ventasBot.empId||SKYBLUE_EMPID;
+  var emp=null; try{var list=await sbFetch('empresas?select=*'); emp=(list||[]).filter(function(e){return e.id===empId})[0];}catch(e){}
+  var prods=[];
+  var cat=data['scat_'+empId]; if(Array.isArray(cat))cat.forEach(function(c){if(c&&c.nombre)prods.push({n:c.nombre,p:(c.precio_min!=null?c.precio_min:null),u:c.unidad||''});});
+  if(Array.isArray(data.extra))data.extra.forEach(function(p){if(p&&p.n&&!prods.some(function(x){return x.n.toLowerCase()===(p.n||'').toLowerCase()}))prods.push({n:p.n,p:(p.v>0?p.v:null),u:''});});
+  (Array.isArray(data.hist)?data.hist:[]).forEach(function(co){(co.items||[]).forEach(function(it){if(it.desc&&!prods.some(function(x){return x.n.toLowerCase()===it.desc.toLowerCase()}))prods.push({n:it.desc,p:(+it.precio||null),u:''});});});
+  var catalogo=prods.slice(0,80).map(function(p){return '- '+p.n+(p.p?(' | S/ '+(+p.p).toFixed(2)+(p.u?(' x '+p.u):'')):' | precio a cotizar')}).join('\n');
+  return {cfg:cfg,emp:emp,catalogo:catalogo,nProds:prods.length};
+}
+
+// Cerebro: una llamada a Gemini que devuelve respuesta + analisis de lead
+async function vbCerebro(ctx,hist,nombreCliente){
+  var emp=ctx.emp||{};
+  var sys='Eres "Sky", el asesor comercial virtual de '+(emp.nombre||'SKY BLUE PERU S.A.C.')+' (RUC '+(emp.ruc||'')+'), empresa peruana de Trujillo, La Libertad. '+
+    (ctx.cfg.ventasBot.info?('INFORMACION DE LA EMPRESA: '+ctx.cfg.ventasBot.info+'. '):'')+
+    'Vendemos productos y servicios a empresas, entidades del Estado y publico general. Datos de contacto: tel '+(emp.telefono||'926533360')+', email '+(emp.email||'')+'.\n'+
+    'CATALOGO REAL (usa SOLO estos productos y precios; si piden algo que no esta, di que lo cotizamos en unas horas y captura sus datos):\n'+ctx.catalogo+'\n\n'+
+    'TU PERSONALIDAD Y METODO DE VENTA:\n'+
+    '- Experto en ventas consultivas: aplica SPIN (pregunta situacion, problema, implicancia, necesidad) y AIDA. Usa principios de persuasion de Cialdini con etica: prueba social ("varias empresas de la region ya trabajan con nosotros"), escasez suave ("stock disponible esta semana"), autoridad (experiencia, RUC formal, facturacion electronica), reciprocidad (da valor primero).\n'+
+    '- Espanol peruano calido y profesional. Mensajes CORTOS estilo chat (max 3-4 lineas), 1 pregunta por mensaje, emojis con moderacion.\n'+
+    '- SIEMPRE avanza hacia el cierre: descubre necesidad -> recomienda producto con precio -> pregunta cantidad -> arma pre-cotizacion (lista + total) -> pide nombre y celular para enviar la cotizacion formal.\n'+
+    '- Si el cliente acepta o pide cotizacion formal: confirma que un asesor humano se la enviara hoy mismo.\n'+
+    'REGLAS ESTRICTAS:\n'+
+    '- SOLO hablas de temas relacionados a nuestra empresa, productos, precios, entregas y ventas. Si preguntan otra cosa (politica, tareas, chistes, otros temas), redirige amablemente en UNA linea a como podemos ayudarle con nuestros productos. No gastes palabras en temas ajenos.\n'+
+    '- NUNCA inventes productos, precios, descuentos ni plazos que no esten en el catalogo o la informacion de empresa. Sin datos, di "eso lo confirmo con mi equipo hoy mismo".\n'+
+    '- No des informacion interna (margenes, proveedores, sistemas).\n'+
+    (nombreCliente?('El cliente se llama '+nombreCliente+'.\n'):'')+
+    '\nRESPONDE SIEMPRE en JSON estricto: {"respuesta":"tu mensaje al cliente","lead":true_o_false,"motivo":"por que es lead caliente o no","nombre":"nombre del cliente si lo dijo","celular":"celular si lo dio","interes":"producto/necesidad detectada","precot":"resumen de pre-cotizacion si la armaste o vacio"}. lead=true SOLO si pide precio/cotizacion/quiere comprar/da sus datos.';
+  var mensajes=hist.map(function(m){return (m.r==='u'?'CLIENTE: ':'SKY: ')+m.t}).join('\n');
+  var prompt=sys+'\n\nCONVERSACION HASTA AHORA:\n'+mensajes+'\n\nResponde el ultimo mensaje del cliente. SOLO el JSON.';
+  var k=process.env.GEMINI_API_KEY;
+  var body={contents:[{parts:[{text:prompt}]}],generationConfig:{temperature:0.6,maxOutputTokens:1024,thinkingConfig:{thinkingBudget:0}}};
+  var r=await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key='+k,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  var d=await r.json();
+  var tx='';try{tx=d.candidates[0].content.parts.map(function(p){return p.text||''}).join('');}catch(e){}
+  var m=tx.replace(/```json/g,'').replace(/```/g,'').match(/\{[\s\S]*\}/);
+  if(!m)return {respuesta:'¡Hola! 👋 Soy Sky, el asesor de '+(emp.nombre||'SKY BLUE PERU')+'. ¿Qué producto o servicio estás buscando? Con gusto te ayudo con precios y disponibilidad.',lead:false};
+  try{return JSON.parse(m[0]);}catch(e){return {respuesta:m[0].slice(0,500),lead:false};}
+}
+
+// Upsert del lead capturado al CRM (server-side)
+async function vbLeadACrm(info,chatId,username){
+  try{
+    if(!info||(!info.nombre&&!info.celular))return;
+    var data=await sbGetData()||{};
+    var cfg=await vbCfg(); var empId=cfg.ventasBot.empId||SKYBLUE_EMPID;
+    var key='crm_'+empId;
+    var crm=data[key]&&typeof data[key]==='object'?data[key]:{contactos:[],tareas:[]};
+    crm.contactos=Array.isArray(crm.contactos)?crm.contactos:[]; crm.tareas=Array.isArray(crm.tareas)?crm.tareas:[];
+    var cel=(info.celular||'').replace(/\D/g,'');
+    var ex=crm.contactos.filter(function(c){return (cel&&(c.cel||'').replace(/\D/g,'')===cel)||(String(c.tgChatId||'')===String(chatId))})[0];
+    var nota={fecha:new Date().toISOString(),texto:'🤖 Bot ventas: '+(info.interes||'interesado')+(info.precot?(' | Pre-cot: '+info.precot):''),tipo:'wa'};
+    if(ex){ if(cel&&!ex.cel)ex.cel=cel; ex.tgChatId=chatId; ex.notas=ex.notas||[]; ex.notas.unshift(nota); ex.ultTocado=new Date().toISOString(); if(ex.etapa==='prospecto')ex.etapa='contactado'; }
+    else crm.contactos.push({id:'CT'+Date.now(),nombre:info.nombre||('Cliente Telegram '+(username||chatId)),empresa:'',ruc:'',cargo:'',cel:cel,email:'',etapa:'contactado',valorEst:0,origen:'telegram',tgChatId:chatId,notas:[nota],creado:new Date().toISOString(),ultTocado:new Date().toISOString()});
+    data[key]=crm; await sbPutData(data);
+  }catch(e){console.error('vbLeadACrm:',e.message);}
+}
+
+// Procesa un mensaje entrante (webhook o simulador)
+async function vbProcesar(chatId,texto,nombre,username,esSimulacion){
+  var ctx=await vbContexto();
+  var store=await sbGetChats();
+  var ch=store.chats[chatId]||{nombre:nombre||'',username:username||'',hist:[],creado:new Date().toISOString(),notifNuevo:false,replies24h:0,dia:''};
+  // guardrails de creditos
+  var hoy=new Date().toISOString().slice(0,10);
+  if(ch.dia!==hoy){ch.dia=hoy;ch.replies24h=0;}
+  if(ch.replies24h>=40)return {respuesta:'Gracias por escribirnos 🙌 Un asesor humano continuará la conversación en breve.',limitado:true};
+  texto=String(texto||'').slice(0,1200);
+  if(!texto.trim())return {respuesta:'¡Hola! 👋 Soy Sky, asesor de '+((ctx.emp&&ctx.emp.nombre)||'SKY BLUE PERU')+'. Cuéntame, ¿qué producto o servicio necesitas?',lead:false};
+  ch.hist.push({r:'u',t:texto,ts:Date.now()});
+  if(ch.hist.length>18)ch.hist=ch.hist.slice(-18);
+  var out=await vbCerebro(ctx,ch.hist,ch.leadNombre||nombre);
+  ch.hist.push({r:'a',t:out.respuesta||'',ts:Date.now()});
+  ch.replies24h++;
+  if(out.nombre)ch.leadNombre=out.nombre;
+  if(out.celular)ch.leadCel=out.celular;
+  // notificaciones a Diego
+  var avisos=[];
+  if(!ch.notifNuevo&&!esSimulacion){ch.notifNuevo=true;avisos.push('🆕 <b>Nueva conversación en el bot de ventas</b>\n👤 '+(nombre||'')+(username?(' (@'+username+')'):'')+'\n💬 "'+texto.slice(0,140)+'"');}
+  if(out.lead&&!esSimulacion){
+    var hace=ch.leadAvisado?Date.now()-ch.leadAvisado:9e9;
+    if(hace>30*60000){ch.leadAvisado=Date.now();
+      avisos.push('🔥 <b>LEAD CALIENTE — Bot de ventas</b>\n👤 '+(out.nombre||ch.leadNombre||nombre||'')+(out.celular||ch.leadCel?('\n📱 '+(out.celular||ch.leadCel)):'')+'\n🎯 '+(out.interes||'')+(out.precot?('\n🧾 Pre-cotización: '+out.precot):'')+'\n📝 '+(out.motivo||'')+'\n\n💬 Último: "'+texto.slice(0,120)+'"');
+    }
+    vbLeadACrm(out,chatId,username);
+  }
+  store.chats[chatId]=ch;
+  await sbPutChats(store);
+  for(var i=0;i<avisos.length;i++){try{await tgSend(avisos[i]);}catch(e){}}
+  return out;
+}
+
+// Webhook del bot de ventas
+app.post('/api/ventasbot/webhook',async function(req,res){
+  res.json({ok:true}); // responder rapido a Telegram
+  try{
+    if(!sbReady())return;
+    var cfg=await vbCfg(); var tok=cfg.ventasBot.token; if(!tok)return;
+    var sec=req.headers['x-telegram-bot-api-secret-token'];
+    if(cfg.ventasBot.secret&&sec!==cfg.ventasBot.secret)return;
+    var upd=req.body||{}; var msg=upd.message; if(!msg||!msg.chat)return;
+    if(msg.from&&msg.from.is_bot)return;
+    var chatId=msg.chat.id;
+    var texto=msg.text||'';
+    if(!texto){await vbSend(tok,chatId,'Por ahora solo puedo leer mensajes de texto 🙏 ¿Qué producto o servicio buscas?');return;}
+    if(texto==='/start')texto='Hola';
+    var nombre=((msg.from&&msg.from.first_name)||'')+' '+((msg.from&&msg.from.last_name)||'');
+    var out=await vbProcesar(chatId,texto,nombre.trim(),(msg.from&&msg.from.username)||'',false);
+    await vbSend(tok,chatId,out.respuesta||'…');
+  }catch(e){console.error('ventasbot webhook:',e.message);}
+});
+// Configurar el bot (guardar token + setWebhook)
+app.post('/api/ventasbot/config',async function(req,res){
+  if(!sbReady())return proxyCloud(req,res);
+  try{
+    var b=req.body||{}; var cfg=await vbCfg();
+    if(b.info!=null)cfg.ventasBot.info=String(b.info).slice(0,4000);
+    if(b.empId)cfg.ventasBot.empId=b.empId;
+    if(b.token){
+      var tok=String(b.token).trim();
+      var me=await (await fetch('https://api.telegram.org/bot'+tok+'/getMe')).json();
+      if(!me.ok)return res.json({ok:false,error:'Token inválido: '+(me.description||'')});
+      var secret='sgm'+Math.random().toString(36).slice(2,14);
+      var wh=await (await fetch('https://api.telegram.org/bot'+tok+'/setWebhook',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url:PROD_URL+'/api/ventasbot/webhook',secret_token:secret,allowed_updates:['message']})})).json();
+      if(!wh.ok)return res.json({ok:false,error:'setWebhook: '+(wh.description||'')});
+      cfg.ventasBot.token=tok; cfg.ventasBot.secret=secret; cfg.ventasBot.botUser=me.result.username;
+    }
+    await sbPutConfig(cfg);
+    res.json({ok:true,botUser:cfg.ventasBot.botUser||'',tieneToken:!!cfg.ventasBot.token,info:cfg.ventasBot.info||''});
+  }catch(e){res.status(500).json({error:e.message});}
+});
+app.get('/api/ventasbot/estado',async function(req,res){
+  if(!sbReady())return proxyCloud(req,res);
+  try{var cfg=await vbCfg();var store=await sbGetChats();res.json({activo:!!cfg.ventasBot.token,botUser:cfg.ventasBot.botUser||'',info:cfg.ventasBot.info||'',conversaciones:Object.keys(store.chats).length});}
+  catch(e){res.status(500).json({error:e.message});}
+});
+// Simulador: probar el cerebro sin bot real
+app.post('/api/ventasbot/simular',async function(req,res){
+  if(!sbReady())return proxyCloud(req,res);
+  try{var b=req.body||{};var out=await vbProcesar('SIM-'+(b.sesion||'1'),b.texto||'',b.nombre||'Cliente Prueba','simulador',true);res.json(out);}
+  catch(e){res.status(500).json({error:e.message});}
+});
+
+// ============================================================
+// AGENTE DE RETENCION: post-venta, remarketing, rescate de frios
+// ============================================================
+async function vbRedactar(prompt){
+  var k=process.env.GEMINI_API_KEY;
+  var body={contents:[{parts:[{text:prompt}]}],generationConfig:{temperature:0.7,maxOutputTokens:512,thinkingConfig:{thinkingBudget:0}}};
+  var r=await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key='+k,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  var d=await r.json();
+  try{return d.candidates[0].content.parts.map(function(p){return p.text||''}).join('').trim();}catch(e){return '';}
+}
+function waMe(cel){var n=(''+(cel||'')).replace(/\D/g,'');if(n.length===9)n='51'+n;return n?('wa.me/'+n):'';}
+async function runRetencion(tipo,force){
+  try{
+    if(!sbReady())return {skipped:true};
+    var cfg=await sbGetConfig(); var hoy=new Date().toISOString().slice(0,10);
+    var guardKey='lastRet_'+tipo;
+    if(!force&&cfg[guardKey]===hoy)return {skipped:'ya corrido hoy'};
+    var data=await sbGetData()||{};
+    var empId=(cfg.ventasBot&&cfg.ventasBot.empId)||SKYBLUE_EMPID;
+    var crm=data['crm_'+empId]||{contactos:[],tareas:[]};
+    var contactos=Array.isArray(crm.contactos)?crm.contactos:[];
+    var lineas=[],titulo='';
+    if(tipo==='postventa'){
+      titulo='🙏 <b>Post-venta — clientes recién atendidos</b>';
+      var facts=[];Object.keys(data).forEach(function(k){if(k.indexOf('fact_')===0&&Array.isArray(data[k]))facts=facts.concat(data[k]);});
+      var cambio=false;
+      for(var i=0;i<facts.length;i++){var x=facts[i];
+        if(x.estado!=='pagada'||x.postventaOk)continue;
+        var dias=Math.floor((Date.now()-new Date((x.fecha||hoy)+'T12:00:00'))/86400000);
+        if(dias<2||dias>30)continue;
+        var msj=await vbRedactar('Redacta un mensaje corto de WhatsApp (max 45 palabras) de post-venta en espanol peruano de SKY BLUE PERU al cliente '+(x.cliente||'')+' que nos compró hace unos días (factura '+(x.num||'')+'). Agradecer, preguntar si todo llegó bien y ofrecerse para lo que necesite. Solo el texto.');
+        var cont=contactos.filter(function(c){return (c.ruc&&c.ruc===x.ruc)||c.nombre.toLowerCase()===(x.cliente||'').toLowerCase()})[0];
+        var cel=cont?cont.cel:'';
+        lineas.push('👤 <b>'+(x.cliente||'')+'</b> · 🧾 '+(x.num||'')+'\n💬 '+msj+(cel?('\n📱 '+waMe(cel)):'\n📱 (sin celular en CRM)'));
+        x.postventaOk=true; cambio=true;
+        if(lineas.length>=5)break;
+      }
+      if(cambio)await sbPutData(data);
+    } else if(tipo==='remarketing'){
+      titulo='📢 <b>Remarketing mensual — clientes para reactivar</b>';
+      var ganados=contactos.filter(function(c){return c.etapa==='ganado'}).slice(0,6);
+      for(var j=0;j<ganados.length;j++){var g=ganados[j];
+        var consumo=(g.notas||[]).slice(0,2).map(function(n){return n.texto}).join('; ');
+        var msj2=await vbRedactar('Redacta un mensaje corto de WhatsApp (max 50 palabras) de remarketing en espanol peruano de SKY BLUE PERU al cliente '+g.nombre+'. Contexto: '+((consumo||'cliente que ya nos compró antes').slice(0,200))+'. Ofrecer novedades/reposición, cálido, con llamada a la acción. Solo el texto.');
+        lineas.push('👤 <b>'+g.nombre+'</b>\n💬 '+msj2+(g.cel?('\n📱 '+waMe(g.cel)):'\n📱 (sin celular)'));
+      }
+    } else { // rescate de frios
+      titulo='🧊 <b>Rescate semanal — prospectos fríos (7+ días sin tocar)</b>';
+      var frios=contactos.filter(function(c){
+        if(['ganado','perdido'].indexOf(c.etapa)>=0)return false;
+        var d=c.ultTocado?Math.floor((Date.now()-new Date(c.ultTocado))/86400000):99;
+        return d>=7;
+      }).slice(0,6);
+      for(var q=0;q<frios.length;q++){var f=frios[q];
+        var msj3=await vbRedactar('Redacta un mensaje corto de WhatsApp (max 45 palabras) en espanol peruano de SKY BLUE PERU para reactivar al prospecto '+f.nombre+' (etapa: '+f.etapa+', interés previo: '+((f.notas&&f.notas[0]&&f.notas[0].texto)||'productos de nuestra empresa').slice(0,120)+'). Sin presionar, aportando valor y con pregunta abierta. Solo el texto.');
+        lineas.push('👤 <b>'+f.nombre+'</b> ('+f.etapa+')\n💬 '+msj3+(f.cel?('\n📱 '+waMe(f.cel)):'\n📱 (sin celular)'));
+      }
+    }
+    if(lineas.length){await tgSendLong(titulo+'\n\n'+lineas.join('\n\n')+'\n\n👉 Toca el wa.me de cada uno para enviar con un toque.');}
+    cfg=await sbGetConfig(); cfg[guardKey]=hoy; await sbPutConfig(cfg);
+    return {ok:true,generados:lineas.length};
+  }catch(e){console.error('retencion '+tipo+':',e.message);return {error:e.message};}
+}
+app.get('/api/retencion/run',async function(req,res){
+  if(!sbReady())return proxyCloud(req,res);
+  try{res.json(await runRetencion(req.query.tipo||'postventa',true));}catch(e){res.status(500).json({error:e.message});}
+});
+
 app.get('/api/alertas/run',async function(req,res){
   if(!sbReady())return proxyCloud(req,res);
   try{ res.json(await runAlertas(true)); }catch(e){ res.status(500).json({error:e.message}); }
@@ -626,7 +854,7 @@ app.get('/favicon.svg',function(req,res){res.setHeader('Content-Type','image/svg
 app.get('/favicon.ico',function(req,res){res.redirect('/favicon.svg');});
 app.get('/icon-192.png',function(req,res){var p=path.join(__dirname,'icon-192.png');fs.access(p,function(e){if(e)res.status(404).end();else res.sendFile(p);});});
 app.get('/icon-512.png',function(req,res){var p=path.join(__dirname,'icon-512.png');fs.access(p,function(e){if(e)res.status(404).end();else res.sendFile(p);});});
-app.get('/health',function(req,res){res.status(200).json({status:'ok',version:'2.2'});});
+app.get('/health',function(req,res){res.status(200).json({status:'ok',version:'2.3'});});
 app.get('/api/diag',function(req,res){
   res.json({
     apiKey: process.env.ANTHROPIC_API_KEY ? 'CONFIGURADA ('+process.env.ANTHROPIC_API_KEY.slice(0,12)+'...)' : 'FALTA - configurala en Railway Variables',
@@ -921,6 +1149,12 @@ app.listen(PORT,'0.0.0.0',function(){
 if(sbReady()){
   setInterval(function(){
     runCrmRecordatorios().catch(function(e){console.error('CRM rec:',e.message);}); // seguimientos CRM a su hora
+    var _d=new Date();
+    if(_d.getUTCHours()===15){ // 10 AM Peru: agente de retencion
+      runRetencion('postventa',false);
+      if(_d.getUTCDate()===1)runRetencion('remarketing',false);
+      if(_d.getUTCDay()===1)runRetencion('rescate',false);
+    }
     var h=new Date().getUTCHours();
     if(h===13){ // 8 AM hora Peru: alertas + digest SEACE matutino
       runAlertas(false).then(function(r){ if(r&&r.ok&&r.enviadas)console.log('Alertas enviadas:',r.enviadas); }).catch(function(e){console.error('Alertas:',e.message);});
