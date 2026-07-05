@@ -567,6 +567,42 @@ async function runReporteDiario(force){
   }catch(e){console.error('Reporte diario:',e.message);return {error:e.message};}
 }
 app.get('/api/reporte/run',async function(req,res){ if(!sbReady())return proxyCloud(req,res); try{ res.json(await runReporteDiario(true)); }catch(e){ res.status(500).json({error:e.message}); } });
+
+// ---- CRM: recordatorios de seguimientos por Telegram (a la hora programada) ----
+async function runCrmRecordatorios(){
+  try{
+    if(!sbReady())return {skipped:true};
+    var data=await sbGetData(); if(!data)return {skipped:true};
+    var peru=new Date(Date.now()-5*3600000); // UTC-5
+    var hoy=peru.toISOString().slice(0,10);
+    var ahora=peru.toISOString().slice(11,16); // HH:MM
+    var pendientes=[], cambio=false;
+    Object.keys(data).forEach(function(k){
+      if(k.indexOf('crm_')!==0)return;
+      var crm=data[k]; if(!crm||!Array.isArray(crm.tareas))return;
+      var contactos=Array.isArray(crm.contactos)?crm.contactos:[];
+      crm.tareas.forEach(function(t){
+        if(t.hecho||t.notificado||!t.fecha)return;
+        var debe=(t.fecha<hoy)||(t.fecha===hoy&&(!t.hora||t.hora<=ahora));
+        if(!debe)return;
+        var c=contactos.filter(function(x){return x.id===t.contactoId})[0];
+        pendientes.push({titulo:t.titulo,contacto:c?c.nombre:'',cel:c?c.cel:'',hora:t.hora||'',vencida:t.fecha<hoy});
+        t.notificado=true; cambio=true;
+      });
+    });
+    if(pendientes.length){
+      var lineas=pendientes.map(function(p){
+        var l=(p.vencida?'🔴':'⏰')+' <b>'+p.titulo+'</b>'+(p.contacto?(' — '+p.contacto):'')+(p.hora?(' · 🕐 '+p.hora):'');
+        if(p.cel){var num=(''+p.cel).replace(/\D/g,'');if(num.length===9)num='51'+num;l+='\n     📱 wa.me/'+num;}
+        return l;
+      }).join('\n');
+      await tgSend('📋 <b>CRM — Seguimientos de ahora</b>\n\n'+lineas+'\n\n👉 Márcalos ✔ en SIGMA → CRM → Tareas.');
+    }
+    if(cambio)await sbPutData(data);
+    return {ok:true,avisadas:pendientes.length};
+  }catch(e){console.error('CRM recordatorios:',e.message);return {error:e.message};}
+}
+app.get('/api/crm/recordatorios',async function(req,res){ if(!sbReady())return proxyCloud(req,res); try{ res.json(await runCrmRecordatorios()); }catch(e){ res.status(500).json({error:e.message}); } });
 app.get('/api/alertas/run',async function(req,res){
   if(!sbReady())return proxyCloud(req,res);
   try{ res.json(await runAlertas(true)); }catch(e){ res.status(500).json({error:e.message}); }
@@ -590,7 +626,7 @@ app.get('/favicon.svg',function(req,res){res.setHeader('Content-Type','image/svg
 app.get('/favicon.ico',function(req,res){res.redirect('/favicon.svg');});
 app.get('/icon-192.png',function(req,res){var p=path.join(__dirname,'icon-192.png');fs.access(p,function(e){if(e)res.status(404).end();else res.sendFile(p);});});
 app.get('/icon-512.png',function(req,res){var p=path.join(__dirname,'icon-512.png');fs.access(p,function(e){if(e)res.status(404).end();else res.sendFile(p);});});
-app.get('/health',function(req,res){res.status(200).json({status:'ok',version:'2.1'});});
+app.get('/health',function(req,res){res.status(200).json({status:'ok',version:'2.2'});});
 app.get('/api/diag',function(req,res){
   res.json({
     apiKey: process.env.ANTHROPIC_API_KEY ? 'CONFIGURADA ('+process.env.ANTHROPIC_API_KEY.slice(0,12)+'...)' : 'FALTA - configurala en Railway Variables',
@@ -884,6 +920,7 @@ app.listen(PORT,'0.0.0.0',function(){
 // Programador de alertas: revisa cada 30 min y envia 1 vez al dia (~8am hora Peru = 13 UTC)
 if(sbReady()){
   setInterval(function(){
+    runCrmRecordatorios().catch(function(e){console.error('CRM rec:',e.message);}); // seguimientos CRM a su hora
     var h=new Date().getUTCHours();
     if(h===13){ // 8 AM hora Peru: alertas + digest SEACE matutino
       runAlertas(false).then(function(r){ if(r&&r.ok&&r.enviadas)console.log('Alertas enviadas:',r.enviadas); }).catch(function(e){console.error('Alertas:',e.message);});

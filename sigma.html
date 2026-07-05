@@ -491,7 +491,7 @@ aside.rpanel{width:284px;flex-shrink:0;background:linear-gradient(180deg,var(--c
 <div id="portal">
   <div class="brandbig">
     <div class="logomark"><svg viewBox="0 0 24 24" fill="none"><path d="M4 7l8-4 8 4-8 4-8-4z" stroke="#fff" stroke-width="1.7" stroke-linejoin="round"/><path d="M4 12l8 4 8-4M4 17l8 4 8-4" stroke="#fff" stroke-width="1.7" stroke-linejoin="round" opacity=".72"/></svg></div>
-    <div><div class="brandname">SIGMA <span class="vtag">2.1</span></div><div class="brandsub">Plataforma ERP · IA</div></div>
+    <div><div class="brandname">SIGMA <span class="vtag">2.2</span></div><div class="brandsub">Plataforma ERP · IA</div></div>
   </div>
   <div class="portal-title">Selecciona la empresa con la que vas a trabajar</div>
   <div class="cards" id="ecards"><div style="grid-column:1/-1;text-align:center;color:var(--tmuted);font-size:13px;padding:30px">Cargando empresas…</div></div>
@@ -505,7 +505,7 @@ aside.rpanel{width:284px;flex-shrink:0;background:linear-gradient(180deg,var(--c
   <aside class="side" id="sidebar">
     <div class="side-logo">
       <div class="lm"><svg viewBox="0 0 24 24" fill="none"><path d="M4 7l8-4 8 4-8 4-8-4z" stroke="#fff" stroke-width="1.7" stroke-linejoin="round"/><path d="M4 12l8 4 8-4M4 17l8 4 8-4" stroke="#fff" stroke-width="1.7" stroke-linejoin="round" opacity=".72"/></svg></div>
-      <div><div class="nm">SIGMA</div><div class="sb">ERP · 2.1</div></div>
+      <div><div class="nm">SIGMA</div><div class="sb">ERP · 2.2</div></div>
     </div>
     <nav class="navlist" id="navlist"></nav>
     <div class="side-user">
@@ -612,7 +612,7 @@ var NAV=[
   {id:'ocrec',ic:'cart',lb:'OC Recibidas'},
   {id:'solicitudes',ic:'send',lb:'Solicitud Cotiz.',tab:'sc'},
   {id:'ordenes',ic:'box',lb:'OC a Proveedores',tab:'oc'},
-  {id:'clientes',ic:'dollar',lb:'Clientes'},
+  {id:'crm',ic:'dollar',lb:'CRM Clientes'},
   {id:'proveedores',ic:'building',lb:'Proveedores'},
   {id:'productos',ic:'trending',lb:'Productos'},
   {id:'traza',ic:'search',lb:'Trazabilidad'},
@@ -641,7 +641,7 @@ function navClick(it){
   toggleMenu(false);
   if(it.tab){window.location.href='/cotizador?tab='+it.tab;return}
   ACTIVE=it.id;renderNav();
-  if(it.id==='dashboard')refreshDash();else if(it.id==='proyectos')renderProyectos();else if(it.id==='boveda')renderBoveda();else if(it.id==='proveedores')renderProveedores();else if(it.id==='clientes')renderClientes();else if(it.id==='productos')renderProductos();else if(it.id==='ocrec')renderOCRecibidas();else if(it.id==='segcot')renderSegCot();else if(it.id==='facturacion')renderFacturacion();else if(it.id==='cobranza')renderCobranza();else if(it.id==='traza')renderTraza();else if(it.id==='contabilidad')renderContabilidad();else if(it.id==='reportes')renderReportes();else if(it.id==='config')renderConfig();else if(it.id==='oportunidades')renderOportunidades();else if(it.id==='logistica')renderLogistica();else if(it.id==='conformidad')renderConformidad();else renderSoon(it);
+  if(it.id==='dashboard')refreshDash();else if(it.id==='proyectos')renderProyectos();else if(it.id==='boveda')renderBoveda();else if(it.id==='proveedores')renderProveedores();else if(it.id==='crm')renderCRM();else if(it.id==='clientes')renderClientes();else if(it.id==='productos')renderProductos();else if(it.id==='ocrec')renderOCRecibidas();else if(it.id==='segcot')renderSegCot();else if(it.id==='facturacion')renderFacturacion();else if(it.id==='cobranza')renderCobranza();else if(it.id==='traza')renderTraza();else if(it.id==='contabilidad')renderContabilidad();else if(it.id==='reportes')renderReportes();else if(it.id==='config')renderConfig();else if(it.id==='oportunidades')renderOportunidades();else if(it.id==='logistica')renderLogistica();else if(it.id==='conformidad')renderConformidad();else renderSoon(it);
 }
 
 function selectEmpresa(e){
@@ -2141,6 +2141,7 @@ function cloudSyncPush(){
     payload['fact_'+EMP.id]=JSON.parse(localStorage.getItem(factKey())||'[]');
     payload['oport_'+EMP.id]=JSON.parse(localStorage.getItem(oportKey())||'[]');
     payload['conf_'+EMP.id]=JSON.parse(localStorage.getItem(confKey())||'[]');
+    payload['crm_'+EMP.id]=JSON.parse(localStorage.getItem(crmKey())||'{}');
     payload['logist_'+EMP.id]=JSON.parse(localStorage.getItem(logistKey())||'[]');
     fetch('/api/data',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
   }catch(e){}
@@ -2156,6 +2157,7 @@ function cloudSyncPull(cb){
       if(d&&d['cotstat_'+EMP.id])localStorage.setItem(cotstatKey(),JSON.stringify(d['cotstat_'+EMP.id]));
       if(d&&d['fact_'+EMP.id])localStorage.setItem(factKey(),JSON.stringify(d['fact_'+EMP.id]));
       if(d&&d['conf_'+EMP.id])localStorage.setItem(confKey(),JSON.stringify(d['conf_'+EMP.id]));
+      if(d&&d['crm_'+EMP.id])localStorage.setItem(crmKey(),JSON.stringify(d['crm_'+EMP.id]));
       if(d&&d['oport_'+EMP.id])localStorage.setItem(oportKey(),JSON.stringify(d['oport_'+EMP.id]));
       if(d&&d['logist_'+EMP.id])localStorage.setItem(logistKey(),JSON.stringify(d['logist_'+EMP.id]));
     }catch(e){}
@@ -2387,6 +2389,352 @@ function confAI(file){
       try{var o=JSON.parse(m[0]);if($('cf_cli'))$('cf_cli').value=o.cliente||'';if($('cf_ruc'))$('cf_ruc').value=(o.ruc||'').replace(/\D/g,'');if($('cf_tipo')&&o.tipo){var tl=(o.tipo+'').toLowerCase();$('cf_tipo').value=tl.indexOf('contra')>=0?'contrato':(tl.indexOf('guia')>=0?'guia':(tl.indexOf('oc')>=0||tl.indexOf('orden')>=0?'oc':'factura'));}if($('cf_num'))$('cf_num').value=o.num||'';if(o.fecha&&$('cf_fecha'))$('cf_fecha').value=o.fecha;if($('cf_monto'))$('cf_monto').value=o.monto||0;if($('cf_mon'))$('cf_mon').value=curOf(o.moneda);if($('cf_desc'))$('cf_desc').value=o.desc||'';if(st){st.textContent='Datos extraidos. Revisa y guarda.';st.style.color='#16a34a';}}catch(e2){if(st){st.textContent='Error al leer.';st.style.color='#ef4444';}}
     }).catch(function(){if(st){st.textContent='Error de conexion.';st.style.color='#ef4444';}});
   };rd.readAsDataURL(file);
+}
+/* ===== Modulo CRM: contactos, pipeline, tareas, WhatsApp, campanas ===== */
+var CRM={contactos:[],tareas:[]},_crmTab='pipeline',_crmQ='',_crmEditId=null,_campSeg='todos',_campMsg='';
+var CRM_ETAPAS=[['prospecto','🎯 Prospecto','#94a3b8'],['contactado','📞 Contactado','#0ea5e9'],['cotizado','📝 Cotizado','#14b8a6'],['negociacion','🤝 Negociación','#f59e0b'],['ganado','✅ Ganado','#16a34a'],['perdido','❌ Perdido','#ef4444']];
+function crmKey(){return 'sigma_crm_'+(EMP?EMP.id:'x')}
+function loadCRM(){try{var d=JSON.parse(localStorage.getItem(crmKey())||'{}');CRM.contactos=Array.isArray(d.contactos)?d.contactos:[];CRM.tareas=Array.isArray(d.tareas)?d.tareas:[];}catch(e){CRM={contactos:[],tareas:[]}}}
+function saveCRM(){try{localStorage.setItem(crmKey(),JSON.stringify(CRM))}catch(e){}cloudSyncPush()}
+function etapaInfo(k){return CRM_ETAPAS.filter(function(e){return e[0]===k})[0]||CRM_ETAPAS[0]}
+function waNum(c){c=(''+(c||'')).replace(/\D/g,'');if(c.length===9)c='51'+c;return c;}
+function waLink(cel,text){return 'https://wa.me/'+waNum(cel)+'?text='+encodeURIComponent(text||'');}
+function _hoyISO(){return new Date().toISOString().slice(0,10)}
+function diasSin(c){if(!c.ultTocado)return 99;return Math.floor((Date.now()-new Date(c.ultTocado).getTime())/86400000)}
+function tocar(c){c.ultTocado=new Date().toISOString()}
+function crmNota(cid,texto,tipo){var c=CRM.contactos.filter(function(x){return x.id===cid})[0];if(!c)return;c.notas=c.notas||[];c.notas.unshift({fecha:new Date().toISOString(),texto:texto,tipo:tipo||'nota'});tocar(c);saveCRM();}
+
+/* ── Sincronizacion automatica desde SIGMA (cotizaciones, OC recibidas, facturas) ── */
+function crmSyncAuto(cb){
+  loadCRM(); try{loadOCREC()}catch(e){} try{loadFact()}catch(e){}
+  loadDash(function(){
+    var antes=CRM.contactos.length;
+    function upsert(nombre,ruc,etapa){
+      nombre=(nombre||'').trim(); if(!nombre)return;
+      var key=(ruc||'').trim()||nombre.toLowerCase();
+      var ex=CRM.contactos.filter(function(c){return ((c.ruc||'').trim()&&(c.ruc||'').trim()===(ruc||'').trim())||c.nombre.toLowerCase()===nombre.toLowerCase()})[0];
+      if(ex){ if(!ex.ruc&&ruc)ex.ruc=ruc; var orden=['prospecto','contactado','cotizado','negociacion','ganado'];
+        if(ex.origen==='auto'&&orden.indexOf(etapa)>orden.indexOf(ex.etapa||'prospecto'))ex.etapa=etapa; return; }
+      CRM.contactos.push({id:'CT'+Date.now()+Math.floor(Math.random()*9999),nombre:nombre,empresa:nombre,ruc:ruc||'',cargo:'',cel:'',email:'',etapa:etapa,valorEst:0,origen:'auto',notas:[],creado:new Date().toISOString(),ultTocado:new Date().toISOString()});
+    }
+    (DASH.hist||[]).forEach(function(co){if(EMP&&co.empresaId&&co.empresaId!==EMP.id)return;upsert((co.cli&&co.cli.n),(co.cli&&co.cli.ruc),'cotizado');});
+    (OCREC||[]).forEach(function(o){upsert(o.cliente,o.ruc,'ganado');});
+    (FACT||[]).forEach(function(x){upsert(x.cliente,x.ruc,'ganado');});
+    saveCRM();
+    if(cb)cb(CRM.contactos.length-antes);
+  });
+}
+
+/* ── Importar CSV/Excel exportado ── */
+function crmImportCSV(file){
+  if(!file)return; var st=$('crmImpSt'); if(st){st.textContent='Leyendo archivo…';st.style.color='var(--tmuted)';}
+  var rd=new FileReader();
+  rd.onload=function(e){
+    try{
+      var txt=String(e.target.result).replace(/^﻿/,'');
+      var sep=(txt.indexOf(';')>=0&&txt.split(';').length>txt.split(',').length)?';':(txt.indexOf('\t')>=0&&txt.split('\t').length>txt.split(',').length?'\t':',');
+      var lineas=txt.split(/\r?\n/).filter(function(l){return l.trim()});
+      if(!lineas.length){if(st){st.textContent='Archivo vacío';st.style.color='#f59e0b';}return;}
+      var head=lineas[0].toLowerCase().split(sep).map(function(h){return h.replace(/"/g,'').trim()});
+      function col(names){for(var i=0;i<head.length;i++){for(var j=0;j<names.length;j++){if(head[i].indexOf(names[j])>=0)return i;}}return -1;}
+      var iNom=col(['nombre','name','cliente','contacto','razon']);
+      var iCel=col(['cel','telefono','teléfono','phone','movil','móvil','whats']);
+      var iEmp=col(['empresa','company','organiz']);
+      var iMail=col(['mail','correo']);
+      var iRuc=col(['ruc','dni','doc']);
+      if(iNom<0&&iCel<0){if(st){st.textContent='No encontré columnas de nombre/celular. Usa encabezados: nombre, celular, empresa, email, ruc';st.style.color='#ef4444';}return;}
+      loadCRM(); var add=0,dup=0;
+      lineas.slice(1).forEach(function(l){
+        var p=l.split(sep).map(function(v){return v.replace(/"/g,'').trim()});
+        var nom=iNom>=0?p[iNom]:'', cel=iCel>=0?(p[iCel]||'').replace(/[^\d+]/g,''):'';
+        if(!nom&&!cel)return;
+        var ya=CRM.contactos.some(function(c){return (cel&&waNum(c.cel)===waNum(cel))||(nom&&c.nombre.toLowerCase()===nom.toLowerCase())});
+        if(ya){dup++;return;}
+        CRM.contactos.push({id:'CT'+Date.now()+Math.floor(Math.random()*99999),nombre:nom||cel,empresa:iEmp>=0?p[iEmp]||'':'',ruc:iRuc>=0?p[iRuc]||'':'',cargo:'',cel:cel,email:iMail>=0?p[iMail]||'':'',etapa:'prospecto',valorEst:0,origen:'import',notas:[],creado:new Date().toISOString(),ultTocado:new Date().toISOString()});
+        add++;
+      });
+      saveCRM();
+      if(st){st.textContent='✓ '+add+' contactos importados'+(dup?(' · '+dup+' duplicados omitidos'):'');st.style.color='#16a34a';}
+      renderCRM();
+    }catch(err){if(st){st.textContent='Error: '+err.message;st.style.color='#ef4444';}}
+  };
+  rd.readAsText(file);
+}
+
+/* ── Render principal ── */
+function renderCRM(){
+  loadCRM();
+  var hoy=_hoyISO();
+  var tHoy=CRM.tareas.filter(function(t){return !t.hecho&&t.fecha===hoy}).length;
+  var tVenc=CRM.tareas.filter(function(t){return !t.hecho&&t.fecha&&t.fecha<hoy}).length;
+  var enNeg=CRM.contactos.filter(function(c){return c.etapa==='negociacion'}).length;
+  var valorPipe=CRM.contactos.filter(function(c){return ['contactado','cotizado','negociacion'].indexOf(c.etapa)>=0}).reduce(function(s,c){return s+(+c.valorEst||0)},0);
+  var h='<div class="pmod-head fade"><div><h1 style="font-size:23px;font-weight:700;letter-spacing:-.6px">CRM</h1><div style="font-size:13px;color:var(--tmuted);margin-top:4px">Clientes, pipeline y seguimientos · '+(EMP?EMP.nombre:'')+'</div></div>'+
+    '<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="aibtn" onclick="crmSyncAuto(function(n){toast(\'🔄 \'+n+\' contactos nuevos desde SIGMA\');renderCRM();})" style="border:1px solid var(--bd,#e2e8f0)">🔄 Traer de SIGMA</button>'+
+    '<button class="btn-new" onclick="_crmTab=\'contactos\';renderCRM();setTimeout(function(){toggleCrmForm(false)},50)">+ Contacto</button></div></div>';
+  h+='<div class="kpis fade" style="margin-bottom:12px">'+
+    '<div class="kpi"><div class="val mono">'+CRM.contactos.length+'</div><div class="lab">Contactos</div></div>'+
+    '<div class="kpi"><div class="val mono" style="color:#f59e0b">'+enNeg+'</div><div class="lab">En negociación</div></div>'+
+    '<div class="kpi"><div class="val mono" style="color:'+(tVenc?'#ef4444':'#16a34a')+'">'+(tHoy+tVenc)+'</div><div class="lab">Tareas hoy'+(tVenc?(' (🔴 '+tVenc+' vencidas)'):'')+'</div></div>'+
+    '<div class="kpi"><div class="val mono">'+fmtMonto(valorPipe)+'</div><div class="lab">Valor en pipeline</div></div></div>';
+  h+='<div class="seg">'+[['pipeline','📊 Pipeline'],['contactos','👥 Contactos'],['tareas','⏰ Tareas'],['campanas','📢 Campañas']].map(function(t){return '<button class="'+(_crmTab===t[0]?'on':'')+'" onclick="_crmTab=\''+t[0]+'\';renderCRM()">'+t[1]+'</button>'}).join('')+'</div>';
+  if(_crmTab==='pipeline')h+=crmPipelineHTML();
+  else if(_crmTab==='contactos')h+=crmContactosHTML();
+  else if(_crmTab==='tareas')h+=crmTareasHTML();
+  else h+=crmCampanasHTML();
+  $('content').innerHTML=h;
+}
+
+/* ── Pipeline kanban ── */
+function crmPipelineHTML(){
+  var h='<div class="fade" style="display:flex;gap:10px;overflow-x:auto;padding-bottom:10px;-webkit-overflow-scrolling:touch">';
+  CRM_ETAPAS.forEach(function(e){
+    var cs=CRM.contactos.filter(function(c){return (c.etapa||'prospecto')===e[0]});
+    var tot=cs.reduce(function(s,c){return s+(+c.valorEst||0)},0);
+    h+='<div style="flex:0 0 240px;min-width:240px;background:var(--input,#f8fafc);border-radius:12px;padding:10px">';
+    h+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><div style="font-size:12px;font-weight:700;color:'+e[2]+'">'+e[1]+' ('+cs.length+')</div>'+(tot?'<div class="mono" style="font-size:10px;color:var(--tmuted)">'+fmtMonto(tot)+'</div>':'')+'</div>';
+    cs.sort(function(a,b){return diasSin(b)-diasSin(a)}).forEach(function(c){
+      var ds=diasSin(c); var semaforo=ds>=7?'🔴':ds>=3?'🟡':'🟢';
+      var ix=CRM_ETAPAS.findIndex(function(x){return x[0]===e[0]});
+      h+='<div class="card" style="padding:10px;margin-bottom:8px;cursor:pointer" onclick="openCRM(\''+c.id+'\')">'+
+        '<div style="font-size:12.5px;font-weight:600;line-height:1.3">'+esc(c.nombre)+'</div>'+
+        (c.empresa&&c.empresa!==c.nombre?'<div style="font-size:10.5px;color:var(--tmuted)">'+esc(c.empresa)+'</div>':'')+
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px">'+
+        '<div style="font-size:10px;color:var(--tmuted)">'+semaforo+' '+(ds>=99?'sin tocar':ds+'d sin tocar')+(c.valorEst?(' · '+fmtMonto(c.valorEst)):'')+'</div>'+
+        '<div>'+(ix>0?'<button onclick="event.stopPropagation();crmMover(\''+c.id+'\',-1)" style="background:none;border:1px solid var(--bd,#e2e8f0);border-radius:6px;cursor:pointer;font-size:11px;padding:1px 6px">←</button>':'')+
+        (ix<CRM_ETAPAS.length-1?' <button onclick="event.stopPropagation();crmMover(\''+c.id+'\',1)" style="background:none;border:1px solid var(--bd,#e2e8f0);border-radius:6px;cursor:pointer;font-size:11px;padding:1px 6px">→</button>':'')+'</div></div></div>';
+    });
+    if(!cs.length)h+='<div style="font-size:11px;color:var(--tmuted);text-align:center;padding:14px 0">vacío</div>';
+    h+='</div>';
+  });
+  h+='</div>';
+  return h;
+}
+function crmMover(id,dir){
+  loadCRM(); var c=CRM.contactos.filter(function(x){return x.id===id})[0]; if(!c)return;
+  var ix=CRM_ETAPAS.findIndex(function(e){return e[0]===(c.etapa||'prospecto')});
+  var nx=Math.max(0,Math.min(CRM_ETAPAS.length-1,ix+dir));
+  c.etapa=CRM_ETAPAS[nx][0]; tocar(c);
+  c.notas=c.notas||[]; c.notas.unshift({fecha:new Date().toISOString(),texto:'Movido a '+CRM_ETAPAS[nx][1],tipo:'etapa'});
+  saveCRM(); renderCRM();
+}
+
+/* ── Contactos ── */
+function crmContactosHTML(){
+  var q=(_crmQ||'').toLowerCase();
+  var list=CRM.contactos.filter(function(c){return !q||[c.nombre,c.empresa,c.cel,c.ruc,c.email].join(' ').toLowerCase().indexOf(q)>=0});
+  var h='<div class="fade">';
+  h+='<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;align-items:center">'+
+    '<input placeholder="🔍 Buscar contacto…" value="'+esc(_crmQ)+'" oninput="_crmQ=this.value;renderCRM()" style="flex:1;min-width:160px;padding:9px 12px;border:1px solid var(--bd,#e2e8f0);border-radius:10px;font-size:13px;background:var(--input,#fff);color:var(--tprimary)">'+
+    '<label class="aibtn" style="cursor:pointer;border:1px solid var(--bd,#e2e8f0)">📥 Importar Excel/CSV<input type="file" accept=".csv,.txt,text/csv" style="display:none" onchange="crmImportCSV(this.files[0])"></label></div>'+
+    '<div id="crmImpSt" style="font-size:11.5px;color:var(--tmuted);margin-bottom:8px"></div>';
+  h+='<div id="crmForm" class="card" style="display:none;margin-bottom:12px"><div class="ct" style="font-weight:600;margin-bottom:10px" id="crmFormTitle">Nuevo contacto</div>'+
+    '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">'+
+    ocrecField('cr_nom','Nombre','Persona o empresa')+ocrecField('cr_emp','Empresa','')+ocrecField('cr_cargo','Cargo','Ej: Jefe de Logística')+
+    ocrecField('cr_cel','Celular (WhatsApp)','9XXXXXXXX')+ocrecField('cr_mail','Email','')+ocrecField('cr_ruc','RUC/DNI','')+
+    ocrecSelect('cr_etapa','Etapa',CRM_ETAPAS.map(function(e){return [e[0],e[1]]}))+ocrecField('cr_valor','Valor estimado (S/)','0','','number')+
+    '</div><div style="margin-top:10px;display:flex;gap:8px"><button class="btn-new" onclick="crmGuardar()">Guardar</button><button class="aibtn" onclick="toggleCrmForm(true)">Cancelar</button></div></div>';
+  if(!list.length){h+='<div class="empty"><div class="ei">'+icon('dollar',1.5)+'</div><div style="font-size:15px;font-weight:600;color:var(--tprimary);margin-bottom:6px">'+(CRM.contactos.length?'Sin resultados':'Aún no hay contactos')+'</div><div style="font-size:13px;max-width:430px;margin:0 auto;line-height:1.6">Usa <b>🔄 Traer de SIGMA</b> para crear contactos desde tus cotizaciones y ventas, <b>📥 Importar</b> para subir tu base, o <b>+ Contacto</b> para registrar uno al vuelo.</div></div></div>';return h;}
+  h+='<div class="card"><div class="ptable-wrap"><table class="ptable"><thead><tr><th>Contacto</th><th>Celular</th><th>Etapa</th><th>Últ. actividad</th><th></th></tr></thead><tbody>';
+  list.sort(function(a,b){return diasSin(a)-diasSin(b)}).forEach(function(c){
+    var e=etapaInfo(c.etapa); var ds=diasSin(c);
+    h+='<tr style="cursor:pointer" onclick="openCRM(\''+c.id+'\')"><td><div style="font-weight:600">'+esc(c.nombre)+'</div><div class="pdl">'+esc(c.empresa&&c.empresa!==c.nombre?c.empresa:(c.ruc?'RUC '+c.ruc:''))+'</div></td>'+
+      '<td>'+(c.cel?('<a href="'+waLink(c.cel,'Hola '+c.nombre.split(' ')[0]+', le saluda '+((EMP&&EMP.nombre)||'')+'. ')+'" target="_blank" onclick="event.stopPropagation();crmNota(\''+c.id+'\',\'WhatsApp enviado\',\'wa\')" style="color:#16a34a;text-decoration:none;font-weight:600">📱 '+esc(c.cel)+'</a>'):'<span style="color:var(--tmuted)">—</span>')+'</td>'+
+      '<td><span class="badge" style="color:'+e[2]+';background:'+bg(e[2],.14)+'">'+e[1]+'</span></td>'+
+      '<td style="font-size:11.5px;color:var(--tmuted)">'+(ds>=99?'nunca':ds===0?'hoy':ds+' días')+'</td>'+
+      '<td style="white-space:nowrap"><button onclick="event.stopPropagation();crmEditar(\''+c.id+'\')" style="background:none;border:none;color:#0ea5e9;cursor:pointer;font-size:11.5px;font-weight:600">editar</button> <button onclick="event.stopPropagation();crmBorrar(\''+c.id+'\')" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:15px">×</button></td></tr>';
+  });
+  h+='</tbody></table></div></div></div>';
+  return h;
+}
+function toggleCrmForm(hide){var f=$('crmForm');if(!f)return;f.style.display=hide?'none':'block';if(!hide)f.scrollIntoView({behavior:'smooth',block:'center'});if(hide)_crmEditId=null;}
+function crmGuardar(){
+  var nom=_v('cr_nom'); if(!nom){toast('Falta el nombre');return;}
+  loadCRM();
+  var obj={nombre:nom,empresa:_v('cr_emp'),cargo:_v('cr_cargo'),cel:_v('cr_cel'),email:_v('cr_mail'),ruc:_v('cr_ruc'),etapa:_v('cr_etapa')||'prospecto',valorEst:parseFloat(_v('cr_valor'))||0};
+  if(_crmEditId){CRM.contactos.forEach(function(c){if(c.id===_crmEditId){Object.assign(c,obj);tocar(c);}});_crmEditId=null;}
+  else{obj.id='CT'+Date.now();obj.origen='manual';obj.notas=[];obj.creado=new Date().toISOString();obj.ultTocado=new Date().toISOString();CRM.contactos.push(obj);}
+  saveCRM();toast('💾 Contacto guardado');renderCRM();
+}
+function crmEditar(id){
+  loadCRM(); var c=CRM.contactos.filter(function(x){return x.id===id})[0]; if(!c)return;
+  _crmTab='contactos'; _crmEditId=id; renderCRM();
+  setTimeout(function(){
+    toggleCrmForm(false);
+    if($('crmFormTitle'))$('crmFormTitle').textContent='Editar contacto';
+    if($('cr_nom'))$('cr_nom').value=c.nombre||'';if($('cr_emp'))$('cr_emp').value=c.empresa||'';if($('cr_cargo'))$('cr_cargo').value=c.cargo||'';
+    if($('cr_cel'))$('cr_cel').value=c.cel||'';if($('cr_mail'))$('cr_mail').value=c.email||'';if($('cr_ruc'))$('cr_ruc').value=c.ruc||'';
+    if($('cr_etapa'))$('cr_etapa').value=c.etapa||'prospecto';if($('cr_valor'))$('cr_valor').value=c.valorEst||0;
+  },60);
+}
+function crmBorrar(id){if(!confirm('¿Eliminar este contacto y su historial?'))return;loadCRM();CRM.contactos=CRM.contactos.filter(function(c){return c.id!==id});CRM.tareas=CRM.tareas.filter(function(t){return t.contactoId!==id});saveCRM();renderCRM();}
+
+/* ── Ficha 360 ── */
+function openCRM(id){
+  loadCRM(); var c=CRM.contactos.filter(function(x){return x.id===id})[0]; if(!c){renderCRM();return;}
+  try{loadOCREC()}catch(e){} try{loadFact()}catch(e){}
+  loadDash(function(){
+    var e=etapaInfo(c.etapa);
+    var h='<div class="pmod-head fade"><div><button class="btn-new" onclick="renderCRM()" style="margin-bottom:10px">← CRM</button>'+
+      '<h1 style="font-size:21px;font-weight:700">'+esc(c.nombre)+'</h1><div style="font-size:13px;color:var(--tmuted);margin-top:4px">'+esc(c.empresa&&c.empresa!==c.nombre?c.empresa:'')+(c.cargo?(' · '+esc(c.cargo)):'')+(c.ruc?(' · RUC '+esc(c.ruc)):'')+'</div></div>'+
+      '<select onchange="crmSetEtapa(\''+c.id+'\',this.value)" style="padding:8px 12px;border-radius:10px;border:1px solid '+bg(e[2],.5)+';background:'+bg(e[2],.12)+';color:'+e[2]+';font-size:13px;font-weight:700">'+CRM_ETAPAS.map(function(x){return '<option value="'+x[0]+'"'+(x[0]===c.etapa?' selected':'')+'>'+x[1]+'</option>'}).join('')+'</select></div>';
+    /* acciones rapidas */
+    h+='<div class="fade" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">';
+    if(c.cel){
+      h+='<button class="btn-new" style="background:#16a34a" onclick="crmWAmenu(\''+c.id+'\')">📱 WhatsApp</button>';
+      h+='<a class="aibtn" href="tel:+'+waNum(c.cel)+'" onclick="crmNota(\''+c.id+'\',\'Llamada realizada\',\'call\')" style="border:1px solid var(--bd,#e2e8f0);text-decoration:none">📞 Llamar</a>';
+    }
+    if(c.email)h+='<a class="aibtn" href="mailto:'+esc(c.email)+'" style="border:1px solid var(--bd,#e2e8f0);text-decoration:none">✉️ Email</a>';
+    h+='<button class="aibtn" onclick="crmTareaRapida(\''+c.id+'\')" style="border:1px solid var(--bd,#e2e8f0)">⏰ Agendar seguimiento</button></div>';
+    h+='<div id="crmWAbox"></div>';
+    /* consumo (absorbe modulo Clientes) */
+    var docs=[];
+    (DASH.hist||[]).forEach(function(co){if(EMP&&co.empresaId&&co.empresaId!==EMP.id)return;var m=((co.cli&&co.cli.ruc)&&co.cli.ruc===c.ruc)||((co.cli&&co.cli.n)||'').toLowerCase()===c.nombre.toLowerCase();if(m)docs.push({ic:'📝',t:'Cotización COT-'+(co.num||''),f:co.fecha||'',m:fmtMon(co.tot,co.mon)});});
+    (OCREC||[]).forEach(function(o){var m=(o.ruc&&o.ruc===c.ruc)||(o.cliente||'').toLowerCase()===c.nombre.toLowerCase();if(m)docs.push({ic:'🛒',t:'OC recibida '+(o.num||''),f:o.fecha||'',m:fmtMon(o.monto,o.moneda)});});
+    (FACT||[]).forEach(function(x){var m=(x.ruc&&x.ruc===c.ruc)||(x.cliente||'').toLowerCase()===c.nombre.toLowerCase();if(m)docs.push({ic:'🧾',t:'Factura '+(x.num||'')+(x.estado==='pagada'?' ✅ pagada':' ⏳ por cobrar'),f:x.fecha||'',m:fmtMon(x.monto,x.moneda)});});
+    var consumo=null; try{consumo=cliAgg().filter(function(k){return (k.ruc&&k.ruc===c.ruc)||k.nombre.toLowerCase()===c.nombre.toLowerCase()})[0];}catch(err){}
+    h+='<div class="charts fade">';
+    h+='<div class="card"><div class="ct" style="font-weight:600;margin-bottom:8px">💰 Negocio con este cliente</div>';
+    if(consumo){h+='<div class="kv"><div class="k">Total vendido</div><div><b>'+fmtMonto(consumo.total)+'</b></div><div class="k">Cotizaciones</div><div>'+consumo.nCot+'</div></div>';
+      if(consumo.top&&consumo.top.length){h+='<div style="font-size:10px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--tmuted);margin:10px 0 4px">Lo que más consume</div>';consumo.top.slice(0,4).forEach(function(p){h+='<div style="font-size:12px;padding:3px 0;border-bottom:1px solid var(--bd,#f1f5f9)">• '+esc((p.desc||'').slice(0,60))+'</div>';});}}
+    else h+='<div style="font-size:12.5px;color:var(--tmuted)">Aún sin ventas registradas.'+(c.valorEst?(' Valor estimado: <b>'+fmtMonto(c.valorEst)+'</b>'):'')+'</div>';
+    if(docs.length){h+='<div style="font-size:10px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--tmuted);margin:10px 0 4px">Documentos ('+docs.length+')</div>';docs.sort(function(a,b){return (b.f||'').localeCompare(a.f||'')}).slice(0,8).forEach(function(d){h+='<div style="display:flex;justify-content:space-between;font-size:11.5px;padding:3px 0;border-bottom:1px solid var(--bd,#f1f5f9)"><span>'+d.ic+' '+esc(d.t)+'</span><span class="mono">'+d.m+'</span></div>';});}
+    h+='</div>';
+    /* tareas + timeline */
+    h+='<div class="card"><div class="ct" style="font-weight:600;margin-bottom:8px">⏰ Seguimientos</div><div id="crmFichaTareas">';
+    var ts=CRM.tareas.filter(function(t){return t.contactoId===c.id&&!t.hecho});
+    if(ts.length)ts.forEach(function(t){h+='<div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;padding:5px 0;border-bottom:1px solid var(--bd,#f1f5f9)"><span>'+(t.fecha<_hoyISO()?'🔴':'📋')+' '+esc(t.titulo)+' · '+esc(t.fecha||'')+(t.hora?(' '+t.hora):'')+'</span><button onclick="crmTareaHecha(\''+t.id+'\',\''+c.id+'\')" style="background:#16a34a;color:#fff;border:none;border-radius:6px;padding:2px 8px;font-size:11px;cursor:pointer">✔</button></div>';});
+    else h+='<div style="font-size:12px;color:var(--tmuted)">Sin seguimientos pendientes</div>';
+    h+='</div>';
+    h+='<div class="ct" style="font-weight:600;margin:12px 0 6px">📜 Historial</div>';
+    h+='<div style="display:flex;gap:6px;margin-bottom:8px"><input id="crmNotaInp" placeholder="Escribir nota… (ej: llamé, pidió catálogo)" style="flex:1;padding:8px 10px;border:1px solid var(--bd,#e2e8f0);border-radius:8px;font-size:12px;background:var(--input,#fff);color:var(--tprimary)"><button class="btn-new" onclick="crmAgregarNota(\''+c.id+'\')" style="padding:8px 12px">＋</button></div>';
+    var nts=(c.notas||[]).slice(0,15);
+    if(nts.length)nts.forEach(function(n){var ic={wa:'📱',call:'📞',etapa:'📊',nota:'✏️'}[n.tipo]||'✏️';h+='<div style="font-size:11.5px;padding:4px 0;border-bottom:1px solid var(--bd,#f1f5f9)"><span style="color:var(--tmuted)">'+new Date(n.fecha).toLocaleDateString('es-PE')+'</span> '+ic+' '+esc(n.texto)+'</div>';});
+    else h+='<div style="font-size:12px;color:var(--tmuted)">Sin actividad registrada</div>';
+    h+='</div></div>';
+    $('content').innerHTML=h;
+  });
+}
+function crmSetEtapa(id,v){loadCRM();CRM.contactos.forEach(function(c){if(c.id===id){c.etapa=v;tocar(c);c.notas=c.notas||[];c.notas.unshift({fecha:new Date().toISOString(),texto:'Movido a '+etapaInfo(v)[1],tipo:'etapa'});}});saveCRM();openCRM(id);}
+function crmAgregarNota(id){var t=_v('crmNotaInp');if(!t){toast('Escribe la nota');return;}crmNota(id,t,'nota');openCRM(id);}
+function crmTareaRapida(cid){
+  var tit=prompt('¿Qué seguimiento agendo? (ej: Llamar para cerrar venta)'); if(!tit)return;
+  var f=prompt('¿Para qué fecha? (AAAA-MM-DD, vacío = mañana)')||''; if(!f){var d=new Date();d.setDate(d.getDate()+1);f=d.toISOString().slice(0,10);}
+  var hr=prompt('¿A qué hora? (HH:MM, opcional)')||'';
+  loadCRM();CRM.tareas.push({id:'TK'+Date.now(),contactoId:cid,titulo:tit,fecha:f,hora:hr,hecho:false,notificado:false,creado:new Date().toISOString()});
+  saveCRM();toast('⏰ Seguimiento agendado · te avisaré por Telegram');openCRM(cid);
+}
+function crmTareaHecha(tid,cid){loadCRM();CRM.tareas.forEach(function(t){if(t.id===tid)t.hecho=true;});saveCRM();toast('✔ Hecho');if(cid)openCRM(cid);else renderCRM();}
+
+/* ── WhatsApp con plantillas + IA ── */
+function crmWAmenu(cid){
+  loadCRM(); var c=CRM.contactos.filter(function(x){return x.id===cid})[0]; if(!c)return;
+  var box=$('crmWAbox'); if(!box)return;
+  var primer=c.nombre.split(' ')[0];
+  var emp=(EMP&&EMP.nombre)||'';
+  var tpl={
+    saludo:'Hola '+primer+', le saluda Diego de '+emp+'. Un gusto contactarle. ¿Cómo podemos apoyarle?',
+    seguimiento:'Hola '+primer+', le escribe Diego de '+emp+'. Le hago seguimiento a la cotización que le enviamos, ¿tuvo oportunidad de revisarla? Quedo atento a cualquier consulta.',
+    cobranza:'Hola '+primer+', le saluda Diego de '+emp+'. Le recuerdo amablemente el pago pendiente de su comprobante. Cualquier consulta estoy a su disposición. ¡Gracias!',
+    gracias:'Hola '+primer+', le agradecemos por su compra en '+emp+'. Cualquier necesidad adicional, estamos para servirle. 🙌'
+  };
+  window._waTpl=tpl;
+  var lbl={saludo:'👋 Saludo',seguimiento:'📋 Seguimiento',cobranza:'💰 Cobranza',gracias:'🙏 Agradecimiento'};
+  var h='<div class="card fade" style="margin-bottom:14px;border-left:3px solid #16a34a"><div class="ct" style="font-weight:600;margin-bottom:8px">📱 Enviar WhatsApp a '+esc(c.nombre)+'</div>'+
+    '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">'+
+    Object.keys(tpl).map(function(k){return '<button class="aibtn" style="border:1px solid var(--bd,#e2e8f0);font-size:11.5px" onclick="if($(\'crmWAtxt\'))$(\'crmWAtxt\').value=window._waTpl[\''+k+'\']">'+lbl[k]+'</button>'}).join('')+
+    '<button class="aibtn" style="border:1px solid #8b5cf6;color:#8b5cf6;font-size:11.5px" onclick="crmWAia(\''+cid+'\')">✨ IA redacta</button></div>'+
+    '<textarea id="crmWAtxt" rows="3" style="width:100%;padding:10px;border:1px solid var(--bd,#e2e8f0);border-radius:10px;font-size:13px;background:var(--input,#fff);color:var(--tprimary);resize:vertical">'+esc(tpl.saludo)+'</textarea>'+
+    '<div id="crmWAst" style="font-size:11px;color:var(--tmuted);margin-top:6px"></div>'+
+    '<div style="margin-top:8px;display:flex;gap:8px"><button class="btn-new" style="background:#16a34a" onclick="crmWAenviar(\''+cid+'\')">📱 Abrir WhatsApp con este mensaje</button><button class="aibtn" onclick="$(\'crmWAbox\').innerHTML=\'\'">Cerrar</button></div></div>';
+  box.innerHTML=h;
+  box.scrollIntoView({behavior:'smooth',block:'center'});
+}
+function crmWAenviar(cid){
+  loadCRM(); var c=CRM.contactos.filter(function(x){return x.id===cid})[0]; if(!c||!c.cel){toast('Sin celular');return;}
+  var txt=_v('crmWAtxt')||'';
+  crmNota(cid,'WhatsApp: '+txt.slice(0,80)+(txt.length>80?'…':''),'wa');
+  window.open(waLink(c.cel,txt),'_blank');
+}
+function crmWAia(cid){
+  loadCRM(); var c=CRM.contactos.filter(function(x){return x.id===cid})[0]; if(!c)return;
+  var st=$('crmWAst'); if(st){st.textContent='✨ La IA está redactando…';}
+  var ctx={contacto:c.nombre,empresa_contacto:c.empresa,cargo:c.cargo,etapa:etapaInfo(c.etapa)[1],ultimas_notas:(c.notas||[]).slice(0,3).map(function(n){return n.texto}),mi_empresa:(EMP&&EMP.nombre)||''};
+  fetch('/api/gemini',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt:'Redacta UN mensaje de WhatsApp corto (max 60 palabras), calido y profesional en espanol peruano, de un vendedor (Diego) a un cliente. Contexto: '+JSON.stringify(ctx)+'. El objetivo es avanzar la venta segun la etapa. NO uses saludos genericos largos, se directo y humano. Devuelve SOLO el texto del mensaje, sin comillas.'})})
+  .then(function(r){return r.json()}).then(function(d){
+    var tx='';if(d&&d.candidates&&d.candidates[0]&&d.candidates[0].content&&d.candidates[0].content.parts)tx=d.candidates[0].content.parts.map(function(p){return p.text||''}).join('').trim();
+    if(tx&&$('crmWAtxt')){$('crmWAtxt').value=tx;if(st){st.textContent='✓ Mensaje redactado por IA. Edítalo si quieres.';st.style.color='#16a34a';}}
+    else if(st){st.textContent='No se pudo redactar.';st.style.color='#ef4444';}
+  }).catch(function(){if(st){st.textContent='Error de conexión.';st.style.color='#ef4444';}});
+}
+
+/* ── Tareas ── */
+function crmTareasHTML(){
+  var hoy=_hoyISO();
+  function nomDe(t){var c=CRM.contactos.filter(function(x){return x.id===t.contactoId})[0];return c?c.nombre:'(general)';}
+  function bloque(tit,arr,col){
+    var h='<div class="card" style="margin-bottom:12px"><div class="ct" style="font-weight:600;color:'+col+';margin-bottom:8px">'+tit+' ('+arr.length+')</div>';
+    if(!arr.length)return h+'<div style="font-size:12px;color:var(--tmuted)">Nada por aquí</div></div>';
+    arr.forEach(function(t){h+='<div style="display:flex;justify-content:space-between;align-items:center;font-size:12.5px;padding:6px 0;border-bottom:1px solid var(--bd,#f1f5f9)"><span><b>'+esc(t.titulo)+'</b> · '+esc(nomDe(t))+'<span style="color:var(--tmuted)"> · '+esc(t.fecha||'')+(t.hora?(' '+t.hora):'')+'</span></span><button onclick="crmTareaHecha(\''+t.id+'\')" style="background:#16a34a;color:#fff;border:none;border-radius:6px;padding:3px 10px;font-size:11px;cursor:pointer;font-weight:600">✔ Hecho</button></div>';});
+    return h+'</div>';
+  }
+  var pend=CRM.tareas.filter(function(t){return !t.hecho});
+  var h='<div class="fade">';
+  h+='<div class="card" style="margin-bottom:12px"><div class="ct" style="font-weight:600;margin-bottom:8px">＋ Nueva tarea</div><div style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr auto;gap:8px;align-items:end">'+
+    ocrecField('tk_tit','Tarea','Ej: Llamar a…')+
+    '<div><div style="font-size:9.5px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--tmuted);margin-bottom:3px">Contacto</div><select id="tk_cid" style="width:100%;padding:8px 10px;border:1px solid var(--bd,#e2e8f0);border-radius:8px;font-size:13px;background:var(--input,#fff);color:var(--tprimary)"><option value="">— general —</option>'+CRM.contactos.map(function(c){return '<option value="'+c.id+'">'+esc(c.nombre.slice(0,35))+'</option>'}).join('')+'</select></div>'+
+    ocrecField('tk_fecha','Fecha','',_hoyISO(),'date')+ocrecField('tk_hora','Hora','','','time')+
+    '<button class="btn-new" onclick="crmAddTarea()" style="height:38px">Agendar</button></div></div>';
+  h+=bloque('🔴 Vencidas',pend.filter(function(t){return t.fecha&&t.fecha<hoy}),'#ef4444');
+  h+=bloque('📋 Para HOY',pend.filter(function(t){return t.fecha===hoy}),'#f59e0b');
+  h+=bloque('📅 Próximas',pend.filter(function(t){return !t.fecha||t.fecha>hoy}).slice(0,20),'#0ea5e9');
+  h+='</div>';
+  return h;
+}
+function crmAddTarea(){
+  var tit=_v('tk_tit'); if(!tit){toast('Escribe la tarea');return;}
+  loadCRM();CRM.tareas.push({id:'TK'+Date.now(),contactoId:_v('tk_cid')||'',titulo:tit,fecha:_v('tk_fecha')||_hoyISO(),hora:_v('tk_hora')||'',hecho:false,notificado:false,creado:new Date().toISOString()});
+  saveCRM();toast('⏰ Agendada · te avisaré por Telegram');renderCRM();
+}
+
+/* ── Campañas semi-automaticas ── */
+function crmCampanasHTML(){
+  var segs=[['todos','👥 Todos los contactos'],['prospecto','🎯 Prospectos'],['contactado','📞 Contactados'],['cotizado','📝 Cotizados (sin cerrar)'],['negociacion','🤝 En negociación'],['ganado','✅ Clientes (ganados)']];
+  var lista=CRM.contactos.filter(function(c){return c.cel&&(_campSeg==='todos'||c.etapa===_campSeg)});
+  var h='<div class="fade"><div class="card" style="margin-bottom:12px"><div class="ct" style="font-weight:600;margin-bottom:8px">📢 Campaña por WhatsApp (semi-automática, sin riesgo de baneo)</div>'+
+    '<div style="font-size:12px;color:var(--tmuted);margin-bottom:10px">Elige el segmento, redacta (o pide a la IA) y envía uno por uno con un toque. Usa <b>[nombre]</b> y se personaliza solo.</div>'+
+    '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px">'+
+    '<select onchange="_campSeg=this.value;renderCRM()" style="padding:8px 12px;border:1px solid var(--bd,#e2e8f0);border-radius:10px;font-size:13px;background:var(--input,#fff);color:var(--tprimary)">'+segs.map(function(s){return '<option value="'+s[0]+'"'+(s[0]===_campSeg?' selected':'')+'>'+s[1]+'</option>'}).join('')+'</select>'+
+    '<span class="badge" style="color:#0ea5e9;background:'+bg('#0ea5e9',.14)+'">'+lista.length+' con celular</span>'+
+    '<button class="aibtn" style="border:1px solid #8b5cf6;color:#8b5cf6" onclick="crmCampIA()">✨ IA redacta la campaña</button></div>'+
+    '<textarea id="campTxt" rows="3" oninput="_campMsg=this.value" style="width:100%;padding:10px;border:1px solid var(--bd,#e2e8f0);border-radius:10px;font-size:13px;background:var(--input,#fff);color:var(--tprimary);resize:vertical" placeholder="Hola [nombre], en '+esc((EMP&&EMP.nombre)||'')+' tenemos…">'+esc(_campMsg)+'</textarea>'+
+    '<div id="campSt" style="font-size:11px;color:var(--tmuted);margin-top:6px"></div></div>';
+  if(!lista.length){h+='<div class="empty"><div style="font-size:13px;color:var(--tmuted)">No hay contactos con celular en este segmento. Agrega celulares a tus contactos.</div></div></div>';return h;}
+  h+='<div class="card"><div class="ptable-wrap"><table class="ptable"><thead><tr><th>Contacto</th><th>Celular</th><th>Enviar</th></tr></thead><tbody>';
+  lista.forEach(function(c){
+    h+='<tr id="camp_'+c.id+'"><td>'+esc(c.nombre)+'</td><td class="mono">'+esc(c.cel)+'</td><td><button onclick="crmCampEnviar(\''+c.id+'\')" style="background:#16a34a;color:#fff;border:none;border-radius:8px;padding:5px 12px;font-size:11.5px;font-weight:600;cursor:pointer">📱 Enviar</button></td></tr>';
+  });
+  h+='</tbody></table></div></div></div>';
+  return h;
+}
+function crmCampEnviar(cid){
+  loadCRM(); var c=CRM.contactos.filter(function(x){return x.id===cid})[0]; if(!c)return;
+  var msg=(_v('campTxt')||_campMsg||'').replace(/\[nombre\]/gi,c.nombre.split(' ')[0]);
+  if(!msg){toast('Escribe el mensaje primero');return;}
+  _campMsg=_v('campTxt')||_campMsg;
+  crmNota(cid,'Campaña WhatsApp: '+msg.slice(0,60)+'…','wa');
+  var fila=$('camp_'+cid); if(fila)fila.style.opacity='.45';
+  window.open(waLink(c.cel,msg),'_blank');
+}
+function crmCampIA(){
+  var st=$('campSt'); if(st)st.textContent='✨ Redactando campaña…';
+  var seg=_campSeg;
+  fetch('/api/gemini',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt:'Redacta UN mensaje de WhatsApp de campaña comercial (max 70 palabras) en espanol peruano para la empresa '+((EMP&&EMP.nombre)||'')+' dirigido al segmento "'+seg+'". Debe iniciar con "Hola [nombre]," (el sistema reemplaza [nombre] automaticamente), ser calido, directo, con llamada a la accion clara. Devuelve SOLO el texto.'})})
+  .then(function(r){return r.json()}).then(function(d){
+    var tx='';if(d&&d.candidates&&d.candidates[0]&&d.candidates[0].content&&d.candidates[0].content.parts)tx=d.candidates[0].content.parts.map(function(p){return p.text||''}).join('').trim();
+    if(tx){_campMsg=tx;if($('campTxt'))$('campTxt').value=tx;if(st){st.textContent='✓ Campaña redactada. Personaliza si deseas.';st.style.color='#16a34a';}}
+    else if(st){st.textContent='No se pudo redactar.';st.style.color='#ef4444';}
+  }).catch(function(){if(st){st.textContent='Error de conexión.';st.style.color='#ef4444';}});
 }
 function renderProyectos(){
   loadProy();
