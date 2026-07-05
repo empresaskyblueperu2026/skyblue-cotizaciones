@@ -1169,11 +1169,23 @@ function renderOCRecibidas(){
       h+='<tr style="cursor:pointer" onclick="openOCRec(\''+o.id+'\')"><td class="mono">'+esc(o.num||'—')+'</td><td>'+esc(o.cliente||'—')+(o.ruc?'<div class="pdl">RUC '+esc(o.ruc)+'</div>':'')+'</td>'+
         '<td><span class="badge" style="color:'+(o.rubro==='publico'?'#0ea5e9':'#8b5cf6')+';background:'+bg(o.rubro==='publico'?'#0ea5e9':'#8b5cf6',.14)+'">'+(o.rubro==='publico'?'Estado':'Privado')+'</span></td>'+
         '<td class="mono" style="font-weight:600">'+fmtMon(o.monto,o.moneda)+'</td><td>'+(o.forma_pago==='credito'?('Crédito '+(o.dias_credito||0)+'d '+_vencInfo(o)):'Contado')+'</td><td style="color:var(--tmuted)">'+esc(o.fecha||'—')+'</td>'+
-        '<td style="white-space:nowrap"><button onclick="event.stopPropagation();ocrecEdit(\''+o.id+'\')" style="background:none;border:none;color:#0ea5e9;cursor:pointer;font-size:11.5px;font-weight:600">editar</button> <button onclick="event.stopPropagation();delOCRec(\''+o.id+'\')" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:16px">×</button></td></tr>';
+        '<td style="white-space:nowrap"><button onclick="event.stopPropagation();ocrecToFact(\''+o.id+'\')" title="Crear factura pre-llenada desde esta OC" style="background:#06b6d4;color:#fff;border:none;border-radius:8px;padding:5px 10px;font-size:11px;font-weight:600;cursor:pointer">🧾 Facturar</button> <button onclick="event.stopPropagation();ocrecEdit(\''+o.id+'\')" style="background:none;border:none;color:#0ea5e9;cursor:pointer;font-size:11.5px;font-weight:600">editar</button> <button onclick="event.stopPropagation();delOCRec(\''+o.id+'\')" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:16px">×</button></td></tr>';
     });
     h+='</tbody></table></div></div>';
   }
   $('content').innerHTML=h;
+  /* flujo conectado: si venimos de una cotización aceptada, abrir el form pre-llenado */
+  if(window._ocrecPrefill){
+    var p=window._ocrecPrefill; window._ocrecPrefill=null;
+    toggleOcrecForm(false); var f=$('ocrecForm'); if(f)f.style.display='block';
+    if($('ocr_cli'))$('ocr_cli').value=p.cliente||'';
+    if($('ocr_ruc'))$('ocr_ruc').value=p.ruc||'';
+    if($('ocr_monto'))$('ocr_monto').value=p.monto||0;
+    if($('ocr_moneda'))$('ocr_moneda').value=p.moneda||'S/';
+    if($('ocr_proy'))$('ocr_proy').value=p.proyecto||'';
+    toast('📋 Datos traídos de la cotización. Completa el N° de OC y guarda');
+    if(f)f.scrollIntoView({behavior:'smooth',block:'center'});
+  }
 }
 function openOCRec(id){
   loadOCREC(); var o=null; OCREC.forEach(function(x){if(x.id===id)o=x;}); if(!o){renderOCRecibidas();return;}
@@ -1211,6 +1223,41 @@ function ocrecEdit(id){loadOCREC();var o=OCREC.filter(function(x){return x.id===
   if($('ocr_num'))$('ocr_num').value=o.num||'';if($('ocr_cli'))$('ocr_cli').value=o.cliente||'';if($('ocr_ruc'))$('ocr_ruc').value=o.ruc||'';if($('ocr_fecha'))$('ocr_fecha').value=o.fecha||'';if($('ocr_monto'))$('ocr_monto').value=o.monto||0;if($('ocr_moneda'))$('ocr_moneda').value=curOf(o.moneda);if($('ocr_rubro'))$('ocr_rubro').value=o.rubro||'publico';if($('ocr_pago'))$('ocr_pago').value=o.forma_pago||'contado';if($('ocr_dias'))$('ocr_dias').value=o.dias_credito||0;if($('ocr_proy'))$('ocr_proy').value=o.proyecto||'';
   if(f)f.scrollIntoView({behavior:'smooth',block:'center'});}
 function delOCRec(id){if(!confirm('¿Eliminar esta OC recibida?'))return;OCREC=OCREC.filter(function(o){return o.id!==id});saveOCREC();renderOCRecibidas();}
+/* ── FLUJO CONECTADO: navega a un módulo y aplica valores cuando el form ya existe ── */
+function _fluirA(modId,formId,campos,msj){
+  navClick({id:modId});
+  var t0=Date.now();
+  (function poll(){
+    var f=$(formId);
+    if(f){
+      f.style.display='block';
+      Object.keys(campos).forEach(function(k){var e=$(k);if(e!=null&&campos[k]!=null&&campos[k]!=='')e.value=campos[k];});
+      toast(msj||'📋 Datos traídos del paso anterior');
+      f.scrollIntoView({behavior:'smooth',block:'center'});
+      return;
+    }
+    if(Date.now()-t0<4000)setTimeout(poll,150);
+  })();
+}
+/* OC recibida → factura (pre-llenada y enlazada) */
+function ocrecToFact(id){
+  loadOCREC(); var o=OCREC.filter(function(x){return x.id===id})[0];
+  if(!o){toast('No se encontró la OC');return;}
+  _fluirA('facturacion','factForm',{fc_cli:o.cliente,fc_ruc:o.ruc,fc_monto:o.monto,fc_moneda:curOf(o.moneda),fc_pago:o.forma_pago||'contado',fc_dias:o.dias_credito||0,fc_ref:'oc:'+o.id},'🧾 Factura pre-llenada desde la OC '+(o.num||'')+'. Pon el N° de comprobante y guarda');
+}
+/* Factura → acta de conformidad / entrega logística */
+function factToConf(id){
+  loadFact(); var x=FACT.filter(function(f){return f.id===id})[0];
+  if(!x){toast('No se encontró la factura');return;}
+  var d=(x.items&&x.items.length)?x.items.map(function(it){return it.desc||''}).join('; ').slice(0,300):'';
+  _fluirA('conformidad','confForm',{cf_cli:x.cliente,cf_ruc:x.ruc,cf_tipo:'factura',cf_num:x.num,cf_fecha:x.fecha,cf_monto:x.monto,cf_mon:curOf(x.moneda),cf_desc:d},'✅ Conformidad pre-llenada desde la factura '+(x.num||''));
+}
+function factToLog(id){
+  loadFact(); var x=FACT.filter(function(f){return f.id===id})[0];
+  if(!x){toast('No se encontró la factura');return;}
+  var d=(x.items&&x.items.length)?x.items.map(function(it){return it.desc||''}).join('; ').slice(0,200):('Ref. factura '+(x.num||''));
+  _fluirA('logistica','logForm',{lg_cli:x.cliente,lg_desc:d},'🚚 Entrega pre-llenada desde la factura '+(x.num||''));
+}
 function ocrecAI(file){
   if(!file)return; var st=$('ocrecAiSt'); if(st){st.textContent='Leyendo y analizando con IA…';st.style.color='var(--tmuted)';}
   var rd=new FileReader();
@@ -1246,7 +1293,15 @@ function loadCotStat(){try{COTSTAT=JSON.parse(localStorage.getItem(cotstatKey())
 function saveCotStat(){try{localStorage.setItem(cotstatKey(),JSON.stringify(COTSTAT))}catch(e){}cloudSyncPush()}
 var COT_ESTADOS=[['pendiente','Pendiente','#f59e0b'],['aceptada','Aceptada','#16a34a'],['facturada','Facturada','#06b6d4'],['rechazada','Rechazada','#ef4444']];
 function cotEstadoOf(num){return COTSTAT[num]||'pendiente'}
-function setCotStat(num,val){COTSTAT[num]=val;saveCotStat();renderSegCot();}
+function setCotStat(num,val){COTSTAT[num]=val;saveCotStat();renderSegCot();if(val==='aceptada')toast('✅ Aceptada. Usa "🛒 Registrar OC" para el siguiente paso');}
+/* ── FLUJO CONECTADO: cotización aceptada → OC recibida (pre-llenada) ── */
+function segcotToOC(num){
+  var c=(DASH.hist||[]).filter(function(x){return String(x.num)===String(num)})[0];
+  if(!c){toast('No se encontró la cotización');return;}
+  window._ocrecPrefill={cliente:(c.cli&&c.cli.n)||'',ruc:(c.cli&&c.cli.ruc)||'',monto:c.tot||0,moneda:curOf(c.mon),proyecto:c.proy||('Ref. COT-'+(c.num||''))};
+  if(COTSTAT[num]!=='aceptada'&&COTSTAT[num]!=='facturada'){COTSTAT[num]='aceptada';saveCotStat();}
+  navClick({id:'ocrec'});
+}
 function renderSegCot(){
   $('content').innerHTML='<div class="pmod-head fade"><div><h1 style="font-size:23px;font-weight:700">Seguimiento de Cotizaciones</h1><div style="font-size:13px;color:var(--tmuted);margin-top:4px">Cargando…</div></div></div>';
   loadCotStat();
@@ -1259,11 +1314,11 @@ function renderSegCot(){
        '<div class="kpi"><div class="val mono" style="color:#f59e0b">'+cont.pendiente+'</div><div class="lab">Pendientes</div></div>'+
        '<div class="kpi"><div class="val mono">'+fmtMonto(montoAcep)+'</div><div class="lab">Monto aceptado</div></div></div>';
     if(!hist.length){ h+='<div class="empty fade"><div class="ei">'+icon('chat',1.5)+'</div><div style="font-size:15px;font-weight:600;color:var(--tprimary);margin-bottom:6px">Aún no hay cotizaciones</div><div style="font-size:13px;max-width:430px;margin:0 auto;line-height:1.6">Cuando guardes cotizaciones podrás marcarlas como Aceptada/Rechazada para hacer seguimiento de tus ventas. Las aceptadas suman a "Ventas confirmadas".</div></div>'; $('content').innerHTML=h; return; }
-    h+='<div class="card fade"><div class="ptable-wrap"><table class="ptable"><thead><tr><th>N° COT</th><th>Cliente</th><th>Monto</th><th>Fecha</th><th>Estado</th></tr></thead><tbody>';
+    h+='<div class="card fade"><div class="ptable-wrap"><table class="ptable"><thead><tr><th>N° COT</th><th>Cliente</th><th>Monto</th><th>Fecha</th><th>Estado</th><th>Siguiente paso</th></tr></thead><tbody>';
     hist.slice().sort(function(a,b){return (b.fecha||'').localeCompare(a.fecha||'')}).forEach(function(c){
       var e=cotEstadoOf(c.num);var col=(COT_ESTADOS.filter(function(x){return x[0]===e})[0]||['','',''])[2];
       var sel='<select onchange="setCotStat(\''+c.num+'\',this.value)" style="padding:5px 8px;border-radius:8px;border:1px solid '+bg(col,.5)+';background:'+bg(col,.12)+';color:'+col+';font-size:12px;font-weight:600">'+COT_ESTADOS.map(function(x){return '<option value="'+x[0]+'"'+(x[0]===e?' selected':'')+'>'+x[1]+'</option>'}).join('')+'</select>';
-      h+='<tr><td class="mono">COT-'+esc(c.num||'')+'</td><td>'+esc((c.cli&&c.cli.n)||'—')+'</td><td class="mono" style="font-weight:600">'+fmtMonto(c.tot)+'</td><td style="color:var(--tmuted)">'+esc(c.fecha||'—')+'</td><td>'+sel+'</td></tr>';
+      h+='<tr><td class="mono">COT-'+esc(c.num||'')+'</td><td>'+esc((c.cli&&c.cli.n)||'—')+'</td><td class="mono" style="font-weight:600">'+fmtMonto(c.tot)+'</td><td style="color:var(--tmuted)">'+esc(c.fecha||'—')+'</td><td>'+sel+'</td><td><button onclick="segcotToOC(\''+esc(c.num||'')+'\')" title="Registrar la OC recibida del cliente con estos datos" style="background:#0ea5e9;color:#fff;border:none;border-radius:8px;padding:5px 10px;font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap">🛒 Registrar OC</button></td></tr>';
     });
     h+='</tbody></table></div></div>';
     $('content').innerHTML=h;
@@ -1326,7 +1381,7 @@ function renderFacturacion(){
       var pagoTxt=x.forma_pago==='credito'?('Crédito '+(x.dias_credito||0)+'d'+(x.fecha_venc?(' · '+_vencInfo({forma_pago:'credito',fecha_venc:x.fecha_venc})):'')):'Contado';
       h+='<tr><td class="mono"><span onclick="openFact(\''+x.id+'\')" style="cursor:pointer;color:#0ea5e9;font-weight:600">'+esc(x.num||'(ver)')+'</span><div class="pdl">'+(x.tipo==='boleta'?'Boleta':'Factura')+((x.items&&x.items.length)?(' · '+x.items.length+' ítems'):'')+'</div></td><td>'+esc(x.cliente||'—')+'</td><td class="mono" style="font-weight:600">'+fmtMon(x.monto,x.moneda)+'</td><td style="font-size:11.5px">'+pagoTxt+'</td><td style="color:var(--tmuted);font-size:11.5px">'+refLabel(x.ref)+'</td>'+
         '<td><span class="badge" title="Click para cambiar" onclick="toggleFactPagada(\''+x.id+'\')" style="cursor:pointer;color:'+(pag?'#16a34a':'#f59e0b')+';background:'+bg(pag?'#16a34a':'#f59e0b',.14)+'">'+(pag?'Pagada':'Por cobrar')+'</span></td>'+
-        '<td style="white-space:nowrap"><button onclick="factPDF(\''+x.id+'\')" style="background:none;border:none;color:#0f766e;cursor:pointer;font-size:11.5px;font-weight:600">PDF</button> <button onclick="factEdit(\''+x.id+'\')" style="background:none;border:none;color:#0ea5e9;cursor:pointer;font-size:11.5px;font-weight:600">editar</button> <button onclick="delFact(\''+x.id+'\')" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:16px">×</button></td></tr>';
+        '<td style="white-space:nowrap"><button onclick="factPDF(\''+x.id+'\')" style="background:none;border:none;color:#0f766e;cursor:pointer;font-size:11.5px;font-weight:600">PDF</button> <button onclick="factEdit(\''+x.id+'\')" style="background:none;border:none;color:#0ea5e9;cursor:pointer;font-size:11.5px;font-weight:600">editar</button> <button onclick="factToConf(\''+x.id+'\')" title="Generar acta de conformidad" style="background:#16a34a;color:#fff;border:none;border-radius:8px;padding:4px 8px;font-size:11px;font-weight:600;cursor:pointer">✅ Acta</button> <button onclick="factToLog(\''+x.id+'\')" title="Registrar entrega en logística" style="background:#f59e0b;color:#fff;border:none;border-radius:8px;padding:4px 8px;font-size:11px;font-weight:600;cursor:pointer">🚚</button> <button onclick="delFact(\''+x.id+'\')" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:16px">×</button></td></tr>';
     });
     h+='</tbody></table></div></div>';
     $('content').innerHTML=h;
@@ -1690,6 +1745,7 @@ function renderOportunidades(){
       '<div style="font-size:11.5px;color:var(--tmuted);margin-top:3px">'+(o.fecha?('Cierra: <b style="color:var(--tprimary)">'+esc(o.fecha)+'</b>'):'')+(o.monto?(' · '+fmtMon(o.monto,o.moneda)):'')+'</div></div>'+
       '<div style="text-align:right;display:flex;flex-direction:column;gap:6px;align-items:flex-end">'+sel+
       (o.url?'<a href="'+esc(o.url)+'" target="_blank" style="font-size:11px;color:#0ea5e9;text-decoration:none">Ver / descargar requerimiento →</a>':'')+
+      '<button onclick="oportToCot(\''+o.id+'\')" title="Abrir el cotizador con este proyecto pre-llenado" style="background:#14b8a6;color:#fff;border:none;border-radius:8px;padding:5px 10px;font-size:11px;font-weight:600;cursor:pointer">📝 Cotizar</button>'+
       '<button onclick="delOport(\''+o.id+'\')" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:14px">eliminar</button></div></div></div>';
   });
   h+='</div>';
@@ -1699,6 +1755,15 @@ function toggleOportForm(hide){var f=$('oportForm');if(!f)return;f.style.display
 function addOport(){var n=_v('op_nom');if(!n){toast('Falta el nombre');return;}OPORT.push({id:'OP'+Date.now(),source:'manual',nombre:n,cliente:_v('op_cli'),desc:n,monto:parseFloat(_v('op_monto'))||0,moneda:_v('op_mon')||'S/',estado:'nuevo',fecha:_v('op_fecha')});saveOport();toast('Oportunidad creada');renderOportunidades();}
 function setOportEst(id,v){OPORT.forEach(function(o){if(o.id===id)o.estado=v;});saveOport();renderOportunidades();}
 function delOport(id){if(!confirm('¿Eliminar oportunidad?'))return;OPORT=OPORT.filter(function(o){return o.id!==id});saveOport();renderOportunidades();}
+/* ── FLUJO CONECTADO: oportunidad SEACE → cotizador con proyecto pre-llenado ── */
+function oportToCot(id){
+  loadOport(); var o=OPORT.filter(function(x){return x.id===id})[0];
+  if(!o){toast('No se encontró la oportunidad');return;}
+  try{localStorage.setItem('sigma_handoff',JSON.stringify({proy:(o.desc||o.nombre||'').slice(0,180),cliente:o.cliente||'',ts:Date.now()}));}catch(e){}
+  if(o.estado==='nuevo'){o.estado='pensando';saveOport();}
+  toast('📝 Abriendo el cotizador con el proyecto pre-llenado…');
+  window.open('/cotizador','_blank');
+}
 function importSeace(){
   var st=$('seaceSt'); if(st){st.textContent='Buscando en SEACE (La Libertad, vigentes, cotizables)…';}
   fetch('/api/seace').then(function(r){return r.json()}).then(function(d){
