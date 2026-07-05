@@ -423,14 +423,14 @@ function buildAlerts(data){
     if(key.indexOf('sproy_')===0){            // proyectos: plazo de entrega
       arr.forEach(function(p){
         var dias=_daysLeft(p.fecha); if(dias===null)return;
-        if(dias<=7){ out.push({nombre:'Proyecto: '+(p.n||p.nombre||''),fecha:p.fecha,dias:dias,cliente:p.cl||p.entidad||''}); }
+        if(dias<=7){ out.push({tipo:'proyecto',nombre:(p.n||p.nombre||''),fecha:p.fecha,dias:dias,cliente:p.cl||p.entidad||''}); }
       });
     } else if(key.indexOf('fact_')===0){      // facturas por cobrar: vencimiento
       arr.forEach(function(x){
         if(x.estado==='pagada'||!x.fecha_venc)return;
         var dias=_daysLeft(x.fecha_venc); if(dias===null||dias>7)return;
         var mon=(x.moneda==='US$')?'US$ ':'S/ ';
-        out.push({nombre:'Cobro factura '+(x.num||'')+' ('+mon+(x.monto||0)+')',fecha:x.fecha_venc,dias:dias,cliente:x.cliente||''});
+        out.push({tipo:'factura',nombre:'Factura '+(x.num||'')+' · '+mon+(+x.monto||0).toLocaleString('es-PE'),fecha:x.fecha_venc,dias:dias,cliente:x.cliente||''});
       });
     }
   });
@@ -438,13 +438,17 @@ function buildAlerts(data){
   return out;
 }
 function alertText(list){
-  if(!list.length)return '🟢 <b>SIGMA</b> — Sin plazos proximos (7 dias). Todo en orden.';
-  var t='🔔 <b>SIGMA — Alertas de plazos</b>\n\n';
-  list.forEach(function(a){
+  if(!list.length)return '🟢 <b>SIGMA</b> — Sin plazos próximos (7 días). Todo en orden. ✨';
+  var t='🔔 <b>SIGMA — Alertas de plazos</b>\n';
+  var proys=list.filter(function(a){return a.tipo==='proyecto'});
+  var facts=list.filter(function(a){return a.tipo==='factura'});
+  function linea(a){
     var ic=a.dias<0?'🔴':a.dias<=3?'🟠':'🟡';
-    var et=a.dias<0?('VENCIDO hace '+Math.abs(a.dias)+'d'):a.dias===0?'VENCE HOY':('faltan '+a.dias+'d');
-    t+=ic+' <b>'+a.nombre+'</b>'+(a.cliente?' ('+a.cliente+')':'')+'\n   '+et+' · '+a.fecha+'\n';
-  });
+    var et=a.dias<0?('VENCIDO hace '+Math.abs(a.dias)+'d'):a.dias===0?'⚠️ VENCE HOY':('faltan '+a.dias+'d');
+    return ic+' <b>'+a.nombre+'</b>'+(a.cliente?' ('+a.cliente+')':'')+'\n     '+et+' · 📅 '+a.fecha+'\n';
+  }
+  if(proys.length){ t+='\n🏗 <b>Proyectos por entregar</b>\n'; proys.forEach(function(a){t+=linea(a);}); }
+  if(facts.length){ t+='\n🧾 <b>Facturas por cobrar</b>\n'; facts.forEach(function(a){t+=linea(a);}); }
   return t;
 }
 async function runAlertas(force){
@@ -496,8 +500,23 @@ async function runSeaceDigest(slot){
     if(!sbReady())return; var cfg=await sbGetConfig(); var hoy=new Date().toISOString().slice(0,10); var key='lastSeace'+slot;
     if(cfg[key]===hoy)return;
     var o=await seaceFetch();
-    var top=o.slice(0,8).map(function(x){return '• <b>'+(x.objeto||'')+'</b>: '+(x.desc||'').slice(0,70)+'…\n   '+(x.entidad||'')+' · cierra '+(x.fechaFin||'')}).join('\n');
-    await tgSend('📋 <b>SEACE — Oportunidades 8 UIT</b> (La Libertad, vigentes) ['+slot+']\n'+o.length+' contrataciones que puedes cotizar.\n\n'+top+'\n\nElige en SIGMA → Oportunidades.');
+    var vistos=Array.isArray(cfg.seaceSeen)?cfg.seaceSeen:[];
+    var icObj=function(ob){ob=(ob||'').toLowerCase();if(ob.indexOf('bien')>=0)return '📦';if(ob.indexOf('servicio')>=0)return '🛠';if(ob.indexOf('consultor')>=0)return '📐';if(ob.indexOf('obra')>=0)return '🏗';return '📄';};
+    var diasCierre=function(f){try{var p=(f||'').split(' ')[0].split('/');var d=new Date(+p[2],+p[1]-1,+p[0]);return Math.ceil((d-new Date())/86400000);}catch(e){return null;}};
+    var nB=o.filter(function(x){return (x.objeto||'').toLowerCase().indexOf('bien')>=0}).length;
+    var nS=o.filter(function(x){return (x.objeto||'').toLowerCase().indexOf('servicio')>=0}).length;
+    var nO=o.length-nB-nS;
+    var nuevas=o.filter(function(x){return vistos.indexOf(x.id)<0}).length;
+    var top=o.slice(0,8).map(function(x){
+      var dc=diasCierre(x.fechaFin);
+      var urg=dc===null?'':(dc<=0?' 🔴 ¡cierra HOY!':dc<=1?' 🟠 cierra mañana':(' ⏳ '+dc+'d'));
+      var esNueva=vistos.indexOf(x.id)<0?' 🆕':'';
+      return icObj(x.objeto)+' <b>'+(x.objeto||'')+'</b>'+esNueva+': '+(x.desc||'').slice(0,70)+'…\n     🏛 '+(x.entidad||'').slice(0,55)+'\n     📅 cierra '+(x.fechaFin||'')+urg;
+    }).join('\n');
+    var head='🏛 <b>SEACE — Oportunidades ≤8 UIT</b> · La Libertad · '+(slot==='AM'?'🌅 mañana':'🌙 noche')+'\n'+
+      '📦 Bienes: '+nB+'  ·  🛠 Servicios: '+nS+(nO>0?('  ·  🏗 Otros: '+nO):'')+(nuevas>0?('\n🆕 '+nuevas+' nuevas desde el último aviso'):'')+'\n';
+    await tgSend(head+'\n'+top+'\n\n👉 Elige en SIGMA → Oportunidades (Participar / Pensando / Descartar).');
+    cfg.seaceSeen=o.map(function(x){return x.id}).concat(vistos).slice(0,300);
     cfg[key]=hoy; await sbPutConfig(cfg);
   }catch(e){console.error('SEACE digest:',e.message);}
 }
@@ -506,9 +525,21 @@ async function runReporteDiario(force){
     if(!sbReady())return {skipped:true}; var cfg=await sbGetConfig(); var hoy=new Date().toISOString().slice(0,10);
     if(!force&&cfg.lastReporte===hoy)return {skipped:true};
     var data=await sbGetData()||{}; var hist=Array.isArray(data.hist)?data.hist:[];
-    var ocrec=0,ocrecN=0,fact=0,porc=0;
-    Object.keys(data).forEach(function(k){var a=data[k];if(!Array.isArray(a))return;if(k.indexOf('ocrec_')===0){a.forEach(function(o){ocrec+=(+o.monto||0);ocrecN++;});}if(k.indexOf('fact_')===0){a.forEach(function(x){fact+=(+x.monto||0);if(x.estado!=='pagada')porc+=(+x.monto||0);});}});
-    await tgSend('📊 <b>SIGMA — Reporte diario</b> ('+hoy+')\nCotizaciones: '+hist.length+'\nOC recibidas: '+ocrecN+' (S/ '+ocrec.toFixed(0)+')\nFacturado: S/ '+fact.toFixed(0)+'\nPor cobrar: S/ '+porc.toFixed(0));
+    var ocrec=0,ocrecN=0,fact=0,factN=0,porc=0,porcN=0,vencidas=0;
+    var hoyD=new Date();
+    Object.keys(data).forEach(function(k){var a=data[k];if(!Array.isArray(a))return;
+      if(k.indexOf('ocrec_')===0){a.forEach(function(o){ocrec+=(+o.monto||0);ocrecN++;});}
+      if(k.indexOf('fact_')===0){a.forEach(function(x){fact+=(+x.monto||0);factN++;if(x.estado!=='pagada'){porc+=(+x.monto||0);porcN++;if(x.fecha_venc&&new Date(x.fecha_venc+'T12:00:00')<hoyD)vencidas++;}});}
+    });
+    var seaceLine='';
+    try{var sea=await seaceFetch();var nB=sea.filter(function(x){return (x.objeto||'').toLowerCase().indexOf('bien')>=0}).length;var nS=sea.filter(function(x){return (x.objeto||'').toLowerCase().indexOf('servicio')>=0}).length;seaceLine='\n🏛 SEACE cotizables hoy: '+sea.length+' (📦 '+nB+' · 🛠 '+nS+')';}catch(e){}
+    var f=function(n){return 'S/ '+(+n||0).toLocaleString('es-PE',{maximumFractionDigits:0});};
+    await tgSend('📊 <b>SIGMA — Reporte diario</b> · 📅 '+hoy+'\n\n'+
+      '📝 Cotizaciones emitidas: <b>'+hist.length+'</b>\n'+
+      '🛒 OC recibidas (ventas): <b>'+ocrecN+'</b> · 💰 '+f(ocrec)+'\n'+
+      '🧾 Facturado: <b>'+factN+'</b> comprobantes · '+f(fact)+'\n'+
+      '⏳ Por cobrar: <b>'+porcN+'</b> ('+f(porc)+')'+(vencidas?('\n🔴 Vencidas sin cobrar: <b>'+vencidas+'</b> ¡gestionar cobro!'):'')+
+      seaceLine+'\n\n✅ Respaldo y sistemas operativos.');
     cfg.lastReporte=hoy; await sbPutConfig(cfg); return {ok:true};
   }catch(e){console.error('Reporte diario:',e.message);return {error:e.message};}
 }
@@ -536,7 +567,7 @@ app.get('/favicon.svg',function(req,res){res.setHeader('Content-Type','image/svg
 app.get('/favicon.ico',function(req,res){res.redirect('/favicon.svg');});
 app.get('/icon-192.png',function(req,res){var p=path.join(__dirname,'icon-192.png');fs.access(p,function(e){if(e)res.status(404).end();else res.sendFile(p);});});
 app.get('/icon-512.png',function(req,res){var p=path.join(__dirname,'icon-512.png');fs.access(p,function(e){if(e)res.status(404).end();else res.sendFile(p);});});
-app.get('/health',function(req,res){res.status(200).json({status:'ok',version:'4.0'});});
+app.get('/health',function(req,res){res.status(200).json({status:'ok',version:'2.1'});});
 app.get('/api/diag',function(req,res){
   res.json({
     apiKey: process.env.ANTHROPIC_API_KEY ? 'CONFIGURADA ('+process.env.ANTHROPIC_API_KEY.slice(0,12)+'...)' : 'FALTA - configurala en Railway Variables',
