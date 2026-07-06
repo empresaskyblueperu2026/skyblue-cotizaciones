@@ -684,8 +684,45 @@ async function vbAnalizarPedido(hist,ctx,cat){
 }
 function vbNextCotNum(data){var max=0;(Array.isArray(data.hist)?data.hist:[]).forEach(function(c){var n=parseInt(c.num,10);if(n>max)max=n;});return String(max+1).padStart(3,'0');}
 function vbFechaPE(d){d=d||new Date();return String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')+'/'+d.getFullYear();}
+function vbHE(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
+function vbAppAsset(id){try{var m=APP_HTML.match(new RegExp('<img id="'+id+'"\\s+src="([^"]+)"'));return m?m[1]:'';}catch(e){return '';}}
+function vbEmp(emp){return {nombre:(emp&&emp.nombre)||'SKY BLUE PERU S.A.C.',ruc:(emp&&emp.ruc)||'20610723501',dir:(emp&&emp.direccion)||'CAL.JUAN JULIO GANOZA NRO. 465 DPTO. 701 URB. CALIFORNIA',cel:(emp&&emp.telefono)||'926 533 360',email:(emp&&emp.email)||'empresaskyblueperu@gmail.com',banco:(emp&&emp.banco)||'INTERBANK',cci:(emp&&emp.cci)||'003-200-003006228729-34'};}
+function vbNumLetras(n){
+  if(!n)return'CERO Y 00/100';
+  var U=['','UNO','DOS','TRES','CUATRO','CINCO','SEIS','SIETE','OCHO','NUEVE','DIEZ','ONCE','DOCE','TRECE','CATORCE','QUINCE','DIECISEIS','DIECISIETE','DIECIOCHO','DIECINUEVE','VEINTE','VEINTIUNO','VEINTIDOS','VEINTITRES','VEINTICUATRO','VEINTICINCO','VEINTISEIS','VEINTISIETE','VEINTIOCHO','VEINTINUEVE'],D=['','','VEINTI','TREINTA','CUARENTA','CINCUENTA','SESENTA','SETENTA','OCHENTA','NOVENTA'],C=['','CIENTO','DOSCIENTOS','TRESCIENTOS','CUATROCIENTOS','QUINIENTOS','SEISCIENTOS','SETECIENTOS','OCHOCIENTOS','NOVECIENTOS'];
+  var e=Math.floor(+n||0),dc=Math.round(((+n||0)-e)*100);
+  function w(x){if(!x)return'';if(x===100)return'CIEN';var r='',c=Math.floor(x/100),rs=x%100;if(c)r+=C[c]+' ';if(rs<30)r+=U[rs];else{r+=D[Math.floor(rs/10)];if(rs%10)r+=' Y '+U[rs%10];}return r.trim();}
+  var m=Math.floor(e/1000),r=e%1000;return((m===1?'MIL ':m>1?w(m)+' MIL ':'')+w(r)).trim()+' Y '+String(dc).padStart(2,'0')+'/100';
+}
+function vbCotTotals(cot){var sub=(cot.items||[]).reduce(function(a,it){return a+(+it.qty||1)*(+it.precio||0);},0),igv=cot.igv===false?0:sub*.18;return {sub:sub,igv:igv,tot:sub+igv};}
+function vbCotizacionHTML(cot,emp){
+  emp=vbEmp(emp);var cli=cot.cli||{},items=cot.items||[],cur=cot.mon||'S/',t=vbCotTotals(cot),logo=vbAppAsset('_sky'),liso=vbAppAsset('_iso'),lprov=vbAppAsset('_prov');
+  function money(n){return pdfMoney(n,cur);}
+  var rows=items.map(function(it,i){var p=+it.precio||0,q=+it.qty||1,prod=it._prod||{};return '<tr style="background:'+(i%2===0?'white':'#f8fafc')+';border-bottom:1px solid #f0f4f8;vertical-align:top">'+
+    '<td style="padding:7px 4px;text-align:center;color:#64748b;font-size:8px">'+(i+1)+'</td>'+
+    '<td style="padding:7px 4px;font-size:8px;color:#2ab7a9;font-weight:600;white-space:nowrap">'+vbHE(it.cod||prod.id||'-')+'</td>'+
+    '<td style="padding:7px 4px;max-width:230px"><div style="font-weight:600;font-size:8px;line-height:1.35">'+vbHE(it.desc||'-')+'</div>'+
+    (prod.id||prod.p||prod.c?'<div style="margin-top:2px;display:grid;grid-template-columns:auto 1fr;gap:1px 5px;font-size:7px"><div style="color:#64748b;font-weight:600;white-space:nowrap">Tipo :</div><div style="color:#334155">'+vbHE(prod.c||'')+'</div><div style="color:#64748b;font-weight:600;white-space:nowrap">Marca :</div><div style="color:#334155">'+vbHE(prod.p||it.prov||'')+'</div></div>':'')+'</td>'+
+    '<td style="padding:7px 4px;text-align:center;font-size:9px;color:#64748b">'+vbHE(it.uom||'UND')+'</td>'+
+    '<td style="padding:7px 4px;text-align:center;font-size:8px;font-weight:600">'+vbHE(q)+'</td>'+
+    '<td style="padding:7px 4px;text-align:right;font-size:8px">'+vbHE(money(p))+'</td>'+
+    '<td style="padding:7px 4px;text-align:right;font-size:8px;font-weight:700">'+vbHE(money(q*p))+'</td></tr>';}).join('');
+  var css='*{box-sizing:border-box;margin:0;padding:0}body{font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Arial,sans-serif;background:white;color:#1e293b}a{text-decoration:none;color:inherit}@media print{@page{margin:7mm;size:A4 portrait}body{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}.np{display:none!important}}@media screen{body{padding:12px;background:#eef2f7}#_wrap{max-width:820px;margin:0 auto;background:white;box-shadow:0 4px 20px rgba(0,0,0,.12);border-radius:8px;overflow:hidden}}';
+  return '<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>COT-'+vbHE(cot.num)+' SKY BLUE PERU S.A.C.</title><style>'+css+'</style></head><body>'+
+    '<div class="np" style="background:#0d3b6e;padding:10px 16px;display:flex;align-items:center;justify-content:space-between"><span style="color:rgba(255,255,255,.7);font-size:11px">SKY BLUE PERU S.A.C.</span><div style="display:flex;gap:8px"><button onclick="window.print()" style="background:#2ab7a9;color:white;border:none;padding:7px 14px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer">Imprimir PDF</button><button onclick="window.close()" style="background:rgba(255,255,255,.15);color:white;border:none;padding:7px 10px;border-radius:8px;font-size:12px;cursor:pointer">Cerrar</button></div></div>'+
+    '<div id="_wrap"><div style="background:white;position:relative"><div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;z-index:0;overflow:hidden">'+(logo?'<img src="'+logo+'" style="width:50%;opacity:.04;filter:grayscale(1)">':'')+'</div><div style="position:relative;z-index:1">'+
+    '<div style="display:flex;justify-content:space-between;align-items:flex-start;padding:14px 20px 10px"><div>'+(logo?'<img src="'+logo+'" style="height:70px;margin-bottom:6px;display:block">':'')+
+    '<div style="font-size:7px;color:#334155;font-weight:700;line-height:1.5">'+vbHE(emp.ruc+' - '+emp.nombre)+'</div><div style="font-size:7px;color:#334155;line-height:1.5">RUC: '+vbHE(emp.ruc)+'</div><div style="font-size:7px;color:#334155;line-height:1.5">Dom. Fiscal: '+vbHE(emp.dir)+'</div><div style="font-size:7px;color:#334155;line-height:1.5">Urb. CALIFORNIA</div><div style="font-size:7px;color:#334155;line-height:1.5">Telef. '+vbHE(emp.cel)+'</div><div style="font-size:7px;color:#334155;line-height:1.5">Web: skyblueperuglobal.com</div></div>'+
+    '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:8px">'+(liso?'<img src="'+liso+'" style="height:50px;object-fit:contain">':'')+'<div style="border:1px solid #e2e8f0;border-radius:4px;overflow:hidden;min-width:230px"><div style="display:grid;grid-template-columns:1fr 1fr;border-bottom:1px solid #e2e8f0"><div style="padding:4px 8px;background:#f8fafc;border-right:1px solid #e2e8f0"><div style="font-size:6.5px;color:#64748b;text-transform:uppercase;letter-spacing:1px">SISTEMA INTEGRADO DE GESTION</div><div style="font-size:9px;font-weight:700">SGC-FO-0579</div></div><div style="padding:4px 8px;background:#f8fafc;text-align:center"><img src="https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=https://skyblueperu.com&color=0d3b6e&bgcolor=f8fafc&margin=0" style="width:34px;height:34px"><div style="font-size:5.5px;color:#0d3b6e;font-weight:700">WA: +51 926 533 360</div></div></div><div style="display:grid;grid-template-columns:1fr 1fr"><div style="padding:4px 8px;border-right:1px solid #e2e8f0"><div style="font-size:6.5px;color:#64748b;text-transform:uppercase">COTIZACION</div><div style="font-size:10px;font-weight:700">N '+vbHE(cot.num)+'</div></div><div style="padding:4px 8px"><div style="font-size:6.5px;color:#64748b;text-transform:uppercase">VERSION</div><div style="font-size:10px;font-weight:700">'+vbHE(String(cot.ver||'00').padStart(2,'0'))+'</div></div></div></div></div></div>'+
+    '<div style="background:#2ab7a9;display:flex;align-items:center;padding:0 20px;height:22px;gap:10px"><div style="color:white;font-weight:700;font-size:9px;letter-spacing:1px">COTIZACION</div><div style="background:white;color:#0d3b6e;font-weight:800;font-size:9px;padding:2px 9px;border-radius:3px">N '+vbHE(cot.num)+'/SKY</div></div>'+
+    '<div style="padding:8px 20px;border-bottom:1px solid #e2e8f0;background:#fafafa;display:flex;justify-content:space-between;gap:20px"><div style="display:grid;grid-template-columns:auto 1fr;gap:2px 7px;font-size:7.5px;flex:1"><b>SE&Ntilde;OR(ES):</b><div style="font-weight:600">'+vbHE((cli.ruc?cli.ruc+' - ':'')+(cli.n||''))+'</div><b>CONTACTO:</b><div>'+vbHE(cli.con||'')+'</div><b>TELEFONO:</b><div>'+vbHE(cli.tel||'')+'</div><b>E-MAIL:</b><div>'+vbHE(cli.mail||'')+'</div><b>DIRECCION:</b><div>'+vbHE(cli.dir||'')+'</div><b>CONCEPTO:</b><div>'+vbHE(cot.proy||'')+'</div></div><div style="text-align:right;font-size:7.5px;flex-shrink:0"><b>FECHA: '+vbHE(cot.fecha||vbFechaPE())+'</b><br><b style="display:block;margin-top:2px">PROYECTO: '+vbHE(cot.proy||'')+'</b></div></div>'+
+    '<div style="padding:0 20px 12px"><table style="width:100%;border-collapse:collapse;font-size:9px;margin-top:8px"><thead><tr style="background:#0d3b6e;color:white">'+['LINEA','CODIGO','PRODUCTO / SERVICIO','UND','CANTIDAD','PRECIO UNITARIO','PRECIO TOTAL'].map(function(h,i){return '<th style="padding:6px 5px;text-align:'+(i>3?'right':i===3?'center':'left')+';font-size:8px;font-weight:700;letter-spacing:.3px;white-space:nowrap">'+h+'</th>';}).join('')+'</tr></thead><tbody>'+rows+'</tbody></table>'+
+    '<div style="display:flex;justify-content:space-between;align-items:flex-end;margin-top:8px;padding-top:8px;border-top:2px solid #e2e8f0"><div style="flex:1;padding-right:20px"><div style="font-size:8.5px;font-weight:700;color:#334155">Son: '+vbHE(vbNumLetras(t.tot)+' '+(cur==='S/'?'SOLES':'DOLARES AMERICANOS'))+'</div></div><div style="text-align:right;min-width:165px"><div style="display:grid;grid-template-columns:1fr auto;gap:2px 12px;font-size:8.5px"><div style="color:#64748b">Sub Total:</div><b>'+vbHE(money(t.sub))+'</b><div style="color:#64748b">IGV:</div><b>'+vbHE(money(t.igv))+'</b></div><div style="display:flex;justify-content:space-between;margin-top:6px;padding:7px 10px;background:#0d3b6e;border-radius:6px"><div style="color:white;font-weight:700;font-size:10px">Total: '+vbHE(cur)+'</div><div style="color:#2ab7a9;font-weight:800;font-size:11px">'+vbHE(money(t.tot))+'</div></div></div></div>'+
+    '<div style="margin-top:12px;padding-top:10px;border-top:1px solid #e2e8f0"><div style="font-weight:700;color:#334155;text-transform:uppercase;font-size:7.5px;letter-spacing:.5px;margin-bottom:4px">Condiciones Comerciales</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:1px 20px;font-size:7px;color:#334155">'+[['Forma de pago:',cot.pago],['Tiempo de entrega:',cot.entr],['Validez de la oferta:',cot.valid],['Lugar de entrega:',cli.dir||'A coordinar con el cliente'],['Moneda:',cur==='S/'?'Soles (S/) incluye IGV 18%':'Dolares (US$) incluye IGV'],['Garantia:','12 meses contra defectos de fabricacion'],['Soporte tecnico:','Incluido durante el periodo de garantia'],['Facturacion electronica:','SKY BLUE PERU S.A.C. - RUC '+emp.ruc]].map(function(r){return '<b style="white-space:nowrap;padding-top:2px">'+vbHE(r[0])+'</b><div style="color:#475569;padding-top:2px">'+vbHE(r[1]||'')+'</div>';}).join('')+'</div><div style="display:flex;gap:20px;padding-top:8px;margin-top:10px;border-top:1px solid #e2e8f0;flex-wrap:wrap"><div style="font-size:7px;flex:1"><div style="font-weight:700;color:#334155;margin-bottom:3px;text-transform:uppercase;font-size:7.5px">Datos de Pago</div><b>'+vbHE(emp.banco)+'</b><div style="color:#64748b">CCI: '+vbHE(emp.cci)+'</div><div style="color:#64748b">Titular: '+vbHE(emp.nombre)+'</div><div style="color:#64748b;margin-top:3px">Correo: '+vbHE(emp.email)+'</div><div style="color:#64748b">Telef.: '+vbHE(emp.cel)+'</div></div><div style="font-size:8.5px;text-align:center"><div style="font-weight:700;color:#334155;margin-bottom:3px;text-transform:uppercase;font-size:7.5px">Firma y Sello</div><div style="width:140px;height:42px;border-bottom:1px solid #334155;margin:0 auto 3px"></div><div style="font-size:8px;color:#334155;font-weight:600">SKY BLUE PERU S.A.C.</div><div style="font-size:8px;color:#64748b">RUC: '+vbHE(emp.ruc)+'</div></div></div></div>'+
+    '<div style="border-top:3px solid #2ab7a9;padding:8px 20px 6px;background:#f8fafc">'+(lprov?'<img src="'+lprov+'" style="width:100%;height:auto;min-height:48px;max-height:70px;object-fit:contain;object-position:center;display:block;padding:4px 0">':'')+'<div style="text-align:right;font-size:7.5px;color:#94a3b8;margin-top:3px">Pag. 1 / 1</div></div></div></div></div></div></body></html>';
+}
 function vbCotizacionPDF(cot,emp){
-  var lines=['COTIZACION COT-'+(cot.num||''),''];
+  var tt=vbCotTotals(cot),lines=['COTIZACION COT-'+(cot.num||''),''];
   lines.push((emp&&emp.nombre)||'SKY BLUE PERU S.A.C.');
   if(emp&&emp.ruc)lines.push('RUC: '+emp.ruc);
   if(emp&&emp.direccion)lines.push('Direccion: '+emp.direccion);
@@ -703,9 +740,9 @@ function vbCotizacionPDF(cot,emp){
   lines.push('Detalle de la cotizacion:');
   (cot.items||[]).forEach(function(it,i){var q=+it.qty||1,p=+it.precio||0;lines.push((i+1)+'. '+(it.cod?('['+it.cod+'] '):'')+it.desc);lines.push('   Cant. '+q+' | P.Unit '+pdfMoney(p,cot.mon)+' | Subtotal '+pdfMoney(q*p,cot.mon));});
   lines.push('');
-  lines.push('Subtotal: '+pdfMoney(cot.tot,cot.mon));
-  if(cot.igv)lines.push('Precio incluye IGV.');
-  lines.push('TOTAL: '+pdfMoney(cot.tot,cot.mon));
+  lines.push('Subtotal: '+pdfMoney(tt.sub,cot.mon));
+  if(cot.igv!==false)lines.push('IGV: '+pdfMoney(tt.igv,cot.mon));
+  lines.push('TOTAL: '+pdfMoney(tt.tot,cot.mon));
   lines.push('');
   lines.push('Condiciones comerciales:');
   lines.push('Forma de pago: '+(cot.pago||'Contado'));
@@ -721,7 +758,7 @@ async function vbGuardarCotizacionYCRM(pedido,items,chatId,username,nombreTg){
   var doc=await vbLookupDoc(pedido.rucDni||''),cliNombre=pedido.nombre||(doc&&doc.nombre)||nombreTg||('Cliente Telegram '+chatId);
   var mon=pedido.monedaPreferida||((items[0]&&items[0].mon)||'S/');
   var cotItems=items.map(function(x){return {id:'tg'+Date.now()+Math.random().toString(36).slice(2,6),cod:x.cod||'',desc:x.n,qty:x.qty||1,precio:x.precio,compra:x.compra||0,prov:x.prov||'',_prod:{id:x.cod||'',n:x.n,v:x.precio,p:x.prov||'',compra:x.compra||0}};});
-  var total=cotItems.reduce(function(a,it){return a+(+it.qty||1)*(+it.precio||0);},0);
+  var sub=cotItems.reduce(function(a,it){return a+(+it.qty||1)*(+it.precio||0);},0),total=sub*1.18;
   var num=vbNextCotNum(data);
   var cot={num:num,ver:'00',fecha:vbFechaPE(),cli:{n:cliNombre,ruc:(pedido.rucDni||''),con:'Telegram',tel:pedido.telefono||'',mail:'',dir:(doc&&doc.direccion)||''},proy:'Solicitud Telegram',mon:mon,pago:'Contado',entr:'A coordinar',valid:'15 dias calendario',igv:true,items:cotItems,tot:total,user:'Agente Telegram',empresaId:empId,origen:'telegram',tgChatId:chatId};
   data.hist=[cot].concat(Array.isArray(data.hist)?data.hist:[]);
@@ -734,7 +771,7 @@ async function vbGuardarCotizacionYCRM(pedido,items,chatId,username,nombreTg){
   else crm.contactos.push({id:'CT'+Date.now(),nombre:cliNombre,empresa:cliNombre,ruc:cot.cli.ruc,cargo:'',cel:pedido.telefono||'',email:'',etapa:'cotizado',valorEst:total,origen:'telegram',tgChatId:chatId,notas:[nota],creado:new Date().toISOString(),ultTocado:new Date().toISOString()});
   crm.tareas.unshift({id:'TA'+Date.now(),contacto:cliNombre,titulo:'Seguimiento COT-'+cot.num+' enviada por Telegram',vence:new Date(Date.now()+86400000).toISOString().slice(0,10),estado:'pendiente',tipo:'seguimiento',tgChatId:chatId});
   data[key]=crm;await sbPutData(data);
-  return {cot:cot,pdf:vbCotizacionPDF(cot,emp),emp:emp};
+  return {cot:cot,pdf:vbCotizacionPDF(cot,emp),html:Buffer.from(vbCotizacionHTML(cot,emp),'utf8'),emp:emp};
 }
 function vbMerinsaLink(pedido,faltantes){
   var msg='Hola MERINSA, soy SKY BLUE PERU. Por favor cotizar stock/precio para: '+faltantes.map(function(x){return (x.qty||1)+' und '+x.descripcion;}).join('; ')+'. Enviar ficha/cotizacion para responder a cliente.';
@@ -866,8 +903,9 @@ app.post('/api/ventasbot/webhook',async function(req,res){
     var out=await vbProcesar(chatId,texto,nombre.trim(),(msg.from&&msg.from.username)||'',false);
     await vbSend(tok,chatId,out.respuesta||'…');
     if(out.autoCot&&out.autoCot.pdf){
-      await vbSendDoc(tok,chatId,'COT-'+out.autoCot.cot.num+'_SKY_BLUE.pdf',out.autoCot.pdf,'Cotización formal COT-'+out.autoCot.cot.num+' generada desde SIGMA.');
-      try{await tgSend('✅ <b>Cotización enviada por Telegram</b>\nCOT-'+out.autoCot.cot.num+'\n👤 '+out.autoCot.cot.cli.n+'\n🧾 '+(out.autoCot.cot.cli.ruc||'')+'\n💰 '+pdfMoney(out.autoCot.cot.tot,out.autoCot.cot.mon)+'\n\n<a href="'+PROD_URL+'/cotizador?tab=hist">Abrir en SIGMA Cotizador</a>');}catch(e){}
+      if(out.autoCot.html)await vbSendDoc(tok,chatId,'COT-'+out.autoCot.cot.num+'_SKY_BLUE_SIGMA.html',out.autoCot.html,'Cotización COT-'+out.autoCot.cot.num+' exportada desde SIGMA. Abre el archivo y toca Imprimir PDF.');
+      await vbSendDoc(tok,chatId,'COT-'+out.autoCot.cot.num+'_SKY_BLUE.pdf',out.autoCot.pdf,'Respaldo PDF de la cotización COT-'+out.autoCot.cot.num+'.');
+      try{await tgSend('✅ <b>Cotización enviada por Telegram</b>\nCOT-'+out.autoCot.cot.num+'\n👤 '+out.autoCot.cot.cli.n+'\n🧾 '+(out.autoCot.cot.cli.ruc||'')+'\n💰 '+pdfMoney(out.autoCot.cot.tot,out.autoCot.cot.mon)+'\n\n<a href="'+PROD_URL+'/api/cotizaciones/export/'+out.autoCot.cot.num+'">Exportar formato SIGMA</a>\n<a href="'+PROD_URL+'/cotizador?tab=hist">Abrir en SIGMA Cotizador</a>');}catch(e){}
     }
   }catch(e){console.error('ventasbot webhook:',e.message);}
 });
@@ -895,6 +933,19 @@ app.get('/api/ventasbot/estado',async function(req,res){
   if(!sbReady())return proxyCloud(req,res);
   try{var cfg=await vbCfg();var store=await sbGetChats();res.json({activo:!!cfg.ventasBot.token,botUser:cfg.ventasBot.botUser||'',info:cfg.ventasBot.info||'',conversaciones:Object.keys(store.chats).length});}
   catch(e){res.status(500).json({error:e.message});}
+});
+app.get('/api/cotizaciones/export/:num',async function(req,res){
+  if(!sbReady())return proxyCloud(req,res);
+  try{
+    var data=await sbGetData()||{},num=String(req.params.num||'').replace(/^COT-/i,'').padStart(3,'0');
+    var cot=(Array.isArray(data.hist)?data.hist:[]).filter(function(c){return String(c.num||'').padStart(3,'0')===num;})[0];
+    if(!cot)return res.status(404).send('Cotizacion no encontrada');
+    var emp=null,empId=cot.empresaId||SKYBLUE_EMPID;try{var list=await sbFetch('empresas?select=*');emp=(list||[]).filter(function(e){return e.id===empId})[0];}catch(e){}
+    var html=vbCotizacionHTML(cot,emp);
+    res.setHeader('Content-Type','text/html; charset=utf-8');
+    res.setHeader('Content-Disposition','inline; filename="COT-'+num+'-SKY-BLUE.html"');
+    res.send(html);
+  }catch(e){res.status(500).json({error:e.message});}
 });
 // Simulador: probar el cerebro sin bot real
 app.post('/api/ventasbot/simular',async function(req,res){
