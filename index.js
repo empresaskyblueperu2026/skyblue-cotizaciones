@@ -664,6 +664,25 @@ function vbMatchProducto(q,cat){
   });
   return score>=Math.max(2,Math.min(4,words.length))?best:null;
 }
+function vbAnalizarPedidoLocal(hist,cat){
+  var txt=(hist||[]).filter(function(m){return m.r==='u';}).map(function(m){return m.t;}).join('\n'),last=((hist||[]).filter(function(m){return m.r==='u';}).slice(-1)[0]||{}).t||'';
+  var nt=vbNorm(txt),nl=vbNorm(last),ruc=(txt.match(/\b(10|15|17|20)\d{9}\b|\b\d{8}\b/)||[''])[0],tel=(txt.match(/\b9\d{8}\b/)||[''])[0];
+  var quiere=/cotiza|cotizacion|presupuesto|precio|proforma|compr(ar|a)|necesito|quiero/i.test(txt);
+  var qty=(last.match(/\b(\d+(?:[.,]\d+)?)\b/)||txt.match(/\b(\d+(?:[.,]\d+)?)\b/)||[])[1];
+  qty=qty?Math.max(1,parseFloat(String(qty).replace(',','.'))):1;
+  var items=[],seen={};
+  (cat||[]).forEach(function(p){
+    var pw=vbNorm(p.n).split(' ').filter(function(w){return w.length>3}).map(function(w){return w.replace(/s$/,'');});
+    var score=0;pw.forEach(function(w){if(nt.indexOf(w)>=0)score++;});
+    if(score>=2&&!seen[p.n]){seen[p.n]=1;items.push({descripcion:p.n,cantidad:qty});}
+  });
+  if(quiere&&!items.length){
+    var m=last.match(/(?:para|de|cotizar|cotizacion|presupuesto|precio)\s+(.{4,120})/i);
+    var desc=(m&&m[1]?m[1]:last).replace(/\b(mi\s+)?(ruc|dni)\s*(es)?\s*\d+\b/ig,'').trim();
+    if(desc)items.push({descripcion:desc,cantidad:qty});
+  }
+  return {quiereCotizacion:quiere||items.length>0,rucDni:ruc,nombre:'',telefono:tel,monedaPreferida:/dolar|usd|us\$/i.test(txt)?'US$':(/sol|s\//i.test(txt)?'S/':''),items:items,faltan:[]};
+}
 async function vbLookupDoc(num){
   num=String(num||'').replace(/\D/g,'');
   if(num.length!==8&&num.length!==11)return null;
@@ -671,7 +690,7 @@ async function vbLookupDoc(num){
   return {numero:num,nombre:'',direccion:''};
 }
 async function vbAnalizarPedido(hist,ctx,cat){
-  var k=process.env.GEMINI_API_KEY;if(!k)return {};
+  var k=process.env.GEMINI_API_KEY;if(!k)return vbAnalizarPedidoLocal(hist,cat);
   var catalogo=cat.slice(0,120).map(function(p,i){return (i+1)+'. '+p.n+' | '+p.mon+' '+(p.precio||0);}).join('\n');
   var conv=hist.map(function(m){return (m.r==='u'?'CLIENTE: ':'SKY: ')+m.t}).join('\n');
   var prompt='Extrae solicitud comercial para SIGMA. Usa SOLO el catalogo para items. Responde JSON estricto: {"quiereCotizacion":boolean,"rucDni":"", "nombre":"", "telefono":"", "monedaPreferida":"S/ o US$ o vacio","items":[{"descripcion":"texto pedido","cantidad":numero}],"faltan":["dato"]}. Si pide presupuesto/cotizacion/precio o da cantidades, quiereCotizacion=true. Si no sabes cantidad usa 1. Catalogo real:\\n'+catalogo+'\\n\\nConversacion:\\n'+conv;
@@ -679,8 +698,11 @@ async function vbAnalizarPedido(hist,ctx,cat){
   try{
     var r=await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key='+k,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
     var d=await r.json(),tx='';try{tx=d.candidates[0].content.parts.map(function(p){return p.text||''}).join('');}catch(e){}
-    var m=tx.replace(/```json/g,'').replace(/```/g,'').match(/\{[\s\S]*\}/);return m?JSON.parse(m[0]):{};
-  }catch(e){return {};}
+    var m=tx.replace(/```json/g,'').replace(/```/g,'').match(/\{[\s\S]*\}/);
+    var parsed=m?JSON.parse(m[0]):{};
+    if(parsed&&(parsed.quiereCotizacion||parsed.items&&parsed.items.length))return parsed;
+  }catch(e){}
+  return vbAnalizarPedidoLocal(hist,cat);
 }
 function vbNextCotNum(data){var max=0;(Array.isArray(data.hist)?data.hist:[]).forEach(function(c){var n=parseInt(c.num,10);if(n>max)max=n;});return String(max+1).padStart(3,'0');}
 function vbFechaPE(d){d=d||new Date();return String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')+'/'+d.getFullYear();}
