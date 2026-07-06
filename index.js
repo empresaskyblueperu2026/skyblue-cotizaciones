@@ -670,12 +670,15 @@ function vbAnalizarPedidoLocal(hist,cat){
   var quiere=/cotiza|cotizacion|presupuesto|precio|proforma|compr(ar|a)|necesito|quiero/i.test(txt);
   var qty=(last.match(/\b(\d+(?:[.,]\d+)?)\b/)||txt.match(/\b(\d+(?:[.,]\d+)?)\b/)||[])[1];
   qty=qty?Math.max(1,parseFloat(String(qty).replace(',','.'))):1;
-  var items=[],seen={};
+  var stop={para:1,formal:1,cotizacion:1,presupuesto:1,precio:1,quiero:1,necesito:1,unidad:1,unidades:1};
+  var cand=[];
   (cat||[]).forEach(function(p){
-    var pw=vbNorm(p.n).split(' ').filter(function(w){return w.length>3}).map(function(w){return w.replace(/s$/,'');});
+    var seenW={},pw=vbNorm(p.n).split(' ').filter(function(w){w=w.replace(/s$/,'');if(w.length<=3||stop[w]||seenW[w])return false;seenW[w]=1;return true;}).map(function(w){return w.replace(/s$/,'');});
     var score=0;pw.forEach(function(w){if(nt.indexOf(w)>=0)score++;});
-    if(score>=2&&!seen[p.n]){seen[p.n]=1;items.push({descripcion:p.n,cantidad:qty});}
+    if(score>=2)cand.push({p:p,score:score});
   });
+  cand.sort(function(a,b){return b.score-a.score||String(a.p.n).length-String(b.p.n).length;});
+  var items=cand.slice(0,1).map(function(x){return {descripcion:x.p.n,cantidad:qty};});
   if(quiere&&!items.length){
     var m=last.match(/(?:para|de|cotizar|cotizacion|presupuesto|precio)\s+(.{4,120})/i);
     var desc=(m&&m[1]?m[1]:last).replace(/\b(mi\s+)?(ruc|dni)\s*(es)?\s*\d+\b/ig,'').trim();
