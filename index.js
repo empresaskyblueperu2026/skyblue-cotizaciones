@@ -668,7 +668,8 @@ function vbAnalizarPedidoLocal(hist,cat){
   var txt=(hist||[]).filter(function(m){return m.r==='u';}).map(function(m){return m.t;}).join('\n'),last=((hist||[]).filter(function(m){return m.r==='u';}).slice(-1)[0]||{}).t||'';
   var nt=vbNorm(txt),nl=vbNorm(last),ruc=(txt.match(/\b(10|15|17|20)\d{9}\b|\b\d{8}\b/)||[''])[0],tel=(txt.match(/\b9\d{8}\b/)||[''])[0];
   var quiere=/cotiza|cotizacion|presupuesto|precio|proforma|compr(ar|a)|necesito|quiero/i.test(txt);
-  var qty=(last.match(/\b(\d+(?:[.,]\d+)?)\b/)||txt.match(/\b(\d+(?:[.,]\d+)?)\b/)||[])[1];
+  var nums=(last+'\n'+txt).match(/\b\d{1,4}(?:[.,]\d+)?\b/g)||[];
+  var qty=nums.filter(function(n){return n!==ruc;})[0];
   qty=qty?Math.max(1,parseFloat(String(qty).replace(',','.'))):1;
   var stop={para:1,formal:1,cotizacion:1,presupuesto:1,precio:1,quiero:1,necesito:1,unidad:1,unidades:1};
   var cand=[];
@@ -877,7 +878,7 @@ async function vbProcesar(chatId,texto,nombre,username,esSimulacion){
     if(!pedido.rucDni&&ch.leadRuc)pedido.rucDni=ch.leadRuc;
     if(!pedido.nombre&&ch.leadNombre)pedido.nombre=ch.leadNombre;
     if(!pedido.telefono&&ch.leadCel)pedido.telefono=ch.leadCel;
-    if((!pedido.items||!pedido.items.length)&&ch.pedidoPendiente&&(pedido.rucDni||rucTxt)){
+    if(ch.pedidoPendiente&&(pedido.rucDni||rucTxt)&&((!pedido.items||!pedido.items.length)||rucTxt)){
       pedido=Object.assign({},ch.pedidoPendiente,{rucDni:pedido.rucDni||ch.leadRuc,nombre:pedido.nombre||ch.leadNombre,telefono:pedido.telefono||ch.leadCel,quiereCotizacion:true});
     }
     if(pedido.rucDni)ch.leadRuc=pedido.rucDni;
