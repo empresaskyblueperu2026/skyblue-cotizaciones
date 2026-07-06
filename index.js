@@ -683,24 +683,36 @@ async function vbAnalizarPedido(hist,ctx,cat){
   }catch(e){return {};}
 }
 function vbNextCotNum(data){var max=0;(Array.isArray(data.hist)?data.hist:[]).forEach(function(c){var n=parseInt(c.num,10);if(n>max)max=n;});return String(max+1).padStart(3,'0');}
+function vbFechaPE(d){d=d||new Date();return String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')+'/'+d.getFullYear();}
 function vbCotizacionPDF(cot,emp){
-  var lines=['COTIZACION '+(cot.num||''),''];
+  var lines=['COTIZACION COT-'+(cot.num||''),''];
   lines.push((emp&&emp.nombre)||'SKY BLUE PERU S.A.C.');
   if(emp&&emp.ruc)lines.push('RUC: '+emp.ruc);
-  lines.push('Fecha: '+cot.fecha);
-  lines.push('Cliente: '+((cot.cli&&cot.cli.n)||''));
+  if(emp&&emp.direccion)lines.push('Direccion: '+emp.direccion);
+  if(emp&&emp.telefono)lines.push('Telefono: '+emp.telefono);
+  if(emp&&emp.email)lines.push('Email: '+emp.email);
+  lines.push('');
+  lines.push('Fecha: '+cot.fecha+' | Version: '+(cot.ver||'00'));
+  lines.push('Senor(es): '+((cot.cli&&cot.cli.n)||''));
   if(cot.cli&&cot.cli.ruc)lines.push('RUC/DNI: '+cot.cli.ruc);
-  if(cot.cli&&cot.cli.dir)lines.push('Direccion: '+cot.cli.dir);
-  lines.push('Moneda: '+cot.mon+' | Pago: '+cot.pago+' | Validez: '+cot.valid);
+  if(cot.cli&&cot.cli.con)lines.push('Contacto: '+cot.cli.con);
+  if(cot.cli&&cot.cli.tel)lines.push('Telefono cliente: '+cot.cli.tel);
+  if(cot.cli&&cot.cli.dir)lines.push('Direccion cliente: '+cot.cli.dir);
+  lines.push('Proyecto: '+(cot.proy||'Solicitud comercial'));
   lines.push('');
-  lines.push('Detalle:');
-  (cot.items||[]).forEach(function(it,i){var q=+it.qty||1,p=+it.precio||0;lines.push((i+1)+'. '+it.desc);lines.push('   Cant. '+q+' | P.Unit '+pdfMoney(p,cot.mon)+' | Subtotal '+pdfMoney(q*p,cot.mon));});
+  lines.push('Detalle de la cotizacion:');
+  (cot.items||[]).forEach(function(it,i){var q=+it.qty||1,p=+it.precio||0;lines.push((i+1)+'. '+(it.cod?('['+it.cod+'] '):'')+it.desc);lines.push('   Cant. '+q+' | P.Unit '+pdfMoney(p,cot.mon)+' | Subtotal '+pdfMoney(q*p,cot.mon));});
   lines.push('');
-  lines.push('Subtotal: '+pdfMoney(cot.subtotal||cot.tot,cot.mon));
-  if(cot.igv)lines.push('Incluye IGV.');
+  lines.push('Subtotal: '+pdfMoney(cot.tot,cot.mon));
+  if(cot.igv)lines.push('Precio incluye IGV.');
   lines.push('TOTAL: '+pdfMoney(cot.tot,cot.mon));
   lines.push('');
-  lines.push('Gracias por cotizar con SKY BLUE PERU.');
+  lines.push('Condiciones comerciales:');
+  lines.push('Forma de pago: '+(cot.pago||'Contado'));
+  lines.push('Tiempo de entrega: '+(cot.entr||'A coordinar'));
+  lines.push('Validez de oferta: '+(cot.valid||'15 dias calendario'));
+  lines.push('');
+  lines.push('Documento generado desde el modulo SIGMA Cotizador.');
   return buildSimplePDF([lines]);
 }
 async function vbGuardarCotizacionYCRM(pedido,items,chatId,username,nombreTg){
@@ -710,8 +722,10 @@ async function vbGuardarCotizacionYCRM(pedido,items,chatId,username,nombreTg){
   var mon=pedido.monedaPreferida||((items[0]&&items[0].mon)||'S/');
   var cotItems=items.map(function(x){return {id:'tg'+Date.now()+Math.random().toString(36).slice(2,6),cod:x.cod||'',desc:x.n,qty:x.qty||1,precio:x.precio,compra:x.compra||0,prov:x.prov||'',_prod:{id:x.cod||'',n:x.n,v:x.precio,p:x.prov||'',compra:x.compra||0}};});
   var total=cotItems.reduce(function(a,it){return a+(+it.qty||1)*(+it.precio||0);},0);
-  var cot={num:vbNextCotNum(data),ver:'00',fecha:new Date().toLocaleDateString('es-PE'),cli:{n:cliNombre,ruc:(pedido.rucDni||''),con:'Telegram',tel:pedido.telefono||'',mail:'',dir:(doc&&doc.direccion)||''},proy:'Solicitud Telegram',mon:mon,pago:'Contado',entr:'A coordinar',valid:'15 dias calendario',igv:true,items:cotItems,subtotal:total,tot:total,empresaId:empId,origen:'telegram',tgChatId:chatId};
-  data.hist=Array.isArray(data.hist)?data.hist:[];data.hist.push(cot);
+  var num=vbNextCotNum(data);
+  var cot={num:num,ver:'00',fecha:vbFechaPE(),cli:{n:cliNombre,ruc:(pedido.rucDni||''),con:'Telegram',tel:pedido.telefono||'',mail:'',dir:(doc&&doc.direccion)||''},proy:'Solicitud Telegram',mon:mon,pago:'Contado',entr:'A coordinar',valid:'15 dias calendario',igv:true,items:cotItems,tot:total,user:'Agente Telegram',empresaId:empId,origen:'telegram',tgChatId:chatId};
+  data.hist=[cot].concat(Array.isArray(data.hist)?data.hist:[]);
+  data.num=String((parseInt(num,10)||0)+1).padStart(3,'0');
   var key='crm_'+empId,crm=data[key]&&typeof data[key]==='object'?data[key]:{contactos:[],tareas:[]};
   crm.contactos=Array.isArray(crm.contactos)?crm.contactos:[];crm.tareas=Array.isArray(crm.tareas)?crm.tareas:[];
   var ex=crm.contactos.filter(function(c){return (cot.cli.ruc&&c.ruc===cot.cli.ruc)||String(c.tgChatId||'')===String(chatId)})[0];
@@ -852,8 +866,8 @@ app.post('/api/ventasbot/webhook',async function(req,res){
     var out=await vbProcesar(chatId,texto,nombre.trim(),(msg.from&&msg.from.username)||'',false);
     await vbSend(tok,chatId,out.respuesta||'…');
     if(out.autoCot&&out.autoCot.pdf){
-      await vbSendDoc(tok,chatId,'COT-'+out.autoCot.cot.num+'_SKY_BLUE.pdf',out.autoCot.pdf,'Cotización formal COT-'+out.autoCot.cot.num);
-      try{await tgSend('✅ <b>Cotización enviada por Telegram</b>\nCOT-'+out.autoCot.cot.num+'\n👤 '+out.autoCot.cot.cli.n+'\n🧾 '+(out.autoCot.cot.cli.ruc||'')+'\n💰 '+pdfMoney(out.autoCot.cot.tot,out.autoCot.cot.mon));}catch(e){}
+      await vbSendDoc(tok,chatId,'COT-'+out.autoCot.cot.num+'_SKY_BLUE.pdf',out.autoCot.pdf,'Cotización formal COT-'+out.autoCot.cot.num+' generada desde SIGMA.');
+      try{await tgSend('✅ <b>Cotización enviada por Telegram</b>\nCOT-'+out.autoCot.cot.num+'\n👤 '+out.autoCot.cot.cli.n+'\n🧾 '+(out.autoCot.cot.cli.ruc||'')+'\n💰 '+pdfMoney(out.autoCot.cot.tot,out.autoCot.cot.mon)+'\n\n<a href="'+PROD_URL+'/cotizador?tab=hist">Abrir en SIGMA Cotizador</a>');}catch(e){}
     }
   }catch(e){console.error('ventasbot webhook:',e.message);}
 });
