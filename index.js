@@ -614,6 +614,14 @@ async function vbSend(token,chatId,text){
   var r=await fetch('https://api.telegram.org/bot'+token+'/sendMessage',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({chat_id:chatId,text:text,parse_mode:'HTML',disable_web_page_preview:true})});
   return await r.json();
 }
+async function vbSendDoc(token,chatId,filename,buffer,caption){
+  var fd=new FormData();
+  fd.append('chat_id',String(chatId));
+  fd.append('caption',caption||'');
+  fd.append('document',new Blob([buffer],{type:'application/pdf'}),filename||'cotizacion.pdf');
+  var r=await fetch('https://api.telegram.org/bot'+token+'/sendDocument',{method:'POST',body:fd});
+  return await r.json();
+}
 async function sbGetChats(){try{await sbEnsureBucket();var r=await fetch(SB_URL+'/storage/v1/object/'+SB_BUCKET+'/ventas_chats.json?t='+Date.now(),{headers:{'Authorization':'Bearer '+SB_KEY,'apikey':SB_KEY,'cache-control':'no-cache'}});if(!r.ok)return {chats:{}};var d=JSON.parse(await r.text());return d&&d.chats?d:{chats:{}};}catch(e){return {chats:{}};}}
 async function sbPutChats(obj){await sbEnsureBucket();await fetch(SB_URL+'/storage/v1/object/'+SB_BUCKET+'/ventas_chats.json',{method:'POST',headers:{'Authorization':'Bearer '+SB_KEY,'apikey':SB_KEY,'Content-Type':'application/json','cache-control':'no-cache','x-upsert':'true'},body:JSON.stringify(obj)});}
 
@@ -628,6 +636,94 @@ async function vbContexto(){
   (Array.isArray(data.hist)?data.hist:[]).forEach(function(co){(co.items||[]).forEach(function(it){if(it.desc&&!prods.some(function(x){return x.n.toLowerCase()===it.desc.toLowerCase()}))prods.push({n:it.desc,p:(+it.precio||null),u:''});});});
   var catalogo=prods.slice(0,80).map(function(p){return '- '+p.n+(p.p?(' | S/ '+(+p.p).toFixed(2)+(p.u?(' x '+p.u):'')):' | precio a cotizar')}).join('\n');
   return {cfg:cfg,emp:emp,catalogo:catalogo,nProds:prods.length};
+}
+function vbCatalogo(data,empId){
+  var out=[];
+  function add(o){
+    if(!o||!o.n)return;
+    var key=String(o.n).toLowerCase().trim();
+    if(out.some(function(x){return x.key===key}))return;
+    out.push({key:key,cod:o.cod||o.id||'',n:o.n,precio:+o.precio||+o.p||0,mon:o.mon||'S/',compra:+o.compra||0,prov:o.prov||o.pv||''});
+  }
+  var cat=data['scat_'+empId]; if(Array.isArray(cat))cat.forEach(function(c){add({id:c.id||c.codigo,n:c.nombre||c.n,precio:c.precio_min||c.precio||c.v,mon:c.moneda||'S/',prov:c.proveedor||''});});
+  if(Array.isArray(data.extra))data.extra.forEach(function(p){add({id:p.id,n:p.n,precio:p.v,mon:p.moneda||'S/',compra:p.compra,prov:p.p});});
+  (Array.isArray(data.hist)?data.hist:[]).forEach(function(co){(co.items||[]).forEach(function(it){add({id:it.cod,n:it.desc,precio:it.precio,mon:co.mon||'S/',compra:it.compra,prov:it.prov});});});
+  return out;
+}
+function vbNorm(s){return String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9 ]+/g,' ').replace(/\s+/g,' ').trim();}
+function vbMatchProducto(q,cat){
+  var nq=vbNorm(q); if(!nq)return null;
+  var words=nq.split(' ').filter(function(w){return w.length>2});
+  var best=null,score=0;
+  cat.forEach(function(p){
+    var np=vbNorm(p.n),sc=0;
+    if(np.indexOf(nq)>=0||nq.indexOf(np)>=0)sc+=8;
+    words.forEach(function(w){if(np.indexOf(w)>=0)sc++;});
+    if(sc>score){score=sc;best=p;}
+  });
+  return score>=Math.max(2,Math.min(4,words.length))?best:null;
+}
+async function vbLookupDoc(num){
+  num=String(num||'').replace(/\D/g,'');
+  if(num.length!==8&&num.length!==11)return null;
+  try{var r=await fetch(PROD_URL+'/api/ruc/'+num,{headers:{'Accept':'application/json'},signal:AbortSignal.timeout(9000)});if(r.ok)return await r.json();}catch(e){}
+  return {numero:num,nombre:'',direccion:''};
+}
+async function vbAnalizarPedido(hist,ctx,cat){
+  var k=process.env.GEMINI_API_KEY;if(!k)return {};
+  var catalogo=cat.slice(0,120).map(function(p,i){return (i+1)+'. '+p.n+' | '+p.mon+' '+(p.precio||0);}).join('\n');
+  var conv=hist.map(function(m){return (m.r==='u'?'CLIENTE: ':'SKY: ')+m.t}).join('\n');
+  var prompt='Extrae solicitud comercial para SIGMA. Usa SOLO el catalogo para items. Responde JSON estricto: {"quiereCotizacion":boolean,"rucDni":"", "nombre":"", "telefono":"", "monedaPreferida":"S/ o US$ o vacio","items":[{"descripcion":"texto pedido","cantidad":numero}],"faltan":["dato"]}. Si pide presupuesto/cotizacion/precio o da cantidades, quiereCotizacion=true. Si no sabes cantidad usa 1. Catalogo real:\\n'+catalogo+'\\n\\nConversacion:\\n'+conv;
+  var body={contents:[{parts:[{text:prompt}]}],generationConfig:{temperature:0.1,maxOutputTokens:1600,thinkingConfig:{thinkingBudget:0}}};
+  try{
+    var r=await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key='+k,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    var d=await r.json(),tx='';try{tx=d.candidates[0].content.parts.map(function(p){return p.text||''}).join('');}catch(e){}
+    var m=tx.replace(/```json/g,'').replace(/```/g,'').match(/\{[\s\S]*\}/);return m?JSON.parse(m[0]):{};
+  }catch(e){return {};}
+}
+function vbNextCotNum(data){var max=0;(Array.isArray(data.hist)?data.hist:[]).forEach(function(c){var n=parseInt(c.num,10);if(n>max)max=n;});return String(max+1).padStart(3,'0');}
+function vbCotizacionPDF(cot,emp){
+  var lines=['COTIZACION '+(cot.num||''),''];
+  lines.push((emp&&emp.nombre)||'SKY BLUE PERU S.A.C.');
+  if(emp&&emp.ruc)lines.push('RUC: '+emp.ruc);
+  lines.push('Fecha: '+cot.fecha);
+  lines.push('Cliente: '+((cot.cli&&cot.cli.n)||''));
+  if(cot.cli&&cot.cli.ruc)lines.push('RUC/DNI: '+cot.cli.ruc);
+  if(cot.cli&&cot.cli.dir)lines.push('Direccion: '+cot.cli.dir);
+  lines.push('Moneda: '+cot.mon+' | Pago: '+cot.pago+' | Validez: '+cot.valid);
+  lines.push('');
+  lines.push('Detalle:');
+  (cot.items||[]).forEach(function(it,i){var q=+it.qty||1,p=+it.precio||0;lines.push((i+1)+'. '+it.desc);lines.push('   Cant. '+q+' | P.Unit '+pdfMoney(p,cot.mon)+' | Subtotal '+pdfMoney(q*p,cot.mon));});
+  lines.push('');
+  lines.push('Subtotal: '+pdfMoney(cot.subtotal||cot.tot,cot.mon));
+  if(cot.igv)lines.push('Incluye IGV.');
+  lines.push('TOTAL: '+pdfMoney(cot.tot,cot.mon));
+  lines.push('');
+  lines.push('Gracias por cotizar con SKY BLUE PERU.');
+  return buildSimplePDF([lines]);
+}
+async function vbGuardarCotizacionYCRM(pedido,items,chatId,username,nombreTg){
+  var cfg=await vbCfg(),empId=cfg.ventasBot.empId||SKYBLUE_EMPID,data=await sbGetData()||{};
+  var emp=null;try{var list=await sbFetch('empresas?select=*');emp=(list||[]).filter(function(e){return e.id===empId})[0];}catch(e){}
+  var doc=await vbLookupDoc(pedido.rucDni||''),cliNombre=pedido.nombre||(doc&&doc.nombre)||nombreTg||('Cliente Telegram '+chatId);
+  var mon=pedido.monedaPreferida||((items[0]&&items[0].mon)||'S/');
+  var cotItems=items.map(function(x){return {id:'tg'+Date.now()+Math.random().toString(36).slice(2,6),cod:x.cod||'',desc:x.n,qty:x.qty||1,precio:x.precio,compra:x.compra||0,prov:x.prov||'',_prod:{id:x.cod||'',n:x.n,v:x.precio,p:x.prov||'',compra:x.compra||0}};});
+  var total=cotItems.reduce(function(a,it){return a+(+it.qty||1)*(+it.precio||0);},0);
+  var cot={num:vbNextCotNum(data),ver:'00',fecha:new Date().toLocaleDateString('es-PE'),cli:{n:cliNombre,ruc:(pedido.rucDni||''),con:'Telegram',tel:pedido.telefono||'',mail:'',dir:(doc&&doc.direccion)||''},proy:'Solicitud Telegram',mon:mon,pago:'Contado',entr:'A coordinar',valid:'15 dias calendario',igv:true,items:cotItems,subtotal:total,tot:total,empresaId:empId,origen:'telegram',tgChatId:chatId};
+  data.hist=Array.isArray(data.hist)?data.hist:[];data.hist.push(cot);
+  var key='crm_'+empId,crm=data[key]&&typeof data[key]==='object'?data[key]:{contactos:[],tareas:[]};
+  crm.contactos=Array.isArray(crm.contactos)?crm.contactos:[];crm.tareas=Array.isArray(crm.tareas)?crm.tareas:[];
+  var ex=crm.contactos.filter(function(c){return (cot.cli.ruc&&c.ruc===cot.cli.ruc)||String(c.tgChatId||'')===String(chatId)})[0];
+  var nota={fecha:new Date().toISOString(),texto:'Cotizacion Telegram COT-'+cot.num+' por '+pdfMoney(total,mon),tipo:'tg'};
+  if(ex){ex.nombre=ex.nombre||cliNombre;ex.ruc=ex.ruc||cot.cli.ruc;ex.tgChatId=chatId;ex.etapa='cotizado';ex.ultTocado=new Date().toISOString();ex.notas=ex.notas||[];ex.notas.unshift(nota);}
+  else crm.contactos.push({id:'CT'+Date.now(),nombre:cliNombre,empresa:cliNombre,ruc:cot.cli.ruc,cargo:'',cel:pedido.telefono||'',email:'',etapa:'cotizado',valorEst:total,origen:'telegram',tgChatId:chatId,notas:[nota],creado:new Date().toISOString(),ultTocado:new Date().toISOString()});
+  crm.tareas.unshift({id:'TA'+Date.now(),contacto:cliNombre,titulo:'Seguimiento COT-'+cot.num+' enviada por Telegram',vence:new Date(Date.now()+86400000).toISOString().slice(0,10),estado:'pendiente',tipo:'seguimiento',tgChatId:chatId});
+  data[key]=crm;await sbPutData(data);
+  return {cot:cot,pdf:vbCotizacionPDF(cot,emp),emp:emp};
+}
+function vbMerinsaLink(pedido,faltantes){
+  var msg='Hola MERINSA, soy SKY BLUE PERU. Por favor cotizar stock/precio para: '+faltantes.map(function(x){return (x.qty||1)+' und '+x.descripcion;}).join('; ')+'. Enviar ficha/cotizacion para responder a cliente.';
+  return 'https://wa.me/51926533360?text='+encodeURIComponent(msg);
 }
 
 // Cerebro: una llamada a Gemini que devuelve respuesta + analisis de lead
@@ -691,13 +787,37 @@ async function vbProcesar(chatId,texto,nombre,username,esSimulacion){
   if(!texto.trim())return {respuesta:'¡Hola! 👋 Soy Sky, asesor de '+((ctx.emp&&ctx.emp.nombre)||'SKY BLUE PERU')+'. Cuéntame, ¿qué producto o servicio necesitas?',lead:false};
   ch.hist.push({r:'u',t:texto,ts:Date.now()});
   if(ch.hist.length>18)ch.hist=ch.hist.slice(-18);
+  var avisos=[];
   var out=await vbCerebro(ctx,ch.hist,ch.leadNombre||nombre);
+  var autoCot=null;
+  try{
+    var cfgTmp=await vbCfg(),dataTmp=await sbGetData()||{},empIdTmp=cfgTmp.ventasBot.empId||SKYBLUE_EMPID,cat=vbCatalogo(dataTmp,empIdTmp);
+    var pedido=await vbAnalizarPedido(ch.hist,ctx,cat);
+    var rucTxt=texto.match(/\b(10|15|17|20)\d{9}\b|\b\d{8}\b/);
+    if(rucTxt&&!pedido.rucDni)pedido.rucDni=rucTxt[0];
+    if(pedido&&pedido.quiereCotizacion&&Array.isArray(pedido.items)&&pedido.items.length){
+      var encontrados=[],faltantes=[];
+      pedido.items.forEach(function(it){var p=vbMatchProducto(it.descripcion,cat);if(p&&p.precio>0){encontrados.push(Object.assign({},p,{qty:+it.cantidad||1}));}else faltantes.push(it);});
+      if(faltantes.length){
+        out.respuesta='Estoy validando stock y precio con proveedor, te envío la cotización en unos minutos.';
+        if(!esSimulacion){
+          var link=vbMerinsaLink(pedido,faltantes);
+          avisos.push('🟡 <b>Producto por validar con MERINSA</b>\n👤 '+(pedido.nombre||nombre||'Cliente Telegram')+(pedido.rucDni?('\n🧾 '+pedido.rucDni):'')+'\n📦 '+faltantes.map(function(x){return (x.cantidad||1)+' und '+x.descripcion}).join('; ')+'\n\n<a href="'+link+'">Abrir WhatsApp a Merinsa</a>');
+        }
+      }else if(encontrados.length&&pedido.rucDni){
+        autoCot=await vbGuardarCotizacionYCRM(pedido,encontrados,chatId,username,nombre);
+        out.respuesta='Listo, preparé tu cotización formal. Te la envío en PDF por aquí mismo. ✅';
+        out.lead=true; out.nombre=pedido.nombre||out.nombre; out.celular=pedido.telefono||out.celular; out.interes=encontrados.map(function(x){return x.n}).join('; '); out.precot='COT-'+autoCot.cot.num+' total '+pdfMoney(autoCot.cot.tot,autoCot.cot.mon);
+      }else if(encontrados.length&&!pedido.rucDni){
+        out.respuesta='Sí puedo cotizarlo. Para emitir la cotización formal, por favor envíame tu RUC o DNI.';
+      }
+    }
+  }catch(e){console.error('auto cotizacion telegram:',e.message);}
   ch.hist.push({r:'a',t:out.respuesta||'',ts:Date.now()});
   ch.replies24h++;
   if(out.nombre)ch.leadNombre=out.nombre;
   if(out.celular)ch.leadCel=out.celular;
   // notificaciones a Diego
-  var avisos=[];
   if(!ch.notifNuevo&&!esSimulacion){ch.notifNuevo=true;avisos.push('🆕 <b>Nueva conversación en el bot de ventas</b>\n👤 '+(nombre||'')+(username?(' (@'+username+')'):'')+'\n💬 "'+texto.slice(0,140)+'"');}
   if(out.lead&&!esSimulacion){
     var hace=ch.leadAvisado?Date.now()-ch.leadAvisado:9e9;
@@ -709,7 +829,7 @@ async function vbProcesar(chatId,texto,nombre,username,esSimulacion){
   store.chats[chatId]=ch;
   await sbPutChats(store);
   for(var i=0;i<avisos.length;i++){try{await tgSend(avisos[i]);}catch(e){}}
-  return out;
+  return Object.assign(out,{autoCot:autoCot});
 }
 
 // Webhook del bot de ventas
@@ -729,6 +849,10 @@ app.post('/api/ventasbot/webhook',async function(req,res){
     var nombre=((msg.from&&msg.from.first_name)||'')+' '+((msg.from&&msg.from.last_name)||'');
     var out=await vbProcesar(chatId,texto,nombre.trim(),(msg.from&&msg.from.username)||'',false);
     await vbSend(tok,chatId,out.respuesta||'…');
+    if(out.autoCot&&out.autoCot.pdf){
+      await vbSendDoc(tok,chatId,'COT-'+out.autoCot.cot.num+'_SKY_BLUE.pdf',out.autoCot.pdf,'Cotización formal COT-'+out.autoCot.cot.num);
+      try{await tgSend('✅ <b>Cotización enviada por Telegram</b>\nCOT-'+out.autoCot.cot.num+'\n👤 '+out.autoCot.cot.cli.n+'\n🧾 '+(out.autoCot.cot.cli.ruc||'')+'\n💰 '+pdfMoney(out.autoCot.cot.tot,out.autoCot.cot.mon));}catch(e){}
+    }
   }catch(e){console.error('ventasbot webhook:',e.message);}
 });
 // Configurar el bot (guardar token + setWebhook)
