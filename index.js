@@ -642,12 +642,13 @@ function vbCatalogo(data,empId){
   function add(o){
     if(!o||!o.n)return;
     var key=String(o.n).toLowerCase().trim();
-    if(out.some(function(x){return x.key===key}))return;
-    out.push({key:key,cod:o.cod||o.id||'',n:o.n,precio:+o.precio||+o.p||0,mon:o.mon||'S/',compra:+o.compra||0,prov:o.prov||o.pv||''});
+    var ex=out.filter(function(x){return x.key===key})[0],precio=+o.precio||+o.p||0;
+    if(ex){if(precio>0&&(o.src==='hist'||!ex.precio)){ex.precio=precio;ex.mon=o.mon||ex.mon;ex.cod=o.cod||o.id||ex.cod;ex.compra=+o.compra||ex.compra;ex.prov=o.prov||o.pv||ex.prov;}return;}
+    out.push({key:key,cod:o.cod||o.id||'',n:o.n,precio:precio,mon:o.mon||'S/',compra:+o.compra||0,prov:o.prov||o.pv||''});
   }
+  (Array.isArray(data.hist)?data.hist:[]).forEach(function(co){(co.items||[]).forEach(function(it){add({id:it.cod,n:it.desc,precio:it.precio,mon:co.mon||'S/',compra:it.compra,prov:it.prov,src:'hist'});});});
   var cat=data['scat_'+empId]; if(Array.isArray(cat))cat.forEach(function(c){add({id:c.id||c.codigo,n:c.nombre||c.n,precio:c.precio_min||c.precio||c.v,mon:c.moneda||'S/',prov:c.proveedor||''});});
   if(Array.isArray(data.extra))data.extra.forEach(function(p){add({id:p.id,n:p.n,precio:p.v,mon:p.moneda||'S/',compra:p.compra,prov:p.p});});
-  (Array.isArray(data.hist)?data.hist:[]).forEach(function(co){(co.items||[]).forEach(function(it){add({id:it.cod,n:it.desc,precio:it.precio,mon:co.mon||'S/',compra:it.compra,prov:it.prov});});});
   return out;
 }
 function vbNorm(s){return String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9 ]+/g,' ').replace(/\s+/g,' ').trim();}
@@ -805,9 +806,10 @@ async function vbProcesar(chatId,texto,nombre,username,esSimulacion){
           avisos.push('🟡 <b>Producto por validar con MERINSA</b>\n👤 '+(pedido.nombre||nombre||'Cliente Telegram')+(pedido.rucDni?('\n🧾 '+pedido.rucDni):'')+'\n📦 '+faltantes.map(function(x){return (x.cantidad||1)+' und '+x.descripcion}).join('; ')+'\n\n<a href="'+link+'">Abrir WhatsApp a Merinsa</a>');
         }
       }else if(encontrados.length&&pedido.rucDni){
-        autoCot=await vbGuardarCotizacionYCRM(pedido,encontrados,chatId,username,nombre);
+        if(!esSimulacion)autoCot=await vbGuardarCotizacionYCRM(pedido,encontrados,chatId,username,nombre);
         out.respuesta='Listo, preparé tu cotización formal. Te la envío en PDF por aquí mismo. ✅';
-        out.lead=true; out.nombre=pedido.nombre||out.nombre; out.celular=pedido.telefono||out.celular; out.interes=encontrados.map(function(x){return x.n}).join('; '); out.precot='COT-'+autoCot.cot.num+' total '+pdfMoney(autoCot.cot.tot,autoCot.cot.mon);
+        var simTot=encontrados.reduce(function(a,x){return a+(+x.qty||1)*(+x.precio||0)},0),simMon=(pedido.monedaPreferida||encontrados[0].mon||'S/');
+        out.lead=true; out.nombre=pedido.nombre||out.nombre; out.celular=pedido.telefono||out.celular; out.interes=encontrados.map(function(x){return x.n}).join('; '); out.precot=autoCot?('COT-'+autoCot.cot.num+' total '+pdfMoney(autoCot.cot.tot,autoCot.cot.mon)):('SIM total '+pdfMoney(simTot,simMon));
       }else if(encontrados.length&&!pedido.rucDni){
         out.respuesta='Sí puedo cotizarlo. Para emitir la cotización formal, por favor envíame tu RUC o DNI.';
       }
