@@ -695,7 +695,8 @@ function vbNumLetras(n){
   var m=Math.floor(e/1000),r=e%1000;return((m===1?'MIL ':m>1?w(m)+' MIL ':'')+w(r)).trim()+' Y '+String(dc).padStart(2,'0')+'/100';
 }
 function vbCotTotals(cot){var sub=(cot.items||[]).reduce(function(a,it){return a+(+it.qty||1)*(+it.precio||0);},0),igv=cot.igv===false?0:sub*.18;return {sub:sub,igv:igv,tot:sub+igv};}
-function vbCotizacionHTML(cot,emp){
+function vbCotizacionHTML(cot,emp,opts){
+  opts=opts||{};var showToolbar=opts.toolbar!==false;
   emp=vbEmp(emp);var cli=cot.cli||{},items=cot.items||[],cur=cot.mon||'S/',t=vbCotTotals(cot),logo=vbAppAsset('_sky'),liso=vbAppAsset('_iso'),lprov=vbAppAsset('_prov');
   function money(n){return pdfMoney(n,cur);}
   var rows=items.map(function(it,i){var p=+it.precio||0,q=+it.qty||1,prod=it._prod||{};return '<tr style="background:'+(i%2===0?'white':'#f8fafc')+';border-bottom:1px solid #f0f4f8;vertical-align:top">'+
@@ -709,7 +710,7 @@ function vbCotizacionHTML(cot,emp){
     '<td style="padding:7px 4px;text-align:right;font-size:8px;font-weight:700">'+vbHE(money(q*p))+'</td></tr>';}).join('');
   var css='*{box-sizing:border-box;margin:0;padding:0}body{font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Arial,sans-serif;background:white;color:#1e293b}a{text-decoration:none;color:inherit}@media print{@page{margin:7mm;size:A4 portrait}body{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}.np{display:none!important}}@media screen{body{padding:12px;background:#eef2f7}#_wrap{max-width:820px;margin:0 auto;background:white;box-shadow:0 4px 20px rgba(0,0,0,.12);border-radius:8px;overflow:hidden}}';
   return '<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>COT-'+vbHE(cot.num)+' SKY BLUE PERU S.A.C.</title><style>'+css+'</style></head><body>'+
-    '<div class="np" style="background:#0d3b6e;padding:10px 16px;display:flex;align-items:center;justify-content:space-between"><span style="color:rgba(255,255,255,.7);font-size:11px">SKY BLUE PERU S.A.C.</span><div style="display:flex;gap:8px"><button onclick="window.print()" style="background:#2ab7a9;color:white;border:none;padding:7px 14px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer">Imprimir PDF</button><button onclick="window.close()" style="background:rgba(255,255,255,.15);color:white;border:none;padding:7px 10px;border-radius:8px;font-size:12px;cursor:pointer">Cerrar</button></div></div>'+
+    (showToolbar?'<div class="np" style="background:#0d3b6e;padding:10px 16px;display:flex;align-items:center;justify-content:space-between"><span style="color:rgba(255,255,255,.7);font-size:11px">SKY BLUE PERU S.A.C.</span><div style="display:flex;gap:8px"><button onclick="window.print()" style="background:#2ab7a9;color:white;border:none;padding:7px 14px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer">Imprimir PDF</button><button onclick="window.close()" style="background:rgba(255,255,255,.15);color:white;border:none;padding:7px 10px;border-radius:8px;font-size:12px;cursor:pointer">Cerrar</button></div></div>':'')+
     '<div id="_wrap"><div style="background:white;position:relative"><div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;z-index:0;overflow:hidden">'+(logo?'<img src="'+logo+'" style="width:50%;opacity:.04;filter:grayscale(1)">':'')+'</div><div style="position:relative;z-index:1">'+
     '<div style="display:flex;justify-content:space-between;align-items:flex-start;padding:14px 20px 10px"><div>'+(logo?'<img src="'+logo+'" style="height:70px;margin-bottom:6px;display:block">':'')+
     '<div style="font-size:7px;color:#334155;font-weight:700;line-height:1.5">'+vbHE(emp.ruc+' - '+emp.nombre)+'</div><div style="font-size:7px;color:#334155;line-height:1.5">RUC: '+vbHE(emp.ruc)+'</div><div style="font-size:7px;color:#334155;line-height:1.5">Dom. Fiscal: '+vbHE(emp.dir)+'</div><div style="font-size:7px;color:#334155;line-height:1.5">Urb. CALIFORNIA</div><div style="font-size:7px;color:#334155;line-height:1.5">Telef. '+vbHE(emp.cel)+'</div><div style="font-size:7px;color:#334155;line-height:1.5">Web: skyblueperuglobal.com</div></div>'+
@@ -771,7 +772,7 @@ async function vbGuardarCotizacionYCRM(pedido,items,chatId,username,nombreTg){
   else crm.contactos.push({id:'CT'+Date.now(),nombre:cliNombre,empresa:cliNombre,ruc:cot.cli.ruc,cargo:'',cel:pedido.telefono||'',email:'',etapa:'cotizado',valorEst:total,origen:'telegram',tgChatId:chatId,notas:[nota],creado:new Date().toISOString(),ultTocado:new Date().toISOString()});
   crm.tareas.unshift({id:'TA'+Date.now(),contacto:cliNombre,titulo:'Seguimiento COT-'+cot.num+' enviada por Telegram',vence:new Date(Date.now()+86400000).toISOString().slice(0,10),estado:'pendiente',tipo:'seguimiento',tgChatId:chatId});
   data[key]=crm;await sbPutData(data);
-  return {cot:cot,pdf:vbCotizacionPDF(cot,emp),html:Buffer.from(vbCotizacionHTML(cot,emp),'utf8'),emp:emp};
+  return {cot:cot,pdf:vbCotizacionPDF(cot,emp),html:Buffer.from(vbCotizacionHTML(cot,emp,{toolbar:false}),'utf8'),emp:emp};
 }
 function vbMerinsaLink(pedido,faltantes){
   var msg='Hola MERINSA, soy SKY BLUE PERU. Por favor cotizar stock/precio para: '+faltantes.map(function(x){return (x.qty||1)+' und '+x.descripcion;}).join('; ')+'. Enviar ficha/cotizacion para responder a cliente.';
@@ -811,17 +812,18 @@ async function vbCerebro(ctx,hist,nombreCliente){
 // Upsert del lead capturado al CRM (server-side)
 async function vbLeadACrm(info,chatId,username){
   try{
-    if(!info||(!info.nombre&&!info.celular))return;
+    if(!info||(!info.nombre&&!info.celular&&!info.rucDni&&!info.interes&&!info.precot))return;
     var data=await sbGetData()||{};
     var cfg=await vbCfg(); var empId=cfg.ventasBot.empId||SKYBLUE_EMPID;
     var key='crm_'+empId;
     var crm=data[key]&&typeof data[key]==='object'?data[key]:{contactos:[],tareas:[]};
     crm.contactos=Array.isArray(crm.contactos)?crm.contactos:[]; crm.tareas=Array.isArray(crm.tareas)?crm.tareas:[];
-    var cel=(info.celular||'').replace(/\D/g,'');
-    var ex=crm.contactos.filter(function(c){return (cel&&(c.cel||'').replace(/\D/g,'')===cel)||(String(c.tgChatId||'')===String(chatId))})[0];
+    var cel=(info.celular||'').replace(/\D/g,''),ruc=(info.rucDni||info.ruc||'').replace(/\D/g,'');
+    var ex=crm.contactos.filter(function(c){return (ruc&&String(c.ruc||'').replace(/\D/g,'')===ruc)||(cel&&(c.cel||'').replace(/\D/g,'')===cel)||(String(c.tgChatId||'')===String(chatId))})[0];
     var nota={fecha:new Date().toISOString(),texto:'🤖 Bot ventas: '+(info.interes||'interesado')+(info.precot?(' | Pre-cot: '+info.precot):''),tipo:'wa'};
-    if(ex){ if(cel&&!ex.cel)ex.cel=cel; ex.tgChatId=chatId; ex.notas=ex.notas||[]; ex.notas.unshift(nota); ex.ultTocado=new Date().toISOString(); if(ex.etapa==='prospecto')ex.etapa='contactado'; }
-    else crm.contactos.push({id:'CT'+Date.now(),nombre:info.nombre||('Cliente Telegram '+(username||chatId)),empresa:'',ruc:'',cargo:'',cel:cel,email:'',etapa:'contactado',valorEst:0,origen:'telegram',tgChatId:chatId,notas:[nota],creado:new Date().toISOString(),ultTocado:new Date().toISOString()});
+    if(ex){ if(info.nombre&&!ex.nombre)ex.nombre=info.nombre; if(ruc&&!ex.ruc)ex.ruc=ruc; if(cel&&!ex.cel)ex.cel=cel; ex.tgChatId=chatId; ex.notas=ex.notas||[]; ex.notas.unshift(nota); ex.ultTocado=new Date().toISOString(); if(ex.etapa==='prospecto')ex.etapa='contactado'; }
+    else crm.contactos.push({id:'CT'+Date.now(),nombre:info.nombre||('Cliente Telegram '+(username||chatId)),empresa:info.nombre||'',ruc:ruc,cargo:'',cel:cel,email:'',etapa:'contactado',valorEst:0,origen:'telegram',tgChatId:chatId,notas:[nota],creado:new Date().toISOString(),ultTocado:new Date().toISOString()});
+    if(info.interes)crm.tareas.unshift({id:'TA'+Date.now(),contacto:info.nombre||('Cliente Telegram '+(username||chatId)),titulo:'Seguimiento lead Telegram: '+String(info.interes).slice(0,80),vence:new Date(Date.now()+86400000).toISOString().slice(0,10),estado:'pendiente',tipo:'seguimiento',tgChatId:chatId});
     data[key]=crm; await sbPutData(data);
   }catch(e){console.error('vbLeadACrm:',e.message);}
 }
@@ -847,22 +849,36 @@ async function vbProcesar(chatId,texto,nombre,username,esSimulacion){
     var pedido=await vbAnalizarPedido(ch.hist,ctx,cat);
     var rucTxt=texto.match(/\b(10|15|17|20)\d{9}\b|\b\d{8}\b/);
     if(rucTxt&&!pedido.rucDni)pedido.rucDni=rucTxt[0];
+    if(!pedido.rucDni&&ch.leadRuc)pedido.rucDni=ch.leadRuc;
+    if(!pedido.nombre&&ch.leadNombre)pedido.nombre=ch.leadNombre;
+    if(!pedido.telefono&&ch.leadCel)pedido.telefono=ch.leadCel;
+    if((!pedido.items||!pedido.items.length)&&ch.pedidoPendiente&&(pedido.rucDni||rucTxt)){
+      pedido=Object.assign({},ch.pedidoPendiente,{rucDni:pedido.rucDni||ch.leadRuc,nombre:pedido.nombre||ch.leadNombre,telefono:pedido.telefono||ch.leadCel,quiereCotizacion:true});
+    }
+    if(pedido.rucDni)ch.leadRuc=pedido.rucDni;
+    if(pedido.nombre)ch.leadNombre=pedido.nombre;
+    if(pedido.telefono)ch.leadCel=pedido.telefono;
     if(pedido&&pedido.quiereCotizacion&&Array.isArray(pedido.items)&&pedido.items.length){
       var encontrados=[],faltantes=[];
       pedido.items.forEach(function(it){var p=vbMatchProducto(it.descripcion,cat);if(p&&p.precio>0){encontrados.push(Object.assign({},p,{qty:+it.cantidad||1}));}else faltantes.push(it);});
       if(faltantes.length){
         out.respuesta='Estoy validando stock y precio con proveedor, te envío la cotización en unos minutos.';
+        out.lead=true;out.rucDni=pedido.rucDni||ch.leadRuc||'';out.nombre=pedido.nombre||out.nombre||ch.leadNombre;out.celular=pedido.telefono||out.celular||ch.leadCel;out.interes=faltantes.map(function(x){return x.descripcion}).join('; ');out.precot='Pendiente de proveedor MERINSA';
+        ch.pedidoPendiente=pedido;
         if(!esSimulacion){
           var link=vbMerinsaLink(pedido,faltantes);
           avisos.push('🟡 <b>Producto por validar con MERINSA</b>\n👤 '+(pedido.nombre||nombre||'Cliente Telegram')+(pedido.rucDni?('\n🧾 '+pedido.rucDni):'')+'\n📦 '+faltantes.map(function(x){return (x.cantidad||1)+' und '+x.descripcion}).join('; ')+'\n\n<a href="'+link+'">Abrir WhatsApp a Merinsa</a>');
         }
       }else if(encontrados.length&&pedido.rucDni){
         if(!esSimulacion)autoCot=await vbGuardarCotizacionYCRM(pedido,encontrados,chatId,username,nombre);
-        out.respuesta='Listo, preparé tu cotización formal. Te la envío en PDF por aquí mismo. ✅';
-        var simTot=encontrados.reduce(function(a,x){return a+(+x.qty||1)*(+x.precio||0)},0),simMon=(pedido.monedaPreferida||encontrados[0].mon||'S/');
-        out.lead=true; out.nombre=pedido.nombre||out.nombre; out.celular=pedido.telefono||out.celular; out.interes=encontrados.map(function(x){return x.n}).join('; '); out.precot=autoCot?('COT-'+autoCot.cot.num+' total '+pdfMoney(autoCot.cot.tot,autoCot.cot.mon)):('SIM total '+pdfMoney(simTot,simMon));
+        out.respuesta='Listo, preparé tu cotización formal. Te la envío por aquí mismo. ✅';
+        var simSub=encontrados.reduce(function(a,x){return a+(+x.qty||1)*(+x.precio||0)},0),simMon=(pedido.monedaPreferida||encontrados[0].mon||'S/');
+        out.lead=true; out.rucDni=pedido.rucDni||out.rucDni; out.nombre=pedido.nombre||out.nombre; out.celular=pedido.telefono||out.celular; out.interes=encontrados.map(function(x){return x.n}).join('; '); out.precot=autoCot?('COT-'+autoCot.cot.num+' total '+pdfMoney(autoCot.cot.tot,autoCot.cot.mon)):('SIM total '+pdfMoney(simSub*1.18,simMon));
+        ch.pedidoPendiente=null;
       }else if(encontrados.length&&!pedido.rucDni){
         out.respuesta='Sí puedo cotizarlo. Para emitir la cotización formal, por favor envíame tu RUC o DNI.';
+        out.lead=true;out.interes=encontrados.map(function(x){return x.n}).join('; ');out.rucDni='';
+        ch.pedidoPendiente=pedido;
       }
     }
   }catch(e){console.error('auto cotizacion telegram:',e.message);}
@@ -902,9 +918,8 @@ app.post('/api/ventasbot/webhook',async function(req,res){
     var nombre=((msg.from&&msg.from.first_name)||'')+' '+((msg.from&&msg.from.last_name)||'');
     var out=await vbProcesar(chatId,texto,nombre.trim(),(msg.from&&msg.from.username)||'',false);
     await vbSend(tok,chatId,out.respuesta||'…');
-    if(out.autoCot&&out.autoCot.pdf){
-      if(out.autoCot.html)await vbSendDoc(tok,chatId,'COT-'+out.autoCot.cot.num+'_SKY_BLUE_SIGMA.html',out.autoCot.html,'Cotización COT-'+out.autoCot.cot.num+' exportada desde SIGMA. Abre el archivo y toca Imprimir PDF.');
-      await vbSendDoc(tok,chatId,'COT-'+out.autoCot.cot.num+'_SKY_BLUE.pdf',out.autoCot.pdf,'Respaldo PDF de la cotización COT-'+out.autoCot.cot.num+'.');
+    if(out.autoCot&&out.autoCot.html){
+      await vbSendDoc(tok,chatId,'COT-'+out.autoCot.cot.num+'_SKY_BLUE_SIGMA.html',out.autoCot.html,'Cotización formal COT-'+out.autoCot.cot.num+' exportada desde SIGMA.');
       try{await tgSend('✅ <b>Cotización enviada por Telegram</b>\nCOT-'+out.autoCot.cot.num+'\n👤 '+out.autoCot.cot.cli.n+'\n🧾 '+(out.autoCot.cot.cli.ruc||'')+'\n💰 '+pdfMoney(out.autoCot.cot.tot,out.autoCot.cot.mon)+'\n\n<a href="'+PROD_URL+'/api/cotizaciones/export/'+out.autoCot.cot.num+'">Exportar formato SIGMA</a>\n<a href="'+PROD_URL+'/cotizador?tab=hist">Abrir en SIGMA Cotizador</a>');}catch(e){}
     }
   }catch(e){console.error('ventasbot webhook:',e.message);}
