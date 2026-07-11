@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 250">
+<g fill="#ffffff">
+<path d="M258 18 L300 48 L342 18 L342 46 L300 76 L258 46 Z"/>
+<path d="M272 60 L300 80 L328 60 L328 84 L300 104 L272 84 Z"/>
+</g>
+<text x="300" y="188" text-anchor="middle" font-family="Arial Black, Arial, sans-serif" font-weight="900" font-size="128" letter-spacing="6" fill="#ffffff">DEIKO</text>
+<rect x="150" y="204" width="300" height="3" fill="#c9a24b"/>
+<text x="300" y="238" text-anchor="middle" font-family="Arial, sans-serif" font-weight="700" font-size="34" letter-spacing="20" fill="#ffffff">EMPRESAS</text>
+</svg>
