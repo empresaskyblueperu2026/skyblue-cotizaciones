@@ -1,9 +1,11 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 250">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 620 360">
+<text x="310" y="150" text-anchor="middle" font-family="Arial Black, Arial, sans-serif" font-weight="900" font-size="150" letter-spacing="4" fill="#ffffff">DEIKO</text>
+<text x="310" y="196" text-anchor="middle" font-family="Arial, sans-serif" font-weight="700" font-size="40" letter-spacing="22" fill="#ffffff">EMPRESAS</text>
 <g fill="#ffffff">
-<path d="M258 18 L300 48 L342 18 L342 46 L300 76 L258 46 Z"/>
-<path d="M272 60 L300 80 L328 60 L328 84 L300 104 L272 84 Z"/>
+<path d="M60 225 L292 340 L292 300 L120 214 Z"/>
+<path d="M560 225 L328 340 L328 300 L500 214 Z"/>
+<path d="M150 262 L292 355 L292 322 L188 258 Z"/>
+<path d="M470 262 L328 355 L328 322 L432 258 Z"/>
 </g>
-<text x="300" y="188" text-anchor="middle" font-family="Arial Black, Arial, sans-serif" font-weight="900" font-size="128" letter-spacing="6" fill="#ffffff">DEIKO</text>
-<rect x="150" y="204" width="300" height="3" fill="#c9a24b"/>
-<text x="300" y="238" text-anchor="middle" font-family="Arial, sans-serif" font-weight="700" font-size="34" letter-spacing="20" fill="#ffffff">EMPRESAS</text>
+<rect x="303" y="300" width="14" height="60" fill="#264890"/>
 </svg>
