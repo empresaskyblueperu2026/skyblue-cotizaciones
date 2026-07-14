@@ -46,6 +46,11 @@ async function sbPutData(obj){
   var r=await fetch(SB_URL+'/storage/v1/object/'+SB_BUCKET+'/'+SB_OBJ,{method:'POST',headers:{'Authorization':'Bearer '+SB_KEY,'apikey':SB_KEY,'Content-Type':'application/json','cache-control':'no-cache','x-upsert':'true'},body:JSON.stringify(obj)});
   if(!r.ok){var t=await r.text();throw new Error('put '+r.status+' '+t);}
 }
+async function sbUploadFile(p,buf,ct){
+  await sbEnsureBucket();
+  var r=await fetch(SB_URL+'/storage/v1/object/'+SB_BUCKET+'/'+p,{method:'POST',headers:{'Authorization':'Bearer '+SB_KEY,'apikey':SB_KEY,'Content-Type':ct||'application/octet-stream','cache-control':'no-cache','x-upsert':'true'},body:buf});
+  if(!r.ok){var t=await r.text();throw new Error('upload '+r.status+' '+t);}
+}
 
 // ---- Modo local: si falta una llave, reenvia la llamada a la nube (PC = cliente de la nube) ----
 var PROD_URL=process.env.PROD_URL||'https://skyblue-cotizaciones-production.up.railway.app';
@@ -1095,6 +1100,36 @@ app.get('/deiko-footer.png',function(req,res){var p=path.join(__dirname,'deiko-f
 app.get('/deiko-firma.png',function(req,res){var p=path.join(__dirname,'deiko-firma.png');fs.access(p,function(e){if(e)res.status(404).end();else res.sendFile(p);});});
 app.get('/deiko-logo-white.png',function(req,res){var p=path.join(__dirname,'deiko-logo-white.png');fs.access(p,function(e){if(e)res.status(404).end();else res.sendFile(p);});});
 app.get('/deiko-logo-blue.png',function(req,res){var p=path.join(__dirname,'deiko-logo-blue.png');fs.access(p,function(e){if(e)res.status(404).end();else res.sendFile(p);});});
+;app.post('/api/exp/upload',async function(req,res){
+  try{
+    var b=req.body||{}; var p=(b.path||'').replace(/^\/+/,'');
+    if(!/^exp\//.test(p))return res.status(400).json({error:'ruta invalida'});
+    if(!b.b64)return res.status(400).json({error:'sin archivo'});
+    if(!sbReady())return proxyCloud(req,res);
+    var buf=Buffer.from(b.b64,'base64');
+    await sbUploadFile(p,buf,b.mime||'application/octet-stream');
+    res.json({ok:true,path:p});
+  }catch(e){res.status(500).json({error:e.message});}
+});
+app.get('/api/exp/file',async function(req,res){
+  try{
+    var p=(req.query.p||'').replace(/^\/+/,'');
+    if(!/^exp\//.test(p))return res.status(400).end();
+    if(sbReady()){
+      var r=await fetch(SB_URL+'/storage/v1/object/'+SB_BUCKET+'/'+p,{headers:{'Authorization':'Bearer '+SB_KEY,'apikey':SB_KEY}});
+      if(!r.ok)return res.status(404).end();
+      var ct=r.headers.get('content-type')||'application/octet-stream';
+      var ab=await r.arrayBuffer();
+      res.set('Content-Type',ct);res.set('Cache-Control','private, no-store');
+      return res.send(Buffer.from(ab));
+    }
+    var r2=await fetch(PROD_URL+'/api/exp/file?p='+encodeURIComponent(p));
+    if(!r2.ok)return res.status(404).end();
+    var ct2=r2.headers.get('content-type')||'application/octet-stream';
+    var ab2=await r2.arrayBuffer();
+    res.set('Content-Type',ct2);return res.send(Buffer.from(ab2));
+  }catch(e){res.status(500).end();}
+});
 app.get('/health',function(req,res){res.status(200).json({status:'ok',version:'2.3'});});
 app.get('/api/diag',function(req,res){
   res.json({

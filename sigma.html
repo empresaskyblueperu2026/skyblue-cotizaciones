@@ -603,6 +603,7 @@ applyTheme(localStorage.getItem('sigma_theme2')||'light');
 var NAV=[
   {cat:'Principal'},
   {id:'dashboard',ic:'dashboard',lb:'Dashboard'},
+  {id:'experiencia',ic:'robot',lb:'Experiencia IA'},
   {cat:'Comercial'},
   {id:'oportunidades',ic:'search',lb:'Oportunidades'},
   {id:'proyectos',ic:'clipboard',lb:'Proyectos Públicos'},
@@ -641,7 +642,7 @@ function navClick(it){
   toggleMenu(false);
   if(it.tab){window.location.href='/cotizador?tab='+it.tab;return}
   ACTIVE=it.id;renderNav();
-  if(it.id==='dashboard')refreshDash();else if(it.id==='proyectos')renderProyectos();else if(it.id==='boveda')renderBoveda();else if(it.id==='proveedores')renderProveedores();else if(it.id==='crm')renderCRM();else if(it.id==='clientes')renderClientes();else if(it.id==='productos')renderProductos();else if(it.id==='ocrec')renderOCRecibidas();else if(it.id==='segcot')renderSegCot();else if(it.id==='facturacion')renderFacturacion();else if(it.id==='cobranza')renderCobranza();else if(it.id==='traza')renderTraza();else if(it.id==='contabilidad')renderContabilidad();else if(it.id==='reportes')renderReportes();else if(it.id==='config')renderConfig();else if(it.id==='oportunidades')renderOportunidades();else if(it.id==='logistica')renderLogistica();else if(it.id==='conformidad')renderConformidad();else renderSoon(it);
+  if(it.id==='dashboard')refreshDash();else if(it.id==='proyectos')renderProyectos();else if(it.id==='boveda')renderBoveda();else if(it.id==='proveedores')renderProveedores();else if(it.id==='crm')renderCRM();else if(it.id==='clientes')renderClientes();else if(it.id==='productos')renderProductos();else if(it.id==='ocrec')renderOCRecibidas();else if(it.id==='segcot')renderSegCot();else if(it.id==='facturacion')renderFacturacion();else if(it.id==='cobranza')renderCobranza();else if(it.id==='traza')renderTraza();else if(it.id==='contabilidad')renderContabilidad();else if(it.id==='reportes')renderReportes();else if(it.id==='config')renderConfig();else if(it.id==='oportunidades')renderOportunidades();else if(it.id==='logistica')renderLogistica();else if(it.id==='conformidad')renderConformidad();else if(it.id==='experiencia')renderExperiencia();else renderSoon(it);
 }
 
 function selectEmpresa(e){
@@ -2204,6 +2205,7 @@ function cloudSyncPush(){
     payload['conf_'+EMP.id]=JSON.parse(localStorage.getItem(confKey())||'[]');
     payload['crm_'+EMP.id]=JSON.parse(localStorage.getItem(crmKey())||'{}');
     payload['logist_'+EMP.id]=JSON.parse(localStorage.getItem(logistKey())||'[]');
+    payload['exp_'+EMP.id]=JSON.parse(localStorage.getItem(expKey())||'[]');
     fetch('/api/data',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
   }catch(e){}
 }
@@ -2221,6 +2223,7 @@ function cloudSyncPull(cb){
       if(d&&d['crm_'+EMP.id])localStorage.setItem(crmKey(),JSON.stringify(d['crm_'+EMP.id]));
       if(d&&d['oport_'+EMP.id])localStorage.setItem(oportKey(),JSON.stringify(d['oport_'+EMP.id]));
       if(d&&d['logist_'+EMP.id])localStorage.setItem(logistKey(),JSON.stringify(d['logist_'+EMP.id]));
+    if(d&&d['exp_'+EMP.id])localStorage.setItem(expKey(),JSON.stringify(d['exp_'+EMP.id]));
     }catch(e){}
     try{autoMergeCatalog();}catch(e){}
     if(cb)cb();
@@ -3500,6 +3503,601 @@ fetch('/api/empresas').then(function(r){return r.json()}).then(function(list){
   var saved=localStorage.getItem('sigma_empresa');
   if(saved){var e=EMPRESAS.filter(function(x){return x.id===saved})[0];if(e)selectEmpresa(e)}
 }).catch(function(){$('ecards').innerHTML='<div style="grid-column:1/-1;text-align:center;color:var(--tmuted);font-size:13px;padding:30px">No se pudo conectar. Reintenta.</div>'});
+
+/* ═══════ MODULO EXPERIENCIA IA (inyectado) ═══════ */
+/* ═══════════════════ MÓDULO EXPERIENCIA IA (aislado por empresa: sigma_exp_<EMP.id>) ═══════════════════ */
+var EXP=[];
+function expKey(){return 'sigma_exp_'+(EMP?EMP.id:'x');}
+function loadEXP(){try{EXP=JSON.parse(localStorage.getItem(expKey())||'[]');}catch(e){EXP=[];}if(!Array.isArray(EXP))EXP=[];}
+function saveEXP(){try{localStorage.setItem(expKey(),JSON.stringify(EXP));}catch(e){}try{cloudSyncPush();}catch(e){}}
+function expMoney(n,mon){var m=(mon==='USD'||mon==='US$')?'US$':'S/';return m+' '+(+n||0).toLocaleString('es-PE',{minimumFractionDigits:2,maximumFractionDigits:2});}
+function expKpi(lb,val,col){return '<div class="kpi"><div class="val mono" style="font-size:16px'+(col?';color:'+col:'')+'">'+val+'</div><div class="lab">'+lb+'</div></div>';}
+function expHE(s){return (''+(s==null?'':s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function expNextCode(){var mx=0;EXP.forEach(function(e){var m=/EXP-(\d+)/.exec(e.code||'');if(m)mx=Math.max(mx,+m[1]);});return 'EXP-'+String(mx+1).padStart(4,'0');}
+function expUID(){return 'x'+Date.now().toString(36)+Math.random().toString(36).slice(2,7);}
+var EXP_TIPOS=['FACTURA','BOLETA','ORDEN_DE_COMPRA','ORDEN_DE_SERVICIO','CONTRATO','SOLICITUD_DE_COTIZACION','COTIZACION','GUIA_DE_REMISION','VOUCHER','TRANSFERENCIA_BANCARIA','ACTA_DE_CONFORMIDAD','CONSTANCIA_DE_PRESTACION','CERTIFICADO','COMPROBANTE_DE_RETENCION','OTRO'];
+var _expFiltro={q:'',rubro:'',tipo:'',cliente:'',anio:'',pub:'',min:'',max:'',estado:''};
+var _expVista='tabla';
+
+/* ───────── DASHBOARD ───────── */
+function renderExperiencia(){
+  loadEXP();
+  var totMonto=0,clientes={},completas=0,observ=0,rubros={},acred=0;
+  EXP.forEach(function(e){
+    totMonto+=(+e.total_amount||0);
+    acred+=(+e.paid_amount||0);
+    if(e.client_ruc)clientes[e.client_ruc]=(e.client_name||e.client_ruc);
+    if(e.documentary_status==='COMPLETA')completas++;
+    if(e.documentary_status==='INCONSISTENTE'||e.documentary_status==='REQUIERE_REVISION'||(e.alerts&&e.alerts.length))observ++;
+    if(e.primary_category)rubros[e.primary_category]=(rubros[e.primary_category]||0)+(+e.total_amount||0);
+  });
+  var nClientes=Object.keys(clientes).length, nRubros=Object.keys(rubros).length;
+  var h='';
+  h+='<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:14px">';
+  h+='<div><div style="font-size:20px;font-weight:800;color:var(--tx)">EXPERIENCIA EMPRESARIAL — IA</div>'+
+     '<div style="font-size:12px;color:var(--tmuted)">'+expHE(EMP?EMP.nombre:'')+' · base histórica de experiencias acreditables</div></div>';
+  h+='<div style="display:flex;gap:8px;flex-wrap:wrap">'+
+     '<button class="btn" onclick="expNueva()" style="background:var(--acc);color:#fff;font-weight:700">+ NUEVA EXPERIENCIA</button>'+
+     '<button class="btn2" onclick="expCuadro()">📋 Cuadro de experiencia</button>'+
+     '<button class="btn2" onclick="expSelMonto()">🎯 Selección por monto</button>'+
+     '<button class="btn2" onclick="expTDR()">📑 Compatibilidad TDR</button>'+
+     (EXP.length?'':'<button class="btn2" onclick="expCargarEjemplos()">✨ Cargar 2 ejemplos</button>')+
+     '</div></div>';
+  // KPIs
+  h+='<div class="kpis" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:14px">';
+  h+=expKpi('Experiencias registradas',EXP.length,'#0ea5e9');
+  h+=expKpi('Monto total acreditado',expMoney(totMonto,'PEN'),'#14b8a6');
+  h+=expKpi('Clientes únicos',nClientes,'#2563eb');
+  h+=expKpi('Experiencias completas',completas,'#16a34a');
+  h+=expKpi('Con observaciones',observ,observ?'#f59e0b':'#64748b');
+  h+=expKpi('Rubros registrados',nRubros,'#8b5cf6');
+  h+='</div>';
+  // graficos
+  h+='<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px;margin-bottom:14px">';
+  h+=expChartRubro(rubros);
+  h+=expChartTipo();
+  h+=expChartPubPriv();
+  h+='</div>';
+  // toolbar filtros
+  h+='<div class="card" style="padding:10px;margin-bottom:10px"><div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">';
+  h+='<input id="expQ" placeholder="🔎 Buscar (objeto, ítem, marca, cliente, palabra clave)..." value="'+expHE(_expFiltro.q)+'" oninput="_expFiltro.q=this.value;expRenderTabla()" style="flex:1;min-width:220px;padding:8px 10px;border:1px solid var(--bd);border-radius:8px;background:var(--pane);color:var(--tx);font-size:13px">';
+  h+='<button class="btn2" onclick="expSemantica()">🧠 Búsqueda IA</button>';
+  h+='<select onchange="_expFiltro.tipo=this.value;expRenderTabla()" class="expsel">'+expOpts(['','BIENES','SERVICIOS','OBRAS','CONSULTORIA','MIXTA'],_expFiltro.tipo,'Tipo')+'</select>';
+  h+='<select onchange="_expFiltro.pub=this.value;expRenderTabla()" class="expsel">'+expOpts(['','PUBLICO','PRIVADO'],_expFiltro.pub,'Sector')+'</select>';
+  h+='<select onchange="_expFiltro.estado=this.value;expRenderTabla()" class="expsel">'+expOpts(['','COMPLETA','PARCIAL','INCONSISTENTE','REQUIERE_REVISION'],_expFiltro.estado,'Estado')+'</select>';
+  h+='<input placeholder="Rubro" value="'+expHE(_expFiltro.rubro)+'" oninput="_expFiltro.rubro=this.value;expRenderTabla()" class="expsel" style="width:130px">';
+  h+='<input placeholder="Año" value="'+expHE(_expFiltro.anio)+'" oninput="_expFiltro.anio=this.value;expRenderTabla()" class="expsel" style="width:70px">';
+  h+='<input placeholder="Monto mín" value="'+expHE(_expFiltro.min)+'" oninput="_expFiltro.min=this.value;expRenderTabla()" class="expsel" style="width:90px">';
+  h+='<input placeholder="Monto máx" value="'+expHE(_expFiltro.max)+'" oninput="_expFiltro.max=this.value;expRenderTabla()" class="expsel" style="width:90px">';
+  h+='<button class="btn2" onclick="_expVista=(_expVista===\'tabla\'?\'cards\':\'tabla\');expRenderTabla()">🔀 Vista</button>';
+  h+='<button class="btn2" onclick="expExportCSV()">⬇ CSV</button>';
+  h+='</div></div>';
+  h+='<div id="expTablaWrap"></div>';
+  h+='<style>.expsel{padding:7px 9px;border:1px solid var(--bd);border-radius:8px;background:var(--pane);color:var(--tx);font-size:12px}.expbadge{display:inline-block;padding:2px 8px;border-radius:999px;font-size:10px;font-weight:700}</style>';
+  $('content').innerHTML=h;
+  expRenderTabla();
+}
+function expOpts(arr,sel,ph){return arr.map(function(v){return '<option value="'+v+'"'+(v===sel?' selected':'')+'>'+(v||ph)+'</option>';}).join('');}
+function expChartRubro(rubros){
+  var keys=Object.keys(rubros).sort(function(a,b){return rubros[b]-rubros[a];}).slice(0,6);
+  var mx=keys.length?rubros[keys[0]]:1;
+  var b='<div class="card" style="padding:12px"><div style="font-size:12px;font-weight:700;color:var(--tx);margin-bottom:8px">Experiencia acumulada por rubro</div>';
+  if(!keys.length)b+='<div style="color:var(--tmuted);font-size:12px">Sin datos aún.</div>';
+  keys.forEach(function(k){var p=Math.max(4,Math.round(rubros[k]/mx*100));b+='<div style="margin-bottom:6px"><div style="display:flex;justify-content:space-between;font-size:11px;color:var(--tx)"><span>'+expHE(k)+'</span><span class="mono">'+expMoney(rubros[k],"PEN")+'</span></div><div style="height:7px;background:var(--bd);border-radius:4px;overflow:hidden"><div style="height:100%;width:'+p+'%;background:#0ea5e9"></div></div></div>';});
+  return b+'</div>';
+}
+function expChartTipo(){
+  var t={BIENES:0,SERVICIOS:0,OBRAS:0,CONSULTORIA:0};EXP.forEach(function(e){var k=e.experience_type;if(t[k]!=null)t[k]+=(+e.total_amount||0);});
+  var mx=Math.max(1,t.BIENES,t.SERVICIOS,t.OBRAS,t.CONSULTORIA);var cols={BIENES:'#14b8a6',SERVICIOS:'#2563eb',OBRAS:'#f59e0b',CONSULTORIA:'#8b5cf6'};
+  var b='<div class="card" style="padding:12px"><div style="font-size:12px;font-weight:700;color:var(--tx);margin-bottom:8px">Bienes vs Servicios vs Obras vs Consultoría</div>';
+  ['BIENES','SERVICIOS','OBRAS','CONSULTORIA'].forEach(function(k){var p=Math.max(4,Math.round(t[k]/mx*100));b+='<div style="margin-bottom:6px"><div style="display:flex;justify-content:space-between;font-size:11px;color:var(--tx)"><span>'+k+'</span><span class="mono">'+expMoney(t[k],"PEN")+'</span></div><div style="height:7px;background:var(--bd);border-radius:4px;overflow:hidden"><div style="height:100%;width:'+p+'%;background:'+cols[k]+'"></div></div></div>';});
+  return b+'</div>';
+}
+function expChartPubPriv(){
+  var pub=0,priv=0;EXP.forEach(function(e){if(e.client_type==='PUBLICO')pub+=(+e.total_amount||0);else if(e.client_type==='PRIVADO')priv+=(+e.total_amount||0);});
+  var tot=pub+priv||1;
+  var b='<div class="card" style="padding:12px"><div style="font-size:12px;font-weight:700;color:var(--tx);margin-bottom:8px">Público vs Privado</div>';
+  b+='<div style="display:flex;height:22px;border-radius:6px;overflow:hidden;margin-bottom:8px"><div style="width:'+Math.round(pub/tot*100)+'%;background:#0d3b6e"></div><div style="width:'+Math.round(priv/tot*100)+'%;background:#14b8a6"></div></div>';
+  b+='<div style="display:flex;justify-content:space-between;font-size:11px;color:var(--tx)"><span>🏛 Público: '+expMoney(pub,"PEN")+'</span><span>🏢 Privado: '+expMoney(priv,"PEN")+'</span></div>';
+  return b+'</div>';
+}
+function expFiltradas(){
+  var f=_expFiltro;
+  return EXP.filter(function(e){
+    if(f.tipo&&e.experience_type!==f.tipo)return false;
+    if(f.pub&&e.client_type!==f.pub)return false;
+    if(f.estado&&e.documentary_status!==f.estado)return false;
+    if(f.rubro&&!((e.primary_category||'')+' '+(e.secondary_categories||[]).join(' ')).toLowerCase().includes(f.rubro.toLowerCase()))return false;
+    if(f.anio&&!((e.start_date||e.date||'')+'').includes(f.anio))return false;
+    if(f.min&&(+e.total_amount||0)<parseFloat(f.min))return false;
+    if(f.max&&(+e.total_amount||0)>parseFloat(f.max))return false;
+    if(f.q){var blob=[e.code,e.client_name,e.client_ruc,e.normalized_object,e.original_object,e.short_title,e.executive_summary,e.primary_category,(e.secondary_categories||[]).join(' '),(e.items||[]).map(function(i){return [i.normalized_description,i.original_description,i.brand,i.category,(i.keywords||[]).join(' '),(i.synonyms||[]).join(' ')].join(' ');}).join(' ')].join(' ').toLowerCase();if(!blob.includes(f.q.toLowerCase()))return false;}
+    return true;
+  });
+}
+function expEstadoBadge(s){var c={COMPLETA:'#16a34a',PARCIAL:'#f59e0b',INCONSISTENTE:'#ef4444',REQUIERE_REVISION:'#f59e0b'}[s]||'#64748b';return '<span class="expbadge" style="background:'+c+'22;color:'+c+'">'+(s||'—')+'</span>';}
+function expRenderTabla(){
+  var list=expFiltradas();var w=$('expTablaWrap');if(!w)return;
+  if(!list.length){w.innerHTML='<div class="card" style="padding:30px;text-align:center;color:var(--tmuted)">No hay experiencias que coincidan. Usa <b>+ NUEVA EXPERIENCIA</b> para crear una con IA.</div>';return;}
+  if(_expVista==='cards'){
+    var c='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px">';
+    list.forEach(function(e){c+='<div class="card" style="padding:12px;cursor:pointer" onclick="expOpen(\''+e.id+'\')">'+
+      '<div style="display:flex;justify-content:space-between"><span class="mono" style="font-weight:800;color:var(--acc)">'+expHE(e.code)+'</span>'+expEstadoBadge(e.documentary_status)+'</div>'+
+      '<div style="font-weight:700;color:var(--tx);margin:6px 0;font-size:13px">'+expHE(e.short_title||e.normalized_object||'—')+'</div>'+
+      '<div style="font-size:11px;color:var(--tmuted)">'+expHE(e.client_name||'')+(e.client_ruc?' · RUC '+e.client_ruc:'')+'</div>'+
+      '<div style="display:flex;justify-content:space-between;margin-top:8px;font-size:12px"><span class="mono" style="font-weight:800;color:var(--tx)">'+expMoney(e.total_amount,e.currency)+'</span><span style="color:var(--tmuted)">IA '+(e.ai_confidence||0)+'%</span></div>'+
+      '</div>';});
+    w.innerHTML=c+'</div>';return;
+  }
+  var t='<div class="card" style="padding:0;overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr style="background:var(--pane2,rgba(0,0,0,.03))">';
+  ['Código','Fecha','Cliente','Objeto','Rubro','Tipo','Monto','Acreditado','Docs','Estado','IA','Acciones'].forEach(function(x){t+='<th style="text-align:left;padding:8px;color:var(--tmuted);font-size:10px;text-transform:uppercase;white-space:nowrap">'+x+'</th>';});
+  t+='</tr></thead><tbody>';
+  list.forEach(function(e){
+    t+='<tr style="border-top:1px solid var(--bd)">'+
+      '<td style="padding:8px"><span class="mono" style="font-weight:700;color:var(--acc)">'+expHE(e.code)+'</span></td>'+
+      '<td style="padding:8px;white-space:nowrap">'+expHE(e.start_date||e.date||'—')+'</td>'+
+      '<td style="padding:8px">'+expHE(e.client_name||'—')+'<div style="font-size:10px;color:var(--tmuted)">'+(e.client_ruc||'')+'</div></td>'+
+      '<td style="padding:8px;max-width:240px">'+expHE(e.short_title||e.normalized_object||'—')+'</td>'+
+      '<td style="padding:8px">'+expHE(e.primary_category||'—')+'</td>'+
+      '<td style="padding:8px">'+expHE(e.experience_type||'—')+'</td>'+
+      '<td style="padding:8px;text-align:right;white-space:nowrap" class="mono">'+expMoney(e.total_amount,e.currency)+'</td>'+
+      '<td style="padding:8px;text-align:right;white-space:nowrap" class="mono">'+expMoney(e.paid_amount,e.currency)+'</td>'+
+      '<td style="padding:8px;text-align:center">'+((e.documents||[]).length)+'</td>'+
+      '<td style="padding:8px">'+expEstadoBadge(e.documentary_status)+'</td>'+
+      '<td style="padding:8px;text-align:center;font-weight:700;color:'+((e.ai_confidence||0)>=90?'#16a34a':'#f59e0b')+'">'+(e.ai_confidence||0)+'%</td>'+
+      '<td style="padding:8px;white-space:nowrap"><button class="btn2" style="padding:4px 8px;font-size:11px" onclick="expOpen(\''+e.id+'\')">Abrir</button> <button class="btn2" style="padding:4px 8px;font-size:11px" onclick="expDel(\''+e.id+'\')">🗑</button></td>'+
+      '</tr>';
+  });
+  t+='</tbody></table></div>';
+  t+='<div style="font-size:11px;color:var(--tmuted);margin-top:6px">'+list.length+' experiencia(s) · Monto total filtrado: '+expMoney(list.reduce(function(a,e){return a+(+e.total_amount||0);},0),'PEN')+'</div>';
+  w.innerHTML=t;
+}
+function expDel(id){if(!confirm('¿Eliminar esta experiencia? No se puede deshacer.'))return;EXP=EXP.filter(function(e){return e.id!==id;});saveEXP();renderExperiencia();}
+
+/* ───────── NUEVA EXPERIENCIA (carga + IA) ───────── */
+var _expFiles=[];
+function expNueva(){
+  _expFiles=[];
+  var h='<div style="max-width:900px;margin:0 auto">';
+  h+='<button class="btn2" onclick="renderExperiencia()" style="margin-bottom:10px">← Volver</button>';
+  h+='<div class="card" style="padding:18px">';
+  h+='<div style="font-size:18px;font-weight:800;color:var(--tx)">NUEVA EXPERIENCIA EMPRESARIAL</div>';
+  h+='<div style="font-size:12px;color:var(--tmuted);margin:6px 0 14px">Sube todos los documentos relacionados con esta experiencia. No importa el orden. La IA identificará, clasificará y relacionará automáticamente los documentos.</div>';
+  h+='<div id="expDrop" style="border:2px dashed var(--bd);border-radius:12px;padding:30px;text-align:center;cursor:pointer;background:var(--pane)" onclick="$(\'expFileInput\').click()">';
+  h+='<div style="font-size:34px">📄⬆</div><div style="font-weight:700;color:var(--tx);margin-top:6px">Arrastra y suelta o haz clic para seleccionar</div>';
+  h+='<div style="font-size:11px;color:var(--tmuted);margin-top:4px">PDF · JPG · PNG · WEBP · XML · ZIP</div></div>';
+  h+='<input type="file" id="expFileInput" multiple accept=".pdf,.jpg,.jpeg,.png,.webp,.xml,.zip,application/pdf,image/*" style="display:none" onchange="expAddFiles(this.files)">';
+  h+='<div id="expFileList" style="margin-top:14px"></div>';
+  h+='<div style="display:flex;justify-content:space-between;align-items:center;margin-top:14px">';
+  h+='<div id="expProg" style="font-size:12px;color:var(--tmuted)"></div>';
+  h+='<button id="expAnalizarBtn" class="btn" onclick="expAnalizar()" style="background:var(--acc);color:#fff;font-weight:700;opacity:.5;pointer-events:none">🤖 ANALIZAR CON IA</button>';
+  h+='</div></div></div>';
+  $('content').innerHTML=h;
+  var dz=$('expDrop');
+  ['dragover','dragenter'].forEach(function(ev){dz.addEventListener(ev,function(e){e.preventDefault();dz.style.borderColor='var(--acc)';});});
+  ['dragleave','drop'].forEach(function(ev){dz.addEventListener(ev,function(e){e.preventDefault();dz.style.borderColor='var(--bd)';});});
+  dz.addEventListener('drop',function(e){if(e.dataTransfer&&e.dataTransfer.files)expAddFiles(e.dataTransfer.files);});
+}
+function expAddFiles(files){
+  [].slice.call(files).forEach(function(f){
+    if(f.size>25*1024*1024){toast('Archivo muy grande (máx 25MB): '+f.name);return;}
+    _expFiles.push({id:expUID(),file:f,name:f.name,size:f.size,estado:'Pendiente',b64:null,mime:f.type,doc:null});
+  });
+  expPintarFiles();
+}
+function expPintarFiles(){
+  var w=$('expFileList');if(!w)return;
+  if(!_expFiles.length){w.innerHTML='';$('expAnalizarBtn').style.opacity='.5';$('expAnalizarBtn').style.pointerEvents='none';return;}
+  $('expAnalizarBtn').style.opacity='1';$('expAnalizarBtn').style.pointerEvents='auto';
+  var h='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:8px">';
+  _expFiles.forEach(function(f){
+    var col={'Pendiente':'#64748b','Subiendo':'#0ea5e9','Leyendo':'#0ea5e9','Aplicando OCR':'#0ea5e9','Clasificando':'#8b5cf6','Extrayendo información':'#8b5cf6','Validando':'#f59e0b','Completado':'#16a34a','Error':'#ef4444'}[f.estado]||'#64748b';
+    h+='<div class="card" style="padding:9px;position:relative">'+
+      '<div style="display:flex;justify-content:space-between;gap:6px"><span style="font-size:12px;font-weight:600;color:var(--tx);word-break:break-all">'+expHE(f.name.slice(0,42))+'</span>'+
+      '<span style="cursor:pointer;color:var(--tmuted)" onclick="expRmFile(\''+f.id+'\')">✕</span></div>'+
+      '<div style="font-size:10px;color:var(--tmuted);margin-top:2px">'+(f.size/1024).toFixed(0)+' KB'+(f.doc&&f.doc.tipo?' · '+f.doc.tipo:'')+'</div>'+
+      '<div style="font-size:10px;font-weight:700;color:'+col+';margin-top:4px">● '+f.estado+'</div>'+
+      '</div>';
+  });
+  w.innerHTML=h+'</div>';
+}
+function expRmFile(id){_expFiles=_expFiles.filter(function(f){return f.id!==id;});expPintarFiles();}
+function _expReadB64(f){return new Promise(function(res){var rd=new FileReader();rd.onload=function(e){res(String(e.target.result).split(',')[1]);};rd.onerror=function(){res(null);};rd.readAsDataURL(f);});}
+function _expGemini(prompt,b64,mime){
+  var body={prompt:prompt};if(b64){body.imageBase64=b64;body.mimeType=mime;}
+  return fetch('/api/gemini',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}).then(function(r){return r.json();}).then(function(d){
+    if(d&&d.error)throw new Error((d.error.message||'IA')+'');
+    var tx='';if(d&&d.candidates&&d.candidates[0]&&d.candidates[0].content&&d.candidates[0].content.parts)tx=d.candidates[0].content.parts.map(function(p){return p.text||'';}).join('');
+    var m=tx.replace(/```json/g,'').replace(/```/g,'').match(/\{[\s\S]*\}/);
+    if(!m)throw new Error('Respuesta IA no válida');
+    return JSON.parse(m[0]);
+  });
+}
+var EXP_DOC_PROMPT='Eres un extractor documental peruano con OCR. Lee este documento y clasifícalo. Devuelve SOLO JSON válido sin markdown con esta forma exacta: {"tipo":"uno de: FACTURA,BOLETA,ORDEN_DE_COMPRA,ORDEN_DE_SERVICIO,CONTRATO,SOLICITUD_DE_COTIZACION,COTIZACION,GUIA_DE_REMISION,VOUCHER,TRANSFERENCIA_BANCARIA,ACTA_DE_CONFORMIDAD,CONSTANCIA_DE_PRESTACION,CERTIFICADO,COMPROBANTE_DE_RETENCION,OTRO","numero":null,"fecha":null,"emisor":null,"ruc_emisor":null,"receptor":null,"ruc_receptor":null,"moneda":null,"subtotal":null,"igv":null,"monto":null,"paginas":null,"items":[{"n":1,"desc":null,"tipo":"producto o servicio","marca":null,"modelo":null,"fabricante":null,"cantidad":null,"unidad":null,"precio_unitario":null,"subtotal":null}],"pago":{"banco":null,"operacion":null,"fecha":null,"hora":null,"ordenante":null,"beneficiario":null,"cuenta":null,"moneda":null,"importe":null},"pagina_monto":null,"confianza":0,"resumen":null}. REGLAS ESTRICTAS: 1) NUNCA inventes datos; si un dato no aparece pon null. 2) fecha en formato YYYY-MM-DD. 3) moneda: "PEN" para soles o "USD" para dolares. 4) monto = TOTAL FINAL impreso (con IGV si lo incluye); NO sumes items por tu cuenta. 5) items SOLO si el documento los lista (factura, orden, cotizacion, guia); si no, arreglo vacio. 6) pago SOLO si es VOUCHER o TRANSFERENCIA_BANCARIA; si no, deja todo null. 7) confianza 0-100 segun legibilidad. 8) pagina_monto = numero de pagina donde aparece el monto total.';
+function EXP_CONS_PROMPT(empN,empR){
+return 'Eres analista de experiencia empresarial para contrataciones en Peru. La empresa que ACREDITA la experiencia es "'+empN+'" (RUC '+empR+'). Te doy los datos extraidos de varios documentos de UNA sola operacion. Construye la ficha de experiencia. Devuelve SOLO JSON valido sin markdown: {"experience":{"client_name":null,"client_ruc":null,"client_type":"PUBLICO|PRIVADO|NO_DETERMINADO","experience_type":"BIENES|SERVICIOS|OBRAS|CONSULTORIA|MIXTA|OTRO","original_object":null,"normalized_object":null,"short_title":null,"executive_summary":null,"technical_description":null,"start_date":null,"end_date":null,"currency":"PEN|USD","subtotal":null,"tax":null,"total_amount":null,"delivery_location":null,"department":null,"province":null,"district":null,"primary_category":null,"secondary_categories":[]},"items":[{"original_description":null,"normalized_description":null,"item_type":"producto|servicio","brand":null,"model":null,"manufacturer":null,"quantity":null,"unit":null,"unit_price_without_tax":null,"unit_price_with_tax":null,"total_price":null,"category":null,"subcategory":null,"family":null,"keywords":[],"synonyms":[]}],"categories":[{"name":null,"type":"rubro|categoria|subcategoria|familia","confidence":0}],"validations":[{"field_name":null,"source_a":null,"value_a":null,"source_b":null,"value_b":null,"result":"COINCIDE|NO_COINCIDE|COINCIDE_PARCIALMENTE|NO_VERIFICABLE","severity":"alta|media|baja","explanation":null}],"alerts":[]}. REGLAS: 1) client = la CONTRAPARTE (NO la empresa que acredita). client_type PUBLICO si es entidad del Estado (municipalidad, ministerio, hospital, etc.), PRIVADO si es empresa. 2) total_amount = total de la FACTURA/CONTRATO (no de la cotizacion). 3) Extrae TODOS los items sin agrupar productos distintos; normaliza descripcion, marca, categoria y palabras clave. 4) Genera validaciones cruzadas comparando montos, items y RUC entre documentos. 5) NUNCA inventes; usa null. 6) experience_type segun el objeto.';
+}
+function expAnalizar(){
+  if(!_expFiles.length)return;
+  var btn=$('expAnalizarBtn');btn.style.pointerEvents='none';btn.style.opacity='.6';
+  var prog=$('expProg');
+  var pend=_expFiles.slice();
+  function setProg(pct,txt){if(prog)prog.innerHTML='<b>'+pct+'%</b> · '+txt;}
+  setProg(5,'Leyendo documentos...');
+  var i=0;
+  function next(){
+    if(i>=pend.length){return consolidar();}
+    var f=pend[i];
+    f.estado='Leyendo';expPintarFiles();
+    _expReadB64(f.file).then(function(b64){
+      f.b64=b64;
+      var chk=_prepararArchivoIA(b64,f.mime||'');
+      f.estado='Aplicando OCR';expPintarFiles();setProg(5+Math.round((i/pend.length)*55),'Leyendo '+f.name.slice(0,24)+'...');
+      if(!chk.ok){f.estado='Error';f.err=chk.msg;f.doc={tipo:'OTRO',confianza:0,resumen:chk.msg,items:[],pago:{}};expPintarFiles();i++;return next();}
+      f.estado='Extrayendo información';expPintarFiles();
+      _expGemini(EXP_DOC_PROMPT,b64,chk.mimeType).then(function(doc){
+        f.doc=doc||{};f.estado='Completado';expPintarFiles();i++;next();
+      }).catch(function(err){f.estado='Error';f.err=(err&&err.message)||'IA';f.doc={tipo:'OTRO',confianza:0,resumen:'No se pudo leer',items:[],pago:{}};expPintarFiles();i++;next();});
+    });
+  }
+  function consolidar(){
+    setProg(70,'Relacionando documentos...');
+    var docsData=_expFiles.map(function(f,ix){var d=f.doc||{};return {idx:ix,archivo:f.name,tipo:d.tipo,numero:d.numero,fecha:d.fecha,emisor:d.emisor,ruc_emisor:d.ruc_emisor,receptor:d.receptor,ruc_receptor:d.ruc_receptor,moneda:d.moneda,subtotal:d.subtotal,igv:d.igv,monto:d.monto,items:d.items||[],pago:d.pago||{}};});
+    var prompt=EXP_CONS_PROMPT(EMP?EMP.nombre:'',EMP?EMP.ruc:'')+'\n\nDOCUMENTOS EXTRAIDOS (JSON):\n'+JSON.stringify(docsData);
+    setProg(80,'Validando montos y pagos...');
+    _expGemini(prompt,null,null).then(function(res){
+      setProg(92,'Clasificando experiencia...');
+      expCrearFicha(res);
+    }).catch(function(err){
+      // fallback local si la consolidacion falla
+      expCrearFicha(expFallbackFicha());
+    });
+  }
+  next();
+}
+function expFallbackFicha(){
+  var fac=_expFiles.map(function(f){return f.doc;}).filter(function(d){return d&&(d.tipo==='FACTURA'||d.tipo==='BOLETA'||d.tipo==='CONTRATO');})[0]||{};
+  var items=[];_expFiles.forEach(function(f){(f.doc&&f.doc.items||[]).forEach(function(it){items.push({original_description:it.desc,normalized_description:it.desc,item_type:it.tipo,brand:it.marca,model:it.modelo,manufacturer:it.fabricante,quantity:it.cantidad,unit:it.unidad,unit_price_without_tax:it.precio_unitario,total_price:it.subtotal,keywords:[],synonyms:[]});});});
+  return {experience:{client_name:fac.receptor||fac.emisor,client_ruc:fac.ruc_receptor||fac.ruc_emisor,client_type:'NO_DETERMINADO',experience_type:'BIENES',original_object:fac.resumen,normalized_object:fac.resumen,short_title:fac.resumen,executive_summary:fac.resumen,currency:fac.moneda||'PEN',subtotal:fac.subtotal,tax:fac.igv,total_amount:fac.monto,primary_category:null,secondary_categories:[]},items:items,categories:[],validations:[],alerts:['Consolidación IA no disponible; ficha generada localmente.']};
+}
+function expCrearFicha(res){
+  var ex=(res&&res.experience)||{};
+  var id=expUID();
+  // documentos + subir a storage
+  var documents=_expFiles.map(function(f){var d=f.doc||{};return {id:f.id,document_type:d.tipo||'OTRO',document_number:d.numero||null,document_date:d.fecha||null,issuer_name:d.emisor||null,issuer_ruc:d.ruc_emisor||null,recipient_name:d.receptor||null,recipient_ruc:d.ruc_receptor||null,currency:d.moneda||null,amount:d.monto||null,pages:d.paginas||null,file_name:f.name,file_path:null,extracted_text:d.resumen||null,ai_confidence:d.confianza||0,processing_status:f.estado,pago_pagina:d.pagina_monto||null,_raw:d};});
+  // pagos (de vouchers/transferencias) — cálculo local
+  var payments=[];_expFiles.forEach(function(f){var d=f.doc||{};if((d.tipo==='VOUCHER'||d.tipo==='TRANSFERENCIA_BANCARIA')&&d.pago&&(d.pago.importe||d.pago.operacion)){payments.push({id:expUID(),source_document_id:f.id,bank:d.pago.banco,operation_number:d.pago.operacion,payment_date:d.pago.fecha,payer:d.pago.ordenante,beneficiary:d.pago.beneficiario,account:d.pago.cuenta,currency:d.pago.moneda||d.moneda,amount:+d.pago.importe||0,ai_confidence:d.confianza||0});}});
+  var total=+ex.total_amount||0;
+  var pagado=payments.reduce(function(a,p){return a+(+p.amount||0);},0);
+  var pct=total>0?Math.min(100,Math.round(pagado/total*100)):0;
+  // estado documental (heurística)
+  var tipos={};documents.forEach(function(d){tipos[d.document_type]=true;});
+  var tieneFactura=tipos.FACTURA||tipos.BOLETA;var tieneRespaldo=tipos.GUIA_DE_REMISION||tipos.ACTA_DE_CONFORMIDAD||tipos.CONTRATO||tipos.CONSTANCIA_DE_PRESTACION||tipos.ORDEN_DE_COMPRA;
+  var valNoCoincide=(res.validations||[]).some(function(v){return v.result==='NO_COINCIDE'&&v.severity==='alta';});
+  var estado='REQUIERE_REVISION';
+  if(valNoCoincide)estado='INCONSISTENTE';
+  else if(tieneFactura&&tieneRespaldo&&(pct>=99||pagado>=total&&total>0))estado='COMPLETA';
+  else if(tieneFactura&&(tieneRespaldo||pagado>0))estado='PARCIAL';
+  // confianza IA (promedio docs, con penalización)
+  var confs=documents.map(function(d){return d.ai_confidence||0;}).filter(function(x){return x>0;});
+  var conf=confs.length?Math.round(confs.reduce(function(a,b){return a+b;},0)/confs.length):60;
+  if(valNoCoincide)conf=Math.max(40,conf-15);
+  // evidencia (trazabilidad de campos clave a su documento fuente)
+  var evidence=[];
+  var facDoc=documents.filter(function(d){return d.document_type==='FACTURA'||d.document_type==='BOLETA'||d.document_type==='CONTRATO';})[0];
+  if(facDoc){evidence.push({id:expUID(),document_id:facDoc.id,field_name:'total_amount',page_number:facDoc.pago_pagina||null,original_text:null,extracted_value:total,confidence:facDoc.ai_confidence});
+    evidence.push({id:expUID(),document_id:facDoc.id,field_name:'client_ruc',page_number:1,original_text:null,extracted_value:ex.client_ruc,confidence:facDoc.ai_confidence});}
+  payments.forEach(function(p){evidence.push({id:expUID(),document_id:p.source_document_id,field_name:'pago',page_number:1,original_text:p.operation_number,extracted_value:p.amount,confidence:p.ai_confidence});});
+  var e={
+    id:id,code:expNextCode(),company_id:EMP?EMP.id:null,company_name:EMP?EMP.nombre:null,company_ruc:EMP?EMP.ruc:null,
+    client_name:ex.client_name||null,client_ruc:ex.client_ruc||null,client_type:ex.client_type||'NO_DETERMINADO',
+    experience_type:ex.experience_type||'OTRO',original_object:ex.original_object||null,normalized_object:ex.normalized_object||null,
+    short_title:ex.short_title||ex.normalized_object||null,executive_summary:ex.executive_summary||null,technical_description:ex.technical_description||null,
+    start_date:ex.start_date||(facDoc&&facDoc.document_date)||null,end_date:ex.end_date||null,date:ex.start_date||(facDoc&&facDoc.document_date)||new Date().toISOString().slice(0,10),
+    currency:ex.currency||'PEN',subtotal:+ex.subtotal||null,tax:+ex.tax||null,total_amount:total,paid_amount:pagado,outstanding_amount:Math.max(0,total-pagado),payment_percentage:pct,
+    delivery_location:ex.delivery_location||null,department:ex.department||null,province:ex.province||null,district:ex.district||null,
+    primary_category:ex.primary_category||null,secondary_categories:ex.secondary_categories||[],
+    documents:documents,items:(res.items||[]).map(function(it){it.id=expUID();return it;}),payments:payments,
+    categories:res.categories||[],validations:res.validations||[],evidence:evidence,alerts:res.alerts||[],audit:[],
+    documentary_status:estado,ai_confidence:conf,payment_status:(pct>=100?'PAGADO_TOTALMENTE':(pagado>0?'PAGO_PARCIAL':'SIN_EVIDENCIA_DE_PAGO')),
+    created_at:new Date().toISOString(),updated_at:new Date().toISOString()
+  };
+  EXP.unshift(e);saveEXP();
+  var prog=$('expProg');if(prog)prog.innerHTML='<b>100%</b> · Experiencia creada correctamente ✓';
+  // subir archivos a storage privado (async, no bloquea)
+  _expFiles.forEach(function(f){if(!f.b64)return;var ext=(f.name.split('.').pop()||'bin').toLowerCase();var path='exp/'+(EMP?EMP.id:'x')+'/'+id+'/'+f.id+'.'+ext;
+    fetch('/api/exp/upload',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({path:path,b64:f.b64,mime:f.mime||'application/octet-stream'})}).then(function(r){return r.json();}).then(function(rr){
+      if(rr&&rr.ok){var ed=e.documents.filter(function(d){return d.id===f.id;})[0];if(ed){ed.file_path=path;saveEXP();}}
+    }).catch(function(){});
+  });
+  setTimeout(function(){expOpen(id);},700);
+}
+
+/* ───────── DETALLE ───────── */
+var _expTab='resumen';
+function expOpen(id){var e=EXP.filter(function(x){return x.id===id;})[0];if(!e)return;_expTab='resumen';expRenderDetalle(e);}
+function expRenderDetalle(e){
+  var h='<button class="btn2" onclick="renderExperiencia()" style="margin-bottom:10px">← Volver a experiencias</button>';
+  h+='<div class="card" style="padding:16px;margin-bottom:12px">';
+  h+='<div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:10px">';
+  h+='<div><div class="mono" style="font-weight:800;color:var(--acc);font-size:13px">'+expHE(e.code)+'</div>'+
+     '<div style="font-size:17px;font-weight:800;color:var(--tx);margin:2px 0">'+expHE(e.short_title||e.normalized_object||'—')+'</div>'+
+     '<div style="font-size:12px;color:var(--tmuted)">'+expHE(e.client_name||'')+(e.client_ruc?' · RUC '+e.client_ruc:'')+' · '+(e.client_type||'')+'</div></div>';
+  h+='<div style="text-align:right"><div class="mono" style="font-size:18px;font-weight:800;color:var(--tx)">'+expMoney(e.total_amount,e.currency)+'</div>'+
+     '<div style="font-size:11px;color:var(--tmuted)">'+expHE(e.start_date||e.date||'')+'</div>'+
+     '<div style="margin-top:4px">'+expEstadoBadge(e.documentary_status)+' <span class="expbadge" style="background:#0ea5e922;color:#0ea5e9">IA '+(e.ai_confidence||0)+'%</span></div></div>';
+  h+='</div>';
+  // barra de pago
+  h+='<div style="margin-top:12px"><div style="display:flex;justify-content:space-between;font-size:11px;color:var(--tmuted)"><span>PAGO ACREDITADO: '+(e.payment_percentage||0)+'%</span><span>'+expMoney(e.paid_amount,e.currency)+' / '+expMoney(e.total_amount,e.currency)+'</span></div>'+
+     '<div style="height:9px;background:var(--bd);border-radius:5px;overflow:hidden;margin-top:3px"><div style="height:100%;width:'+(e.payment_percentage||0)+'%;background:'+((e.payment_percentage||0)>=100?'#16a34a':'#f59e0b')+'"></div></div></div>';
+  h+='</div>';
+  // tabs
+  var tabs=[['resumen','Resumen IA'],['documentos','Documentos'],['items','Ítems'],['pagos','Pagos'],['validacion','Validación'],['categorias','Categorías'],['evidencia','Evidencia'],['tdr','Compat. TDR'],['historial','Historial']];
+  h+='<div style="display:flex;gap:4px;flex-wrap:wrap;border-bottom:1px solid var(--bd);margin-bottom:12px">';
+  tabs.forEach(function(t){h+='<div onclick="_expTab=\''+t[0]+'\';expRenderDetalle(EXP.filter(function(x){return x.id===\''+e.id+'\'})[0])" style="padding:8px 12px;cursor:pointer;font-size:12px;font-weight:600;'+(_expTab===t[0]?'color:var(--acc);border-bottom:2px solid var(--acc)':'color:var(--tmuted)')+'">'+t[1]+'</div>';});
+  h+='</div><div id="expTabBody"></div>';
+  $('content').innerHTML=h;
+  expRenderTab(e);
+}
+function expRenderTab(e){
+  var b=$('expTabBody');if(!b)return;var h='';
+  if(_expTab==='resumen'){
+    function row(k,v,field){return '<div style="display:grid;grid-template-columns:180px 1fr;gap:8px;padding:5px 0;border-bottom:1px solid var(--bd)"><div style="font-size:11px;color:var(--tmuted);font-weight:600">'+k+'</div><div style="font-size:12px;color:var(--tx)">'+expHE(v==null||v===''?'—':v)+(field?' <span style="cursor:pointer;color:var(--acc);font-size:11px" onclick="expEdit(\''+e.id+'\',\''+field+'\')">✎</span>':'')+'</div></div>';}
+    h+='<div class="card" style="padding:14px">';
+    h+='<div style="font-size:13px;font-weight:700;color:var(--tx);margin-bottom:8px">Resumen ejecutivo</div><div style="font-size:12px;color:var(--tx);line-height:1.6;margin-bottom:12px">'+expHE(e.executive_summary||e.normalized_object||'—')+'</div>';
+    h+=row('Objeto normalizado',e.normalized_object,'normalized_object');
+    h+=row('Objeto original',e.original_object,'original_object');
+    h+=row('Tipo de experiencia',e.experience_type,'experience_type');
+    h+=row('Cliente / Contratante',e.client_name,'client_name');
+    h+=row('RUC cliente',e.client_ruc,'client_ruc');
+    h+=row('Tipo de cliente',e.client_type,'client_type');
+    h+=row('Rubro principal',e.primary_category,'primary_category');
+    h+=row('Rubros secundarios',(e.secondary_categories||[]).join(', '));
+    h+=row('Moneda',e.currency);
+    h+=row('Subtotal',e.subtotal!=null?expMoney(e.subtotal,e.currency):null,'subtotal');
+    h+=row('IGV',e.tax!=null?expMoney(e.tax,e.currency):null,'tax');
+    h+=row('Monto total',expMoney(e.total_amount,e.currency),'total_amount');
+    h+=row('Monto pagado',expMoney(e.paid_amount,e.currency));
+    h+=row('Saldo pendiente',expMoney(e.outstanding_amount,e.currency));
+    h+=row('Fecha inicio',e.start_date,'start_date');
+    h+=row('Fecha fin',e.end_date,'end_date');
+    h+=row('Lugar de entrega/ejecución',e.delivery_location,'delivery_location');
+    h+=row('Ubicación',[e.department,e.province,e.district].filter(Boolean).join(' / '));
+    if(e.alerts&&e.alerts.length)h+='<div style="margin-top:10px;padding:8px 10px;background:#f59e0b18;border-left:3px solid #f59e0b;border-radius:6px;font-size:11px;color:var(--tx)"><b>⚠ Alertas IA:</b> '+e.alerts.map(expHE).join(' · ')+'</div>';
+    h+='</div>';
+  } else if(_expTab==='documentos'){
+    h+='<div class="card" style="padding:0;overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr style="background:var(--pane2,rgba(0,0,0,.03))">';
+    ['Tipo','Número','Fecha','Emisor','Receptor','Monto','IA','Archivo'].forEach(function(x){h+='<th style="text-align:left;padding:8px;font-size:10px;color:var(--tmuted);text-transform:uppercase">'+x+'</th>';});
+    h+='</tr></thead><tbody>';
+    (e.documents||[]).forEach(function(d){h+='<tr style="border-top:1px solid var(--bd)"><td style="padding:8px"><span class="expbadge" style="background:#0ea5e922;color:#0ea5e9">'+expHE(d.document_type)+'</span></td>'+
+      '<td style="padding:8px">'+expHE(d.document_number||'—')+'</td><td style="padding:8px">'+expHE(d.document_date||'—')+'</td>'+
+      '<td style="padding:8px">'+expHE(d.issuer_name||'—')+'<div style="font-size:10px;color:var(--tmuted)">'+(d.issuer_ruc||'')+'</div></td>'+
+      '<td style="padding:8px">'+expHE(d.recipient_name||'—')+'<div style="font-size:10px;color:var(--tmuted)">'+(d.recipient_ruc||'')+'</div></td>'+
+      '<td style="padding:8px;text-align:right" class="mono">'+(d.amount!=null?expMoney(d.amount,d.currency):'—')+'</td>'+
+      '<td style="padding:8px;text-align:center">'+(d.ai_confidence||0)+'%</td>'+
+      '<td style="padding:8px">'+(d.file_path?'<button class="btn2" style="padding:3px 8px;font-size:11px" onclick="expVerDoc(\''+d.file_path+'\',\''+expHE(d.file_name)+'\')">📄 Ver</button>':'<span style="color:var(--tmuted);font-size:11px">'+expHE(d.file_name||'')+'</span>')+'</td></tr>';});
+    h+='</tbody></table></div>';
+  } else if(_expTab==='items'){
+    h+='<div class="card" style="padding:0;overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr style="background:var(--pane2,rgba(0,0,0,.03))">';
+    ['#','Descripción normalizada','Tipo','Marca','Cant.','Unid.','P.Unit','Total','Categoría','Palabras clave'].forEach(function(x){h+='<th style="text-align:left;padding:8px;font-size:10px;color:var(--tmuted);text-transform:uppercase">'+x+'</th>';});
+    h+='</tr></thead><tbody>';
+    (e.items||[]).forEach(function(it,ix){h+='<tr style="border-top:1px solid var(--bd)"><td style="padding:8px">'+(ix+1)+'</td>'+
+      '<td style="padding:8px"><div style="font-weight:600;color:var(--tx)">'+expHE(it.normalized_description||it.original_description||'—')+'</div><div style="font-size:10px;color:var(--tmuted)">'+expHE(it.original_description||'')+'</div></td>'+
+      '<td style="padding:8px">'+expHE(it.item_type||'—')+'</td><td style="padding:8px">'+expHE(it.brand||'—')+'</td>'+
+      '<td style="padding:8px;text-align:center">'+expHE(it.quantity!=null?it.quantity:'—')+'</td><td style="padding:8px">'+expHE(it.unit||'—')+'</td>'+
+      '<td style="padding:8px;text-align:right" class="mono">'+(it.unit_price_without_tax!=null?(+it.unit_price_without_tax).toFixed(2):'—')+'</td>'+
+      '<td style="padding:8px;text-align:right" class="mono">'+(it.total_price!=null?(+it.total_price).toFixed(2):'—')+'</td>'+
+      '<td style="padding:8px">'+expHE(it.category||'—')+'<div style="font-size:10px;color:var(--tmuted)">'+expHE(it.subcategory||'')+'</div></td>'+
+      '<td style="padding:8px;font-size:10px;color:var(--tmuted)">'+expHE((it.keywords||[]).join(', '))+'</td></tr>';});
+    if(!(e.items||[]).length)h+='<tr><td colspan="10" style="padding:16px;text-align:center;color:var(--tmuted)">Sin ítems extraídos.</td></tr>';
+    h+='</tbody></table></div>';
+  } else if(_expTab==='pagos'){
+    h+='<div class="card" style="padding:14px"><div style="display:flex;justify-content:space-between;margin-bottom:10px"><div style="font-size:13px;font-weight:700;color:var(--tx)">Validación de pagos</div><div class="expbadge" style="background:'+((e.payment_percentage||0)>=100?'#16a34a22;color:#16a34a':'#f59e0b22;color:#f59e0b')+'">'+expHE(e.payment_status)+'</div></div>';
+    h+='<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px">'+
+       '<div style="padding:8px;background:var(--pane);border-radius:8px"><div style="font-size:10px;color:var(--tmuted)">Facturado</div><div class="mono" style="font-weight:800;color:var(--tx)">'+expMoney(e.total_amount,e.currency)+'</div></div>'+
+       '<div style="padding:8px;background:var(--pane);border-radius:8px"><div style="font-size:10px;color:var(--tmuted)">Pagado</div><div class="mono" style="font-weight:800;color:#16a34a">'+expMoney(e.paid_amount,e.currency)+'</div></div>'+
+       '<div style="padding:8px;background:var(--pane);border-radius:8px"><div style="font-size:10px;color:var(--tmuted)">Diferencia</div><div class="mono" style="font-weight:800;color:'+(e.outstanding_amount>0?'#ef4444':'#16a34a')+'">'+expMoney(e.outstanding_amount,e.currency)+'</div></div></div>';
+    h+='<table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr style="background:var(--pane2,rgba(0,0,0,.03))">';
+    ['Banco','N° Operación','Fecha','Ordenante','Beneficiario','Importe'].forEach(function(x){h+='<th style="text-align:left;padding:7px;font-size:10px;color:var(--tmuted)">'+x+'</th>';});
+    h+='</tr></thead><tbody>';
+    (e.payments||[]).forEach(function(p){h+='<tr style="border-top:1px solid var(--bd)"><td style="padding:7px">'+expHE(p.bank||'—')+'</td><td style="padding:7px">'+expHE(p.operation_number||'—')+'</td><td style="padding:7px">'+expHE(p.payment_date||'—')+'</td><td style="padding:7px">'+expHE(p.payer||'—')+'</td><td style="padding:7px">'+expHE(p.beneficiary||'—')+'</td><td style="padding:7px;text-align:right" class="mono">'+expMoney(p.amount,p.currency)+'</td></tr>';});
+    if(!(e.payments||[]).length)h+='<tr><td colspan="6" style="padding:14px;text-align:center;color:var(--tmuted)">Sin evidencia de pago.</td></tr>';
+    h+='</tbody></table></div>';
+  } else if(_expTab==='validacion'){
+    h+='<div class="card" style="padding:0;overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr style="background:var(--pane2,rgba(0,0,0,.03))">';
+    ['Campo','Documento A','Documento B','Resultado','Severidad'].forEach(function(x){h+='<th style="text-align:left;padding:8px;font-size:10px;color:var(--tmuted)">'+x+'</th>';});
+    h+='</tr></thead><tbody>';
+    var rc={COINCIDE:'#16a34a',NO_COINCIDE:'#ef4444',COINCIDE_PARCIALMENTE:'#f59e0b',NO_VERIFICABLE:'#64748b'};
+    (e.validations||[]).forEach(function(v){h+='<tr style="border-top:1px solid var(--bd)"><td style="padding:8px;font-weight:600">'+expHE(v.field_name||'—')+'</td>'+
+      '<td style="padding:8px">'+expHE(v.source_a||'')+': '+expHE(v.value_a||'—')+'</td><td style="padding:8px">'+expHE(v.source_b||'')+': '+expHE(v.value_b||'—')+'</td>'+
+      '<td style="padding:8px"><span class="expbadge" style="background:'+(rc[v.result]||'#64748b')+'22;color:'+(rc[v.result]||'#64748b')+'">'+expHE(v.result||'—')+'</span></td>'+
+      '<td style="padding:8px">'+expHE(v.severity||'—')+'</td></tr>';});
+    if(!(e.validations||[]).length)h+='<tr><td colspan="5" style="padding:14px;text-align:center;color:var(--tmuted)">Sin validaciones cruzadas.</td></tr>';
+    h+='</tbody></table></div>';
+  } else if(_expTab==='categorias'){
+    h+='<div class="card" style="padding:14px"><div style="font-size:13px;font-weight:700;color:var(--tx);margin-bottom:8px">Clasificación multirrubro</div>';
+    h+='<div style="margin-bottom:8px"><b style="font-size:12px;color:var(--tx)">Rubro principal:</b> <span class="expbadge" style="background:#0ea5e922;color:#0ea5e9">'+expHE(e.primary_category||'—')+'</span></div>';
+    h+='<div style="margin-bottom:10px"><b style="font-size:12px;color:var(--tx)">Rubros secundarios:</b> '+((e.secondary_categories||[]).map(function(c){return '<span class="expbadge" style="background:var(--bd);color:var(--tx);margin:2px">'+expHE(c)+'</span>';}).join('')||'—')+'</div>';
+    h+='<table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr style="background:var(--pane2,rgba(0,0,0,.03))"><th style="text-align:left;padding:7px;font-size:10px;color:var(--tmuted)">Categoría</th><th style="text-align:left;padding:7px;font-size:10px;color:var(--tmuted)">Tipo</th><th style="text-align:left;padding:7px;font-size:10px;color:var(--tmuted)">Confianza IA</th></tr></thead><tbody>';
+    (e.categories||[]).forEach(function(c){h+='<tr style="border-top:1px solid var(--bd)"><td style="padding:7px">'+expHE(c.name||'—')+'</td><td style="padding:7px">'+expHE(c.type||'—')+'</td><td style="padding:7px">'+(c.confidence||0)+'%</td></tr>';});
+    if(!(e.categories||[]).length)h+='<tr><td colspan="3" style="padding:14px;text-align:center;color:var(--tmuted)">Sin categorías.</td></tr>';
+    h+='</tbody></table></div>';
+  } else if(_expTab==='evidencia'){
+    h+='<div class="card" style="padding:14px"><div style="font-size:13px;font-weight:700;color:var(--tx);margin-bottom:4px">Trazabilidad de evidencia</div><div style="font-size:11px;color:var(--tmuted);margin-bottom:10px">Cada dato clave enlaza a su documento fuente (para auditoría).</div>';
+    (e.evidence||[]).forEach(function(ev){var d=(e.documents||[]).filter(function(x){return x.id===ev.document_id;})[0]||{};
+      h+='<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--bd)"><div><div style="font-size:12px;font-weight:600;color:var(--tx)">'+expHE(ev.field_name)+': <span class="mono">'+expHE(ev.extracted_value)+'</span></div><div style="font-size:10px;color:var(--tmuted)">Fuente: '+expHE(d.document_type||'')+' '+expHE(d.document_number||'')+(ev.page_number?' · pág. '+ev.page_number:'')+'</div></div>'+
+      (d.file_path?'<button class="btn2" style="padding:3px 8px;font-size:11px" onclick="expVerDoc(\''+d.file_path+'\',\''+expHE(d.file_name)+'\')">Abrir</button>':'')+'</div>';});
+    if(!(e.evidence||[]).length)h+='<div style="color:var(--tmuted);font-size:12px">Sin evidencia registrada.</div>';
+    h+='</div>';
+  } else if(_expTab==='tdr'){
+    h+='<div class="card" style="padding:14px"><div style="font-size:13px;font-weight:700;color:var(--tx);margin-bottom:6px">Compatibilidad con requisito (TDR/EETT)</div>';
+    h+='<textarea id="expTdrTxt'+e.id+'" placeholder="Pega aquí el requisito de experiencia del TDR/EETT (definición de bienes/servicios similares y monto mínimo)..." style="width:100%;min-height:120px;padding:10px;border:1px solid var(--bd);border-radius:8px;background:var(--pane);color:var(--tx);font-size:12px"></textarea>';
+    h+='<button class="btn" onclick="expTdrCheck(\''+e.id+'\')" style="background:var(--acc);color:#fff;margin-top:8px">Evaluar compatibilidad con IA</button>';
+    h+='<div id="expTdrRes'+e.id+'" style="margin-top:12px"></div></div>';
+  } else if(_expTab==='historial'){
+    h+='<div class="card" style="padding:14px"><div style="font-size:13px;font-weight:700;color:var(--tx);margin-bottom:8px">Historial de cambios (auditoría)</div>';
+    h+='<div style="font-size:11px;color:var(--tmuted);margin-bottom:8px">Creada: '+expHE(e.created_at)+'</div>';
+    (e.audit||[]).slice().reverse().forEach(function(a){h+='<div style="padding:6px 0;border-bottom:1px solid var(--bd);font-size:12px;color:var(--tx)"><b>'+expHE(a.field_name)+'</b>: <span style="color:var(--tmuted);text-decoration:line-through">'+expHE(a.original_value)+'</span> → <span style="color:#16a34a">'+expHE(a.new_value)+'</span><div style="font-size:10px;color:var(--tmuted)">'+expHE(a.created_at)+(a.reason?' · '+expHE(a.reason):'')+'</div></div>';});
+    if(!(e.audit||[]).length)h+='<div style="color:var(--tmuted);font-size:12px">Sin ediciones humanas.</div>';
+    h+='</div>';
+  }
+  b.innerHTML=h;
+}
+function expEdit(id,field){
+  var e=EXP.filter(function(x){return x.id===id;})[0];if(!e)return;
+  var cur=e[field];var nv=prompt('Editar '+field+':',cur==null?'':cur);if(nv===null)return;
+  if((''+nv)===(''+cur))return;
+  var reason=prompt('Motivo del cambio (opcional):','')||'';
+  e.audit=e.audit||[];e.audit.push({id:expUID(),field_name:field,original_value:cur,new_value:nv,user_id:(EMP?EMP.nombre:'usuario'),reason:reason,created_at:new Date().toISOString()});
+  if(field==='total_amount'||field==='subtotal'||field==='tax'){nv=parseFloat(nv)||0;e.outstanding_amount=Math.max(0,(+e.total_amount||0)-(+e.paid_amount||0));e.payment_percentage=(+e.total_amount>0)?Math.min(100,Math.round((+e.paid_amount||0)/(+e.total_amount)*100)):0;}
+  e[field]=nv;e.updated_at=new Date().toISOString();saveEXP();expRenderDetalle(e);toast('Guardado (auditado)');
+}
+function expVerDoc(path,name){window.open('/api/exp/file?p='+encodeURIComponent(path)+'&emp='+(EMP?EMP.id:''),'_blank');}
+
+/* ───────── BÚSQUEDA SEMÁNTICA IA ───────── */
+function expSemantica(){
+  var q=prompt('Consulta en lenguaje natural (ej: "experiencias en herramientas mayores a S/ 30,000", "ventas a entidades públicas de ósmosis inversa"):','');
+  if(!q)return;toast('Buscando con IA...');
+  var resumen=EXP.map(function(e){return {id:e.id,code:e.code,objeto:e.normalized_object,tipo:e.experience_type,cliente:e.client_name,sector:e.client_type,monto:e.total_amount,rubro:e.primary_category,items:(e.items||[]).map(function(i){return i.normalized_description;}).slice(0,8)};});
+  var prompt2='Consulta del usuario: "'+q+'". Tengo estas experiencias (JSON): '+JSON.stringify(resumen)+'. Devuelve SOLO JSON {"ids":["id de las experiencias que mejor responden, ordenadas por relevancia"],"motivo":"breve"}. Considera sinónimos y similitud de rubro/producto, y filtros de monto/sector si los menciona. Si ninguna aplica, ids vacío.';
+  _expGemini(prompt2,null,null).then(function(r){
+    var ids=(r&&r.ids)||[];_expFiltro={q:'',rubro:'',tipo:'',cliente:'',anio:'',pub:'',min:'',max:'',estado:''};
+    var w=$('expTablaWrap');if(!w){renderExperiencia();w=$('expTablaWrap');}
+    var sel=ids.map(function(id){return EXP.filter(function(e){return e.id===id;})[0];}).filter(Boolean);
+    if(!sel.length){toast('Sin coincidencias IA');return;}
+    var t='<div class="card" style="padding:10px;margin-bottom:8px;font-size:12px;color:var(--tx)"><b>🧠 Búsqueda IA:</b> '+expHE(q)+' <span style="color:var(--tmuted)">— '+expHE(r.motivo||'')+'</span> <button class="btn2" style="padding:2px 8px;font-size:11px" onclick="renderExperiencia()">Limpiar</button></div>';
+    t+='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px">';
+    sel.forEach(function(e){t+='<div class="card" style="padding:12px;cursor:pointer" onclick="expOpen(\''+e.id+'\')"><div class="mono" style="font-weight:800;color:var(--acc)">'+expHE(e.code)+'</div><div style="font-weight:700;color:var(--tx);margin:4px 0;font-size:13px">'+expHE(e.short_title||e.normalized_object)+'</div><div style="font-size:11px;color:var(--tmuted)">'+expHE(e.client_name||'')+'</div><div class="mono" style="font-weight:800;margin-top:6px">'+expMoney(e.total_amount,e.currency)+'</div></div>';});
+    w.innerHTML=t+'</div>';
+  }).catch(function(){toast('No se pudo completar la búsqueda IA');});
+}
+
+/* ───────── CUADRO CONSOLIDADO ───────── */
+var _expSel={};
+function expCuadro(){
+  var h='<button class="btn2" onclick="renderExperiencia()" style="margin-bottom:10px">← Volver</button>';
+  h+='<div class="card" style="padding:14px"><div style="font-size:16px;font-weight:800;color:var(--tx);margin-bottom:4px">Generar Cuadro de Experiencia</div>';
+  h+='<div style="font-size:12px;color:var(--tmuted);margin-bottom:10px">Selecciona experiencias para el cuadro consolidado (exportable).</div>';
+  h+='<div style="max-height:280px;overflow:auto;border:1px solid var(--bd);border-radius:8px">';
+  EXP.forEach(function(e){h+='<label style="display:flex;align-items:center;gap:8px;padding:7px 10px;border-bottom:1px solid var(--bd);cursor:pointer"><input type="checkbox" '+(_expSel[e.id]?'checked':'')+' onchange="_expSel[\''+e.id+'\']=this.checked;expCuadroTabla()"><span style="flex:1;font-size:12px"><b class="mono">'+expHE(e.code)+'</b> · '+expHE(e.short_title||e.normalized_object||'')+' · '+expHE(e.client_name||'')+'</span><span class="mono" style="font-weight:700">'+expMoney(e.total_amount,e.currency)+'</span></label>';});
+  h+='</div><div style="display:flex;gap:8px;margin-top:10px"><button class="btn2" onclick="expCuadroExport(\'csv\')">⬇ Excel/CSV</button><button class="btn2" onclick="expCuadroExport(\'print\')">🖨 PDF</button><button class="btn2" onclick="expCuadroExport(\'copy\')">📋 Copiar</button></div>';
+  h+='<div id="expCuadroTabla" style="margin-top:12px"></div></div>';
+  $('content').innerHTML=h;expCuadroTabla();
+}
+function expCuadroSel(){return EXP.filter(function(e){return _expSel[e.id];}).sort(function(a,b){return (a.start_date||'').localeCompare(b.start_date||'');});}
+function expCuadroTabla(){
+  var w=$('expCuadroTabla');if(!w)return;var sel=expCuadroSel();var acc=0;
+  var t='<table style="width:100%;border-collapse:collapse;font-size:12px" id="expCuadroTable"><thead><tr style="background:var(--pane2,rgba(0,0,0,.03))">';
+  ['N°','Cliente / Contratante','Objeto de contratación','N° Contrato/Orden/Factura','Fecha','Moneda','Monto','Monto acumulado'].forEach(function(x){t+='<th style="text-align:left;padding:7px;border:1px solid var(--bd);font-size:10px;color:var(--tmuted)">'+x+'</th>';});
+  t+='</tr></thead><tbody>';
+  sel.forEach(function(e,ix){acc+=(+e.total_amount||0);var doc=(e.documents||[]).filter(function(d){return d.document_type==='FACTURA'||d.document_type==='CONTRATO'||d.document_type==='ORDEN_DE_COMPRA';})[0]||{};
+    t+='<tr><td style="padding:7px;border:1px solid var(--bd)">'+(ix+1)+'</td><td style="padding:7px;border:1px solid var(--bd)">'+expHE(e.client_name||'—')+'</td><td style="padding:7px;border:1px solid var(--bd)">'+expHE(e.normalized_object||e.short_title||'—')+'</td><td style="padding:7px;border:1px solid var(--bd)">'+expHE(doc.document_number||'—')+'</td><td style="padding:7px;border:1px solid var(--bd)">'+expHE(e.start_date||e.date||'—')+'</td><td style="padding:7px;border:1px solid var(--bd)">'+(e.currency==='USD'?'US$':'S/')+'</td><td style="padding:7px;border:1px solid var(--bd);text-align:right" class="mono">'+(+e.total_amount||0).toLocaleString('es-PE',{minimumFractionDigits:2})+'</td><td style="padding:7px;border:1px solid var(--bd);text-align:right" class="mono">'+acc.toLocaleString('es-PE',{minimumFractionDigits:2})+'</td></tr>';});
+  t+='</tbody></table>';
+  t+='<div style="margin-top:8px;font-weight:800;color:var(--tx)">Monto acumulado total: '+expMoney(acc,'PEN')+' · '+sel.length+' experiencia(s)</div>';
+  w.innerHTML=sel.length?t:'<div style="color:var(--tmuted);font-size:12px">Selecciona al menos una experiencia.</div>';
+}
+function expCuadroExport(mode){
+  var sel=expCuadroSel();if(!sel.length){toast('Selecciona experiencias');return;}var acc=0;
+  var rows=[['N°','Cliente','Objeto','N° Documento','Fecha','Moneda','Monto','Acumulado']];
+  sel.forEach(function(e,ix){acc+=(+e.total_amount||0);var doc=(e.documents||[]).filter(function(d){return d.document_type==='FACTURA'||d.document_type==='CONTRATO'||d.document_type==='ORDEN_DE_COMPRA';})[0]||{};rows.push([ix+1,e.client_name||'',e.normalized_object||e.short_title||'',doc.document_number||'',e.start_date||e.date||'',e.currency||'PEN',(+e.total_amount||0).toFixed(2),acc.toFixed(2)]);});
+  if(mode==='csv'){var csv=rows.map(function(r){return r.map(function(c){return '"'+String(c).replace(/"/g,'""')+'"';}).join(',');}).join('\n');var bl=new Blob(['﻿'+csv],{type:'text/csv'});var a=document.createElement('a');a.href=URL.createObjectURL(bl);a.download='cuadro_experiencia.csv';a.click();}
+  else if(mode==='copy'){var tsv=rows.map(function(r){return r.join('\t');}).join('\n');navigator.clipboard.writeText(tsv).then(function(){toast('Cuadro copiado');});}
+  else if(mode==='print'){var w=window.open('','_blank');w.document.write('<html><head><title>Cuadro de Experiencia</title></head><body style="font-family:Arial;padding:20px"><h3>CUADRO DE EXPERIENCIA — '+(EMP?EMP.nombre:'')+'</h3>'+$('expCuadroTable').outerHTML.replace(/var\(--bd\)/g,'#ccc')+'<p style="font-weight:bold">Monto acumulado: '+expMoney(acc,'PEN')+'</p></body></html>');w.document.close();setTimeout(function(){w.print();},400);}
+}
+function expExportCSV(){var sel=expFiltradas();var rows=[['Código','Cliente','RUC','Objeto','Rubro','Tipo','Sector','Moneda','Monto','Pagado','Estado','IA%']];sel.forEach(function(e){rows.push([e.code,e.client_name||'',e.client_ruc||'',e.normalized_object||'',e.primary_category||'',e.experience_type||'',e.client_type||'',e.currency||'',(+e.total_amount||0).toFixed(2),(+e.paid_amount||0).toFixed(2),e.documentary_status||'',e.ai_confidence||0]);});var csv=rows.map(function(r){return r.map(function(c){return '"'+String(c).replace(/"/g,'""')+'"';}).join(',');}).join('\n');var bl=new Blob(['﻿'+csv],{type:'text/csv'});var a=document.createElement('a');a.href=URL.createObjectURL(bl);a.download='experiencias.csv';a.click();}
+
+/* ───────── SELECCIÓN ÓPTIMA POR MONTO ───────── */
+function expSelMonto(){
+  var h='<button class="btn2" onclick="renderExperiencia()" style="margin-bottom:10px">← Volver</button>';
+  h+='<div class="card" style="padding:14px"><div style="font-size:16px;font-weight:800;color:var(--tx);margin-bottom:4px">Seleccionar experiencias para cumplir monto</div>';
+  h+='<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:10px 0">';
+  h+='Monto requerido (S/): <input id="expReqMonto" type="number" placeholder="100000" class="expsel" style="width:130px">';
+  h+='Filtrar rubro/tipo: <input id="expReqRubro" placeholder="opcional: herramientas, bienes..." class="expsel" style="width:200px">';
+  h+='<button class="btn" onclick="expSelMontoRun()" style="background:var(--acc);color:#fff">Calcular combinación óptima</button></div>';
+  h+='<div id="expSelRes"></div></div>';
+  $('content').innerHTML=h;
+}
+function expSelMontoRun(){
+  var req=parseFloat($('expReqMonto').value)||0;var filt=($('expReqRubro').value||'').toLowerCase();
+  if(req<=0){toast('Ingresa el monto requerido');return;}
+  var cand=EXP.filter(function(e){if(e.documentary_status==='INCONSISTENTE')return false;if(filt){var blob=((e.primary_category||'')+' '+(e.secondary_categories||[]).join(' ')+' '+(e.experience_type||'')+' '+(e.normalized_object||'')+' '+(e.items||[]).map(function(i){return i.category+' '+i.normalized_description;}).join(' ')).toLowerCase();if(!blob.includes(filt))return false;}return (+e.total_amount||0)>0;});
+  // greedy: mayor monto y mayor confianza primero, menor número de experiencias
+  cand.sort(function(a,b){return (+b.total_amount||0)-(+a.total_amount||0)||((b.ai_confidence||0)-(a.ai_confidence||0));});
+  var sel=[],acc=0;for(var k=0;k<cand.length&&acc<req;k++){sel.push(cand[k]);acc+=(+cand[k].total_amount||0);}
+  var cumple=acc>=req;
+  var conf=sel.length?Math.round(sel.reduce(function(a,e){return a+(e.ai_confidence||0);},0)/sel.length):0;
+  var nivel=conf>=90&&cumple?'ALTO':(cumple?'MEDIO':'INSUFICIENTE');
+  var h='<div style="padding:12px;background:'+(cumple?'#16a34a18':'#ef444418')+';border-radius:8px;margin-bottom:10px">';
+  h+='<div style="font-size:13px;color:var(--tx)">Monto requerido: <b>'+expMoney(req,'PEN')+'</b> · Monto seleccionado: <b style="color:'+(cumple?'#16a34a':'#ef4444')+'">'+expMoney(acc,'PEN')+'</b></div>';
+  h+='<div style="font-size:13px;color:var(--tx)">Experiencias utilizadas: <b>'+sel.length+'</b> · Nivel de confianza: <b>'+nivel+'</b></div>';
+  if(!cumple)h+='<div style="font-size:12px;color:#ef4444;margin-top:4px">⚠ Las experiencias disponibles no alcanzan el monto requerido (faltan '+expMoney(req-acc,'PEN')+').</div>';
+  h+='</div>';
+  h+='<table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr style="background:var(--pane2,rgba(0,0,0,.03))"><th style="text-align:left;padding:7px;font-size:10px;color:var(--tmuted)">Código</th><th style="text-align:left;padding:7px;font-size:10px;color:var(--tmuted)">Objeto</th><th style="text-align:left;padding:7px;font-size:10px;color:var(--tmuted)">Cliente</th><th style="text-align:right;padding:7px;font-size:10px;color:var(--tmuted)">Monto</th><th style="text-align:center;padding:7px;font-size:10px;color:var(--tmuted)">IA</th></tr></thead><tbody>';
+  sel.forEach(function(e){h+='<tr style="border-top:1px solid var(--bd);cursor:pointer" onclick="expOpen(\''+e.id+'\')"><td style="padding:7px" class="mono">'+expHE(e.code)+'</td><td style="padding:7px">'+expHE(e.short_title||e.normalized_object||'')+'</td><td style="padding:7px">'+expHE(e.client_name||'')+'</td><td style="padding:7px;text-align:right" class="mono">'+expMoney(e.total_amount,e.currency)+'</td><td style="padding:7px;text-align:center">'+(e.ai_confidence||0)+'%</td></tr>';});
+  h+='</tbody></table>';
+  $('expSelRes').innerHTML=h;
+}
+
+/* ───────── COMPATIBILIDAD TDR (global) ───────── */
+function expTDR(){
+  var h='<button class="btn2" onclick="renderExperiencia()" style="margin-bottom:10px">← Volver</button>';
+  h+='<div class="card" style="padding:14px"><div style="font-size:16px;font-weight:800;color:var(--tx);margin-bottom:4px">Buscar experiencia compatible con un TDR/EETT</div>';
+  h+='<div style="font-size:12px;color:var(--tmuted);margin-bottom:8px">Pega el requisito de experiencia del proceso. La IA lo compara contra tu base histórica (comparación exacta, no solo semántica).</div>';
+  h+='<textarea id="expTdrGlobal" placeholder="Ej: El postor debe acreditar experiencia en la venta de bienes iguales o similares (herramientas manuales para construcción) por un monto mínimo de S/ 50,000 en los últimos 5 años..." style="width:100%;min-height:140px;padding:10px;border:1px solid var(--bd);border-radius:8px;background:var(--pane);color:var(--tx);font-size:12px"></textarea>';
+  h+='<button class="btn" onclick="expTdrGlobalRun()" style="background:var(--acc);color:#fff;margin-top:8px">🔎 Buscar experiencia compatible</button>';
+  h+='<div id="expTdrGlobalRes" style="margin-top:12px"></div></div>';
+  $('content').innerHTML=h;
+}
+function expTdrGlobalRun(){
+  var tdr=($('expTdrGlobal').value||'').trim();if(!tdr){toast('Pega el requisito del TDR');return;}
+  $('expTdrGlobalRes').innerHTML='<div style="color:var(--tmuted);font-size:12px">Analizando con IA...</div>';
+  var resumen=EXP.map(function(e){return {id:e.id,code:e.code,objeto:e.normalized_object,tipo:e.experience_type,cliente:e.client_name,sector:e.client_type,monto:e.total_amount,fecha:e.start_date,rubro:e.primary_category,items:(e.items||[]).map(function(i){return i.normalized_description;}).slice(0,10)};});
+  var prompt2='Eres experto en contrataciones del Estado peruano. REQUISITO DEL TDR: """'+tdr+'""". Base de experiencias del postor (JSON): '+JSON.stringify(resumen)+'. Evalua cada experiencia contra la DEFINICION EXACTA del requisito (no solo similitud semantica). Devuelve SOLO JSON {"resultados":[{"id":"","compatibilidad":"CUMPLE|PROBABLEMENTE_CUMPLE|CUMPLE_PARCIALMENTE|NO_CUMPLE|REQUIERE_REVISION","motivo":"","items_coincidentes":[],"riesgos":""}],"monto_minimo_detectado":null,"analisis":"resumen general y si la suma de las CUMPLE alcanza el monto minimo"}. Nunca declares CUMPLE solo por similitud; exige que encaje en la definicion del TDR.';
+  _expGemini(prompt2,null,null).then(function(r){
+    var res=(r&&r.resultados)||[];var cc={CUMPLE:'#16a34a',PROBABLEMENTE_CUMPLE:'#0ea5e9',CUMPLE_PARCIALMENTE:'#f59e0b',NO_CUMPLE:'#ef4444',REQUIERE_REVISION:'#f59e0b'};
+    var h='<div class="card" style="padding:10px;margin-bottom:8px;font-size:12px;color:var(--tx)"><b>Monto mínimo detectado:</b> '+(r.monto_minimo_detectado?expMoney(r.monto_minimo_detectado,'PEN'):'no especificado')+'<div style="color:var(--tmuted);margin-top:4px">'+expHE(r.analisis||'')+'</div></div>';
+    res.forEach(function(x){var e=EXP.filter(function(y){return y.id===x.id;})[0];if(!e)return;var c=cc[x.compatibilidad]||'#64748b';
+      h+='<div class="card" style="padding:12px;margin-bottom:8px"><div style="display:flex;justify-content:space-between"><div><b class="mono">'+expHE(e.code)+'</b> · '+expHE(e.short_title||e.normalized_object||'')+'</div><span class="expbadge" style="background:'+c+'22;color:'+c+'">'+expHE(x.compatibilidad)+'</span></div>'+
+        '<div style="font-size:11px;color:var(--tmuted);margin-top:4px">'+expMoney(e.total_amount,e.currency)+' · '+expHE(e.client_name||'')+'</div>'+
+        '<div style="font-size:12px;color:var(--tx);margin-top:6px"><b>Motivo:</b> '+expHE(x.motivo||'')+'</div>'+
+        (x.items_coincidentes&&x.items_coincidentes.length?'<div style="font-size:11px;color:var(--tmuted);margin-top:4px"><b>Ítems coincidentes:</b> '+expHE(x.items_coincidentes.join(', '))+'</div>':'')+
+        (x.riesgos?'<div style="font-size:11px;color:#f59e0b;margin-top:4px"><b>Riesgos:</b> '+expHE(x.riesgos)+'</div>':'')+
+        ' <button class="btn2" style="padding:3px 8px;font-size:11px;margin-top:6px" onclick="expOpen(\''+e.id+'\')">Ver experiencia</button></div>';
+    });
+    if(!res.length)h+='<div style="color:var(--tmuted)">Sin resultados.</div>';
+    $('expTdrGlobalRes').innerHTML=h;
+  }).catch(function(){$('expTdrGlobalRes').innerHTML='<div style="color:#ef4444;font-size:12px">No se pudo evaluar. Reintenta.</div>';});
+}
+function expTdrCheck(id){
+  var e=EXP.filter(function(x){return x.id===id;})[0];if(!e)return;var tdr=($('expTdrTxt'+id).value||'').trim();if(!tdr){toast('Pega el requisito');return;}
+  $('expTdrRes'+id).innerHTML='<div style="color:var(--tmuted);font-size:12px">Analizando...</div>';
+  var prompt2='REQUISITO TDR: """'+tdr+'""". EXPERIENCIA: '+JSON.stringify({objeto:e.normalized_object,tipo:e.experience_type,monto:e.total_amount,cliente:e.client_name,sector:e.client_type,items:(e.items||[]).map(function(i){return i.normalized_description;})})+'. Evalua si esta experiencia cumple la definicion EXACTA del requisito. Devuelve SOLO JSON {"compatibilidad":"CUMPLE|PROBABLEMENTE_CUMPLE|CUMPLE_PARCIALMENTE|NO_CUMPLE|REQUIERE_REVISION","motivo":"","items_coincidentes":[],"riesgos":""}. No declares CUMPLE solo por similitud semantica.';
+  _expGemini(prompt2,null,null).then(function(x){var cc={CUMPLE:'#16a34a',PROBABLEMENTE_CUMPLE:'#0ea5e9',CUMPLE_PARCIALMENTE:'#f59e0b',NO_CUMPLE:'#ef4444',REQUIERE_REVISION:'#f59e0b'};var c=cc[x.compatibilidad]||'#64748b';
+    $('expTdrRes'+id).innerHTML='<div style="padding:10px;border-radius:8px;background:'+c+'18"><span class="expbadge" style="background:'+c+'22;color:'+c+'">'+expHE(x.compatibilidad)+'</span><div style="font-size:12px;color:var(--tx);margin-top:6px"><b>Motivo:</b> '+expHE(x.motivo||'')+'</div>'+(x.riesgos?'<div style="font-size:11px;color:#f59e0b;margin-top:4px"><b>Riesgos:</b> '+expHE(x.riesgos)+'</div>':'')+'</div>';
+  }).catch(function(){$('expTdrRes'+id).innerHTML='<div style="color:#ef4444;font-size:12px">No se pudo evaluar.</div>';});
+}
+
+/* ───────── DEMO ───────── */
+function expCargarEjemplos(){
+  if(!confirm('¿Cargar 2 experiencias de ejemplo para esta empresa?'))return;
+  loadEXP();
+  var e1={id:expUID(),code:'EXP-0001',company_id:EMP?EMP.id:null,company_name:EMP?EMP.nombre:'SKY BLUE PERU S.A.C.',company_ruc:EMP?EMP.ruc:'20610723501',client_name:'MQC CONSTRUCCIONES GENERALES S.A.C.',client_ruc:'20606666633',client_type:'PRIVADO',experience_type:'BIENES',original_object:'Suministro de imprimantes anticorrosivos y solventes diluyentes para pintura en fierro.',normalized_object:'Suministro de imprimantes anticorrosivos y solventes',short_title:'Suministro de imprimantes anticorrosivos y solventes',executive_summary:'Venta de imprimantes anticorrosivos y solventes diluyentes para pintura en fierro a MQC Construcciones.',start_date:'2026-07-02',date:'2026-07-02',currency:'PEN',subtotal:2580.00,tax:464.40,total_amount:3044.40,paid_amount:3044.40,outstanding_amount:0,payment_percentage:100,primary_category:'Pinturas y recubrimientos',secondary_categories:['Materiales de construcción','Mantenimiento industrial','Protección anticorrosiva'],
+    documents:[{id:expUID(),document_type:'FACTURA',document_number:'E001-33',document_date:'2026-07-02',issuer_name:'SKY BLUE PERU S.A.C.',issuer_ruc:'20610723501',recipient_name:'MQC CONSTRUCCIONES GENERALES S.A.C.',recipient_ruc:'20606666633',currency:'PEN',amount:3044.40,ai_confidence:98,file_name:'Factura E001-33',processing_status:'Completado'},{id:expUID(),document_type:'GUIA_DE_REMISION',document_number:'EG07-00000033',document_date:'2026-07-02',ai_confidence:97,file_name:'Guía EG07-00000033',processing_status:'Completado'},{id:expUID(),document_type:'TRANSFERENCIA_BANCARIA',document_number:null,amount:3044.40,currency:'PEN',ai_confidence:96,file_name:'Constancia bancaria',processing_status:'Completado'}],
+    items:[{id:expUID(),original_description:'20 galones de imprimantes anticorrosivos',normalized_description:'Imprimante anticorrosivo',item_type:'producto',quantity:20,unit:'galón',category:'Pinturas y recubrimientos',keywords:['imprimante','anticorrosivo','pintura','fierro'],synonyms:['base anticorrosiva']},{id:expUID(),original_description:'15 baldes de solvente diluyente para pintura en fierro',normalized_description:'Solvente diluyente para pintura',item_type:'producto',quantity:15,unit:'balde',category:'Solventes y diluyentes',keywords:['solvente','diluyente','pintura']}],
+    payments:[{id:expUID(),bank:'Banco',operation_number:null,payment_date:'2026-07-02',amount:3044.40,currency:'PEN',ai_confidence:96}],
+    categories:[{name:'Pinturas y recubrimientos',type:'rubro',confidence:98},{name:'Materiales de construcción',type:'rubro',confidence:90}],
+    validations:[{field_name:'Monto total',source_a:'Factura',value_a:'S/ 3,044.40',source_b:'Constancia',value_b:'S/ 3,044.40',result:'COINCIDE',severity:'alta',explanation:'Pago coincide con factura'}],
+    evidence:[],alerts:[],audit:[],documentary_status:'COMPLETA',ai_confidence:98,payment_status:'PAGADO_TOTALMENTE',created_at:new Date().toISOString(),updated_at:new Date().toISOString()};
+  var e2={id:expUID(),code:'EXP-0002',company_id:EMP?EMP.id:null,company_name:EMP?EMP.nombre:'SKY BLUE PERU S.A.C.',company_ruc:EMP?EMP.ruc:'20610723501',client_name:'MQC CONSTRUCCIONES GENERALES S.A.C.',client_ruc:'20606666633',client_type:'PRIVADO',experience_type:'BIENES',original_object:'Suministro de herramientas manuales para trabajos de construcción y mantenimiento.',normalized_object:'Suministro de herramientas manuales para construcción',short_title:'Suministro de herramientas manuales para construcción',executive_summary:'Venta de carretillas, palas, arcos de sierra y cizallas a MQC Construcciones.',start_date:'2026-07-11',date:'2026-07-11',currency:'PEN',subtotal:8474.58,tax:1525.42,total_amount:10000.00,paid_amount:10000.00,outstanding_amount:0,payment_percentage:100,primary_category:'Herramientas y ferretería',secondary_categories:['Construcción','Mantenimiento','Suministros de obra'],
+    documents:[{id:expUID(),document_type:'SOLICITUD_DE_COTIZACION',document_number:null,ai_confidence:95,file_name:'Solicitud de cotización',processing_status:'Completado'},{id:expUID(),document_type:'COTIZACION',document_number:'00159/SKY',ai_confidence:98,file_name:'Cotización 00159/SKY',processing_status:'Completado'},{id:expUID(),document_type:'ORDEN_DE_COMPRA',document_number:null,ai_confidence:97,file_name:'Orden de compra',processing_status:'Completado'},{id:expUID(),document_type:'VOUCHER',amount:5000,currency:'PEN',ai_confidence:96,file_name:'Voucher 1',processing_status:'Completado'},{id:expUID(),document_type:'VOUCHER',amount:5000,currency:'PEN',ai_confidence:96,file_name:'Voucher 2',processing_status:'Completado'},{id:expUID(),document_type:'FACTURA',document_number:'E001-34',issuer_name:'SKY BLUE PERU S.A.C.',issuer_ruc:'20610723501',recipient_name:'MQC CONSTRUCCIONES GENERALES S.A.C.',recipient_ruc:'20606666633',currency:'PEN',amount:10000,ai_confidence:99,file_name:'Factura E001-34',processing_status:'Completado'},{id:expUID(),document_type:'GUIA_DE_REMISION',document_number:'EG07-00000034',ai_confidence:97,file_name:'Guía EG07-00000034',processing_status:'Completado'}],
+    items:[{id:expUID(),original_description:'15 carretillas tipo buggy marca Pretul',normalized_description:'Carretilla tipo buggy',item_type:'producto',brand:'Pretul',quantity:15,unit:'unidad',category:'Herramientas y ferretería',subcategory:'Equipos manuales para construcción',keywords:['carretilla','buggy','construcción','transporte manual','obra'],synonyms:['buggie']},{id:expUID(),original_description:'20 palas rectas marca Tramontina',normalized_description:'Pala recta',item_type:'producto',brand:'Tramontina',quantity:20,unit:'unidad',category:'Herramientas manuales',keywords:['pala','recta']},{id:expUID(),original_description:'40 palas cuchara marca Tramontina',normalized_description:'Pala cuchara',item_type:'producto',brand:'Tramontina',quantity:40,unit:'unidad',category:'Herramientas manuales',keywords:['pala','cuchara']},{id:expUID(),original_description:'15 arcos de sierra genéricos',normalized_description:'Arco de sierra',item_type:'producto',quantity:15,unit:'unidad',category:'Herramientas de corte',keywords:['arco','sierra','corte']},{id:expUID(),original_description:'2 cizallas de corte marca Kamaza',normalized_description:'Cizalla de corte',item_type:'producto',brand:'Kamaza',quantity:2,unit:'unidad',category:'Herramientas de corte',keywords:['cizalla','corte']}],
+    payments:[{id:expUID(),bank:'Banco',operation_number:'OP1',payment_date:'2026-07-10',amount:5000,currency:'PEN',ai_confidence:96},{id:expUID(),bank:'Banco',operation_number:'OP2',payment_date:'2026-07-11',amount:5000,currency:'PEN',ai_confidence:96}],
+    categories:[{name:'Herramientas y ferretería',type:'rubro',confidence:99},{name:'Construcción',type:'rubro',confidence:88}],
+    validations:[{field_name:'Monto total',source_a:'Factura',value_a:'S/ 10,000.00',source_b:'Orden',value_b:'S/ 10,000.00',result:'COINCIDE',severity:'alta',explanation:''},{field_name:'Pago',source_a:'Factura',value_a:'S/ 10,000.00',source_b:'Vouchers',value_b:'S/ 10,000.00',result:'COINCIDE',severity:'alta',explanation:'2 vouchers de S/5,000'}],
+    evidence:[],alerts:[],audit:[],documentary_status:'COMPLETA',ai_confidence:99,payment_status:'PAGADO_TOTALMENTE',created_at:new Date().toISOString(),updated_at:new Date().toISOString()};
+  EXP.unshift(e2);EXP.unshift(e1);saveEXP();renderExperiencia();toast('2 experiencias de ejemplo cargadas');
+}
+
 </script>
 </body>
 </html>
