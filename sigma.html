@@ -3670,7 +3670,7 @@ function expNueva(){
   h+='<div id="expFileList" style="margin-top:14px"></div>';
   h+='<div style="display:flex;justify-content:space-between;align-items:center;margin-top:14px">';
   h+='<div id="expProg" style="font-size:12px;color:var(--tmuted)"></div>';
-  h+='<button id="expAnalizarBtn" class="btn" onclick="expAnalizar()" style="background:var(--acc);color:#fff;font-weight:700;opacity:.5;pointer-events:none">🤖 ANALIZAR CON IA</button>';
+  h+='<button id="expAnalizarBtn" onclick="expAnalizar()" style="background:linear-gradient(135deg,#7c3aed,#0ea5e9);color:#fff;font-weight:800;border:none;padding:12px 22px;border-radius:10px;font-size:14px;letter-spacing:.5px;cursor:pointer;box-shadow:0 3px 12px rgba(124,58,237,.4);opacity:.5;pointer-events:none">🤖 ANALIZAR CON IA</button>';
   h+='</div></div></div>';
   $('content').innerHTML=h;
   var dz=$('expDrop');
@@ -3788,6 +3788,51 @@ function expCrearFicha(res){
   if(facDoc){evidence.push({id:expUID(),document_id:facDoc.id,field_name:'total_amount',page_number:facDoc.pago_pagina||null,original_text:null,extracted_value:total,confidence:facDoc.ai_confidence});
     evidence.push({id:expUID(),document_id:facDoc.id,field_name:'client_ruc',page_number:1,original_text:null,extracted_value:ex.client_ruc,confidence:facDoc.ai_confidence});}
   payments.forEach(function(p){evidence.push({id:expUID(),document_id:p.source_document_id,field_name:'pago',page_number:1,original_text:p.operation_number,extracted_value:p.amount,confidence:p.ai_confidence});});
+  /* ── FUSION: si los documentos pertenecen a una experiencia ya registrada, agregarlos ahi ── */
+  var _match=null;
+  (function(){
+    var nums=documents.map(function(d){return (d.document_number||'').trim();}).filter(Boolean);
+    EXP.forEach(function(old){ if(_match)return;
+      var oldNums=(old.documents||[]).map(function(d){return (d.document_number||'').trim();}).filter(Boolean);
+      var numOverlap=nums.some(function(n){return oldNums.indexOf(n)>=0;});
+      var rucOk=!ex.client_ruc||!old.client_ruc||String(ex.client_ruc)===String(old.client_ruc);
+      var sameTotal=total>0&&Math.abs((+old.total_amount||0)-total)<0.5;
+      var itemsNew=(res.items||[]).map(function(i){return (i.normalized_description||i.original_description||'').toLowerCase().trim();}).filter(Boolean);
+      var itemsOld=(old.items||[]).map(function(i){return (i.normalized_description||i.original_description||'').toLowerCase().trim();}).filter(Boolean);
+      var common=itemsNew.filter(function(x){return itemsOld.indexOf(x)>=0;}).length;
+      var itemsMatch=itemsNew.length>0&&itemsOld.length>0&&common>=Math.min(itemsNew.length,itemsOld.length)*0.6;
+      if(rucOk&&(numOverlap||(sameTotal&&(itemsMatch||!itemsNew.length||!itemsOld.length))))_match=old;
+    });
+  })();
+  if(_match){
+    var m=_match;
+    documents.forEach(function(d){var dup=(m.documents||[]).some(function(x){return x.document_type===d.document_type&&(x.document_number||'')===(d.document_number||'')&&(x.file_name||'')===(d.file_name||'');});if(!dup)m.documents.push(d);});
+    payments.forEach(function(p){var dup=(m.payments||[]).some(function(x){return (x.operation_number||'')===(p.operation_number||'')&&Math.abs((+x.amount||0)-(+p.amount||0))<0.01;});if(!dup)m.payments.push(p);});
+    var newHasFactura=documents.some(function(d){return d.document_type==='FACTURA'||d.document_type==='BOLETA';});
+    if((res.items||[]).length&&(newHasFactura||!(m.items||[]).length)){m.items=(res.items||[]).map(function(it){it.id=expUID();return it;});}
+    if(newHasFactura&&total>0){m.total_amount=total;if(ex.subtotal!=null)m.subtotal=+ex.subtotal;if(ex.tax!=null)m.tax=+ex.tax;}
+    ['client_name','client_ruc','client_type','primary_category','normalized_object','original_object','short_title','executive_summary','experience_type','start_date','delivery_location'].forEach(function(k){if((m[k]==null||m[k]==='' )&&ex[k]!=null)m[k]=ex[k];});
+    m.validations=(m.validations||[]).concat(res.validations||[]);
+    m.evidence=(m.evidence||[]).concat(evidence);
+    var pag=(m.payments||[]).reduce(function(a,p){return a+(+p.amount||0);},0);
+    m.paid_amount=pag;m.outstanding_amount=Math.max(0,(+m.total_amount||0)-pag);
+    m.payment_percentage=(+m.total_amount>0)?Math.min(100,Math.round(pag/(+m.total_amount)*100)):0;
+    m.payment_status=(m.payment_percentage>=100?'PAGADO_TOTALMENTE':(pag>0?'PAGO_PARCIAL':'SIN_EVIDENCIA_DE_PAGO'));
+    var tip={};(m.documents||[]).forEach(function(d){tip[d.document_type]=true;});
+    var tf=tip.FACTURA||tip.BOLETA, tr=tip.GUIA_DE_REMISION||tip.ACTA_DE_CONFORMIDAD||tip.CONTRATO||tip.CONSTANCIA_DE_PRESTACION||tip.ORDEN_DE_COMPRA;
+    if(tf&&tr&&(m.payment_percentage>=99||pag>=(+m.total_amount||0)&&(+m.total_amount||0)>0))m.documentary_status='COMPLETA';else if(tf&&(tr||pag>0))m.documentary_status='PARCIAL';
+    m.alerts=(m.alerts||[]);m.alerts.push('Se agregaron '+documents.length+' documento(s) el '+new Date().toISOString().slice(0,10)+' (misma operación detectada)');
+    m.updated_at=new Date().toISOString();
+    saveEXP();
+    var prog2=$('expProg');if(prog2)prog2.innerHTML='<b>100%</b> · Documentos agregados a la experiencia existente '+m.code+' ✓';
+    _expFiles.forEach(function(f){if(!f.b64)return;var ext=(f.name.split('.').pop()||'bin').toLowerCase();var path='exp/'+(EMP?EMP.id:'x')+'/'+m.id+'/'+f.id+'.'+ext;
+      fetch('/api/exp/upload',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({path:path,b64:f.b64,mime:f.mime||'application/octet-stream'})}).then(function(r){return r.json();}).then(function(rr){
+        if(rr&&rr.ok){var ed=(m.documents||[]).filter(function(d){return d.id===f.id;})[0];if(ed){ed.file_path=path;saveEXP();}}
+      }).catch(function(){});
+    });
+    setTimeout(function(){expOpen(m.id);},700);
+    return;
+  }
   var e={
     id:id,code:expNextCode(),company_id:EMP?EMP.id:null,company_name:EMP?EMP.nombre:null,company_ruc:EMP?EMP.ruc:null,
     client_name:ex.client_name||null,client_ruc:ex.client_ruc||null,client_type:ex.client_type||'NO_DETERMINADO',
