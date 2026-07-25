@@ -1151,33 +1151,60 @@ async function contfactGemini(b64,mime){
     }
     if(d&&d.error)return {__err:((d.error.message||('HTTP '+st))+'').slice(0,120)};
     var tx='';try{tx=d.candidates[0].content.parts.map(function(p){return p.text||''}).join('');}catch(e){return {__err:'respuesta vacia (HTTP '+st+')'};}
-    var m=tx.replace(/```json/g,'').replace(/```/g,'').match(/{[sS]*}/);
-    if(!m)return {__err:'sin JSON en respuesta'};
-    try{return JSON.parse(m[0]);}catch(e){return {__err:'JSON invalido'};}
+    var lim=tx.replace(/```json/g,'').replace(/```/g,'');
+    var _a=lim.indexOf('{'), _b=lim.lastIndexOf('}');
+    if(_a<0||_b<=_a)return {__err:'sin JSON en respuesta'};
+    try{return JSON.parse(lim.slice(_a,_b+1));}catch(e){return {__err:'JSON invalido'};}
   }catch(e){return {__err:(e.message+'').slice(0,120)};}
 }
-/* Respaldo con Claude cuando Gemini falla (cuota agotada, 5xx, etc). Usa vision nativa (imagen inline en el mensaje). */
+/* Respaldo con Claude cuando Gemini falla (cuota agotada, 5xx, etc).
+   Usa prefill de JSON (assistant empieza con "{") para forzar salida estructurada sin preambulo. */
 async function contfactClaude(b64,mime){
   var k=process.env.ANTHROPIC_API_KEY; if(!k)return {__err:'sin ANTHROPIC_API_KEY'};
   var isPdf=(mime||'').indexOf('pdf')>=0;
-  var block=isPdf?{type:'document',source:{type:'base64',media_type:'application/pdf',data:b64}}:{type:'image',source:{type:'base64',media_type:mime||'image/jpeg',data:b64}};
-  var body={model:'claude-sonnet-4-5',max_tokens:4096,messages:[{role:'user',content:[block,{type:'text',text:CONTFACT_PROMPT}]}]};
+  var mt=(mime||'image/jpeg').toLowerCase();
+  if(!isPdf&&['image/jpeg','image/png','image/gif','image/webp'].indexOf(mt)<0)mt='image/jpeg';
+  var block=isPdf?{type:'document',source:{type:'base64',media_type:'application/pdf',data:b64}}
+                 :{type:'image',source:{type:'base64',media_type:mt,data:b64}};
+  var body={model:'claude-sonnet-4-5',max_tokens:8192,
+    system:'Eres un extractor contable. Respondes UNICAMENTE con un objeto JSON valido, sin markdown, sin explicaciones, sin texto adicional.',
+    messages:[{role:'user',content:[block,{type:'text',text:CONTFACT_PROMPT}]},{role:'assistant',content:'{'}]};
   try{
-    var r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':k,'anthropic-version':'2023-06-01','anthropic-beta':'pdfs-2024-09-25'},body:JSON.stringify(body)});
-    var d=await r.json();
-    if(d&&d.error)return {__err:((d.error.message||('HTTP '+r.status))+'').slice(0,120)};
-    var tx='';try{tx=(d.content||[]).map(function(c){return c.text||'';}).join('');}catch(e){return {__err:'respuesta vacia claude'};}
-    var m=tx.replace(/```json/g,'').replace(/```/g,'').match(/{[sS]*}/);
-    if(!m)return {__err:'sin JSON en respuesta claude'};
-    try{var o=JSON.parse(m[0]);o.__motor='claude';return o;}catch(e){return {__err:'JSON invalido claude'};}
-  }catch(e){return {__err:(e.message+'').slice(0,120)};}
+    var d,st=0,waits=[0,3000,8000];
+    for(var w=0;w<waits.length;w++){
+      if(w>0)await new Promise(function(rs){setTimeout(rs,waits[w]);});
+      var r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':k,'anthropic-version':'2023-06-01','anthropic-beta':'pdfs-2024-09-25'},body:JSON.stringify(body)});
+      st=r.status; d=await r.json();
+      if(st!==429&&st!==529&&st<500)break;
+    }
+    if(d&&d.error)return {__err:('claude '+((d.error.message||('HTTP '+st))+'')).slice(0,140)};
+    var tx='';try{tx=(d.content||[]).map(function(c){return c.text||'';}).join('');}catch(e){}
+    if(!tx)return {__err:'claude respuesta vacia (HTTP '+st+')'};
+    /* el prefill "{" no viene en la respuesta: se antepone */
+    var full=('{'+tx).replace(/```json/g,'').replace(/```/g,'');
+    var _a=full.indexOf('{'), _b=full.lastIndexOf('}');
+    var txt=(_a>=0&&_b>_a)?full.slice(_a,_b+1):full;
+    try{var o=JSON.parse(txt);o.__motor='claude';return o;}
+    catch(e){
+      /* si se trunco por max_tokens, cerrar llaves/corchetes pendientes */
+      try{
+        var fix=txt;
+        while(fix.length&&' \t\r\n,'.indexOf(fix.charAt(fix.length-1))>=0)fix=fix.slice(0,-1);
+        var q=0;for(var z=0;z<fix.length;z++){if(fix.charAt(z)==='"'&&fix.charAt(z-1)!=='\\')q++;}
+        if(q%2)fix+='"';
+        var ab=fix.split('{').length-fix.split('}').length, ac=fix.split('[').length-fix.split(']').length;
+        while(ac-->0)fix+=']';
+        while(ab-->0)fix+='}';
+        var o2=JSON.parse(fix);o2.__motor='claude';o2.__truncado=true;return o2;
+      }catch(e2){ return {__err:('claude JSON invalido ('+(d.stop_reason||'?')+'): '+tx.slice(0,60)).slice(0,140)}; }
+    }
+  }catch(e){return {__err:('claude '+e.message).slice(0,140)};}
 }
 /* Orquesta: intenta Gemini; si falla por cuota/servidor, usa Claude como respaldo automatico. */
 async function contfactExtraer(b64,mime){
   var g=await contfactGemini(b64,mime);
   if(!g.__err)return g;
-  var esCuotaOServidor=/quota|429|503|billing|credit/i.test(g.__err);
-  if(!esCuotaOServidor)return g;
+  /* ante CUALQUIER fallo de Gemini (cuota, parseo, red) se intenta con Claude */
   var c=await contfactClaude(b64,mime);
   if(!c.__err)return c;
   return {__err:'Gemini: '+g.__err+' | Claude: '+c.__err};
@@ -1210,6 +1237,18 @@ async function contfactGuardarNube(f,empId){
   await sbPutData(data); try{writeData(data);}catch(e){}
   return {ok:true,fact:f};
 }
+/* Extraccion de un comprobante con la cadena completa (Gemini -> Claude de respaldo).
+   Lo usa la carga manual del panel y sirve para diagnostico. Body: {b64, mime}. */
+app.post('/api/contfact/extraer',async function(req,res){
+  try{
+    var b=req.body||{};
+    if(!b.b64)return res.status(400).json({error:'falta b64'});
+    if(!process.env.GEMINI_API_KEY&&!process.env.ANTHROPIC_API_KEY)return proxyCloud(req,res);
+    var raw=await contfactExtraer(b.b64,b.mime||'image/jpeg');
+    if(!raw||raw.__err)return res.status(502).json({error:(raw&&raw.__err)||'extraccion fallida'});
+    res.json({ok:true,motor:raw.__motor||'gemini',data:raw});
+  }catch(e){res.status(500).json({error:e.message});}
+});
 /* Activa la recepcion por Telegram: registra el webhook del bot de alertas hacia /api/contfact/webhook. */
 app.post('/api/contfact/activar',async function(req,res){
   try{

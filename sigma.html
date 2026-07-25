@@ -4156,6 +4156,7 @@ function saveCONTFACT(){try{localStorage.setItem(contfactKey(),JSON.stringify(CO
 function cfMon(n,mon){return (mon==='USD'?'US$ ':'S/ ')+(+n||0).toLocaleString('es-PE',{minimumFractionDigits:2,maximumFractionDigits:2});}
 function cfHE(s){return (''+(s==null?'':s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 var _cfFiltro={q:'',tipo:'',cv:'',mes:'',estado:''};
+var _cfUltError='';
 var CF_PROMPT='Eres un extractor contable peruano experto con OCR. Analiza este comprobante y devuelve SOLO JSON valido sin markdown: {"tipo_doc":"FACTURA|BOLETA|NOTA_CREDITO|NOTA_DEBITO|OTRO","numero":"serie-numero ej F001-123","fecha":"YYYY-MM-DD","emisor":"razon social del emisor","ruc_emisor":"RUC 11 digitos","dir_emisor":null,"receptor":"razon social del receptor","ruc_receptor":"RUC o DNI","moneda":"PEN|USD","subtotal":numero_o_null,"igv":numero_o_null,"percepcion":numero_o_null,"retencion":numero_o_null,"total":numero_o_null,"items":[{"desc":"descripcion","cant":numero,"unidad":"unidad","punit":precio_unitario,"total":importe}],"calidad":"BUENA|REGULAR|MALA","confianza":0_a_100,"observacion":null}. REGLAS: 1) NUNCA inventes: si no se lee pon null. 2) total = importe total impreso. 3) Extrae TODOS los items individualmente. 4) confianza segun legibilidad y completitud. 5) fecha YYYY-MM-DD.';
 /* Normaliza + clasifica compra/venta vs RUC de la empresa activa + valida + confianza (revision <90) */
 function cfArmar(o,origen){
@@ -4267,7 +4268,7 @@ function cfSubir(files){
   var arr=[].slice.call(files||[]); if(!arr.length)return;
   var st=$('cfStatus');var i=0,okc=0,dupc=0,errc=0;
   function next(){
-    if(i>=arr.length){if(st)st.innerHTML='<b>✓ '+okc+' registrados</b>'+(dupc?' · ⚠ '+dupc+' duplicados omitidos':'')+(errc?' · ✕ '+errc+' con error':'');_contaPaint();return;}
+    if(i>=arr.length){if(st)st.innerHTML='<b>✓ '+okc+' registrados</b>'+(dupc?' · ⚠ '+dupc+' duplicados omitidos':'')+(errc?' · ✕ '+errc+' con error: '+cfHE(_cfUltError||''):'');_contaPaint();return;}
     var f=arr[i];
     if(f.size>20*1024*1024){errc++;i++;return next();}
     if(st)st.innerHTML='⏳ Extrayendo con IA: <b>'+cfHE(f.name)+'</b> ('+(i+1)+'/'+arr.length+')...';
@@ -4276,16 +4277,16 @@ function cfSubir(files){
       var b64=String(e.target.result).split(',')[1];
       var chk=_prepararArchivoIA(b64,f.type||'');
       if(!chk.ok){errc++;i++;return next();}
-      fetch('/api/gemini',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt:CF_PROMPT,imageBase64:b64,mimeType:chk.mimeType})}).then(function(r){return r.json();}).then(function(d){
-        var tx='';if(d&&d.candidates&&d.candidates[0]&&d.candidates[0].content&&d.candidates[0].content.parts)tx=d.candidates[0].content.parts.map(function(p){return p.text||'';}).join('');
-        var m=tx.replace(/```json/g,'').replace(/```/g,'').match(/\{[\s\S]*\}/);
-        if(!m){errc++;i++;return next();}
+      /* usa el pipeline del servidor: Gemini y, si falla, Claude como respaldo */
+      fetch('/api/contfact/extraer',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({b64:b64,mime:chk.mimeType})}).then(function(r){return r.json();}).then(function(d){
+        if(!d||!d.ok||!d.data){errc++;_cfUltError=(d&&d.error)||'extraccion fallida';i++;return next();}
         try{
-          var fact=cfArmar(JSON.parse(m[0]),'manual');
+          var fact=cfArmar(d.data,'manual');
+          fact.motor=d.motor||'gemini';
           if(cfDup(fact)){dupc++;}else{CONTFACT.unshift(fact);saveCONTFACT();okc++;}
-        }catch(e2){errc++;}
+        }catch(e2){errc++;_cfUltError=e2.message;}
         i++;next();
-      }).catch(function(){errc++;i++;next();});
+      }).catch(function(){errc++;_cfUltError='sin conexión';i++;next();});
     };
     rd.readAsDataURL(f);
   }
