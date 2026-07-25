@@ -1939,8 +1939,9 @@ function _contaPaint(){
   var d=contaData();
   var meses=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
   var h='<div class="pmod-head fade"><div><h1 style="font-size:23px;font-weight:700;letter-spacing:-.6px">Contabilidad</h1><div style="font-size:13px;color:var(--tmuted);margin-top:4px">Departamento contable · Régimen MYPE Tributario · '+(EMP?EMP.nombre:'')+'</div></div><button class="aibtn" onclick="contadorAnalizar()" style="border:1px solid var(--bd,#e2e8f0)">'+icon('bolt')+'Agente Contador IA</button></div>';
-  h+='<div class="seg">'+[['resumen','Resumen'],['igv','IGV y Renta'],['cal','Calendario'],['libros','Libros'],['sunat','Facturación SUNAT']].map(function(t){return '<button class="'+(_contaTab===t[0]?'on':'')+'" onclick="_contaTab=\''+t[0]+'\';_contaPaint()">'+t[1]+'</button>'}).join('')+'</div>';
+  h+='<div class="seg">'+[['resumen','Resumen'],['igv','IGV y Renta'],['cal','Calendario'],['libros','Libros'],['sunat','Facturación SUNAT'],['extfact','🧾 Extracción IA']].map(function(t){return '<button class="'+(_contaTab===t[0]?'on':'')+'" onclick="_contaTab=\''+t[0]+'\';_contaPaint()">'+t[1]+'</button>'}).join('')+'</div>';
   function kpi(lb,val,col,sub){return '<div class="kpi"><div class="val mono" style="font-size:16px'+(col?(';color:'+col):'')+'">'+val+'</div><div class="lab">'+lb+'</div>'+(sub?'<div style="font-size:10px;color:var(--tmuted)">'+sub+'</div>':'')+'</div>';}
+  if(_contaTab==='extfact'){h+=extfactHTML();$('content').innerHTML=h;cfTabla();return;}
   if(_contaTab==='resumen'){
     h+='<div class="kpis fade" style="margin-bottom:14px">'+kpi('Ventas del mes',fmtMonto(d.ventasMes),'','sin IGV: '+fmtMonto(d.baseV))+kpi('IGV por pagar',fmtMonto(d.igvPagar),'#f59e0b','débito - crédito')+kpi('Renta (1%)',fmtMonto(d.renta),'#0ea5e9','pago a cuenta')+kpi('Utilidad estim.',fmtMonto(d.utilidad),'#16a34a','ventas - compras')+'</div>';
     h+='<div class="card fade"><div class="ct" style="font-weight:600;margin-bottom:8px">Estado tributario del mes</div><div class="kv">'+
@@ -2206,6 +2207,7 @@ function cloudSyncPush(){
     payload['crm_'+EMP.id]=JSON.parse(localStorage.getItem(crmKey())||'{}');
     payload['logist_'+EMP.id]=JSON.parse(localStorage.getItem(logistKey())||'[]');
     payload['exp_'+EMP.id]=JSON.parse(localStorage.getItem(expKey())||'[]');
+    payload['contfact_'+EMP.id]=JSON.parse(localStorage.getItem(contfactKey())||'[]');
     fetch('/api/data',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
   }catch(e){}
 }
@@ -2224,6 +2226,7 @@ function cloudSyncPull(cb){
       if(d&&d['oport_'+EMP.id])localStorage.setItem(oportKey(),JSON.stringify(d['oport_'+EMP.id]));
       if(d&&d['logist_'+EMP.id])localStorage.setItem(logistKey(),JSON.stringify(d['logist_'+EMP.id]));
     if(d&&d['exp_'+EMP.id])localStorage.setItem(expKey(),JSON.stringify(d['exp_'+EMP.id]));
+    if(d&&d['contfact_'+EMP.id])localStorage.setItem(contfactKey(),JSON.stringify(d['contfact_'+EMP.id]));
     }catch(e){}
     try{autoMergeCatalog();}catch(e){}
     if(cb)cb();
@@ -4141,6 +4144,204 @@ function expCargarEjemplos(){
     validations:[{field_name:'Monto total',source_a:'Factura',value_a:'S/ 10,000.00',source_b:'Orden',value_b:'S/ 10,000.00',result:'COINCIDE',severity:'alta',explanation:''},{field_name:'Pago',source_a:'Factura',value_a:'S/ 10,000.00',source_b:'Vouchers',value_b:'S/ 10,000.00',result:'COINCIDE',severity:'alta',explanation:'2 vouchers de S/5,000'}],
     evidence:[],alerts:[],audit:[],documentary_status:'COMPLETA',ai_confidence:99,payment_status:'PAGADO_TOTALMENTE',created_at:new Date().toISOString(),updated_at:new Date().toISOString()};
   EXP.unshift(e2);EXP.unshift(e1);saveEXP();renderExperiencia();toast('2 experiencias de ejemplo cargadas');
+}
+
+
+/* ═══════ SUBMODULO EXTRACCION IA DE FACTURAS (inyectado) ═══════ */
+/* ══════════ EXTRACCION INTELIGENTE DE FACTURAS (submodulo Contabilidad, aislado por empresa) ══════════ */
+var CONTFACT=[];
+function contfactKey(){return 'sigma_contfact_'+(EMP?EMP.id:'x');}
+function loadCONTFACT(){try{CONTFACT=JSON.parse(localStorage.getItem(contfactKey())||'[]');}catch(e){CONTFACT=[];}if(!Array.isArray(CONTFACT))CONTFACT=[];}
+function saveCONTFACT(){try{localStorage.setItem(contfactKey(),JSON.stringify(CONTFACT));}catch(e){}try{cloudSyncPush();}catch(e){}}
+function cfMon(n,mon){return (mon==='USD'?'US$ ':'S/ ')+(+n||0).toLocaleString('es-PE',{minimumFractionDigits:2,maximumFractionDigits:2});}
+function cfHE(s){return (''+(s==null?'':s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+var _cfFiltro={q:'',tipo:'',cv:'',mes:'',estado:''};
+var CF_PROMPT='Eres un extractor contable peruano experto con OCR. Analiza este comprobante y devuelve SOLO JSON valido sin markdown: {"tipo_doc":"FACTURA|BOLETA|NOTA_CREDITO|NOTA_DEBITO|OTRO","numero":"serie-numero ej F001-123","fecha":"YYYY-MM-DD","emisor":"razon social del emisor","ruc_emisor":"RUC 11 digitos","dir_emisor":null,"receptor":"razon social del receptor","ruc_receptor":"RUC o DNI","moneda":"PEN|USD","subtotal":numero_o_null,"igv":numero_o_null,"percepcion":numero_o_null,"retencion":numero_o_null,"total":numero_o_null,"items":[{"desc":"descripcion","cant":numero,"unidad":"unidad","punit":precio_unitario,"total":importe}],"calidad":"BUENA|REGULAR|MALA","confianza":0_a_100,"observacion":null}. REGLAS: 1) NUNCA inventes: si no se lee pon null. 2) total = importe total impreso. 3) Extrae TODOS los items individualmente. 4) confianza segun legibilidad y completitud. 5) fecha YYYY-MM-DD.';
+/* Normaliza + clasifica compra/venta vs RUC de la empresa activa + valida + confianza (revision <90) */
+function cfArmar(o,origen){
+  o=o||{}; var R=String(EMP?EMP.ruc:'');
+  var cv='NO_DETERMINADO';
+  if(String(o.ruc_emisor||'')===R)cv='VENTA'; else if(String(o.ruc_receptor||'')===R)cv='COMPRA';
+  var sub=+o.subtotal||0, igv=+o.igv||0, tot=+o.total||0, per=+o.percepcion||0;
+  var vals=[];
+  if(tot>0&&sub>0&&Math.abs((sub+igv)-tot)>0.5&&Math.abs((sub+igv+per)-tot)>0.5)vals.push('Totales no cuadran: '+(sub+igv).toFixed(2)+' vs '+tot.toFixed(2));
+  if(!o.numero)vals.push('Sin numero de comprobante');
+  if(!o.ruc_emisor)vals.push('Sin RUC emisor');
+  if(o.calidad==='MALA')vals.push('Imagen de baja calidad');
+  var conf=Math.max(0,Math.min(100,+o.confianza||0)); if(vals.length)conf=Math.min(conf,85);
+  return {id:'cf'+Date.now().toString(36)+Math.random().toString(36).slice(2,6),tipo_doc:o.tipo_doc||'OTRO',cv:cv,serie_numero:o.numero||null,fecha_emision:o.fecha||null,
+    emisor:{razon:o.emisor||null,ruc:o.ruc_emisor||null,dir:o.dir_emisor||null},receptor:{razon:o.receptor||null,ruc:o.ruc_receptor||null},
+    moneda:(o.moneda==='USD'?'USD':'PEN'),subtotal:sub||null,igv:igv||null,percepcion:per||null,retencion:+o.retencion||null,total:tot||null,
+    items:Array.isArray(o.items)?o.items:[],calidad:o.calidad||null,confianza:conf,revision:conf<90,validaciones:vals,origen:origen||'manual',creado:new Date().toISOString()};
+}
+function cfDup(f){return CONTFACT.some(function(x){return x.serie_numero&&f.serie_numero&&x.serie_numero===f.serie_numero&&String((x.emisor&&x.emisor.ruc)||'')===String((f.emisor&&f.emisor.ruc)||'');});}
+/* ── Panel principal ── */
+function extfactHTML(){
+  loadCONTFACT();
+  var tot=CONTFACT.length,compras=0,ventas=0,mCompra=0,mVenta=0,igvC=0,igvV=0,rev=0;
+  CONTFACT.forEach(function(f){var t=+f.total||0,g=+f.igv||0;if(f.cv==='COMPRA'){compras++;mCompra+=t;igvC+=g;}else if(f.cv==='VENTA'){ventas++;mVenta+=t;igvV+=g;}if(f.revision)rev++;});
+  function kpi(lb,val,col){return '<div class="kpi"><div class="val mono" style="font-size:15px'+(col?(';color:'+col):'')+'">'+val+'</div><div class="lab">'+lb+'</div></div>';}
+  var h='<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:12px">';
+  h+='<div style="font-size:15px;font-weight:800;color:var(--tx)">🧾 Extracción Inteligente de Facturas</div>';
+  h+='<div style="display:flex;gap:8px;flex-wrap:wrap">'+
+     '<button onclick="$(\'cfFileInput\').click()" style="background:linear-gradient(135deg,#7c3aed,#0ea5e9);color:#fff;font-weight:800;border:none;padding:9px 16px;border-radius:9px;cursor:pointer;font-size:12.5px;box-shadow:0 2px 8px rgba(124,58,237,.35)">📤 Cargar comprobantes</button>'+
+     '<button onclick="cfActivarTg()" style="background:#0d3b6e;color:#fff;font-weight:700;border:none;padding:9px 14px;border-radius:9px;cursor:pointer;font-size:12px">📱 Activar recepción Telegram</button>'+
+     '<button onclick="cfExport(\'csv\')" style="background:#16a34a;color:#fff;font-weight:700;border:none;padding:9px 12px;border-radius:9px;cursor:pointer;font-size:12px">⬇ Excel/CSV</button>'+
+     '<button onclick="cfExport(\'print\')" style="background:#ef4444;color:#fff;font-weight:700;border:none;padding:9px 12px;border-radius:9px;cursor:pointer;font-size:12px">🖨 PDF</button>'+
+     '<button onclick="cfExport(\'sheets\')" style="background:#f59e0b;color:#fff;font-weight:700;border:none;padding:9px 12px;border-radius:9px;cursor:pointer;font-size:12px">📊 Sheets</button>'+
+     '</div></div>';
+  h+='<input type="file" id="cfFileInput" multiple accept=".pdf,.jpg,.jpeg,.png,.webp,application/pdf,image/*" style="display:none" onchange="cfSubir(this.files)">';
+  h+='<div style="font-size:11px;color:var(--tmuted);margin-bottom:10px">Recepción: 📱 Telegram (envía la foto/PDF al bot SIGMA) · 📤 carga manual · WhatsApp Business: requiere Meta Cloud API — mientras tanto reenvía el documento al bot de Telegram.</div>';
+  h+='<div id="cfStatus" style="font-size:12px;color:var(--tmuted);margin-bottom:8px"></div>';
+  h+='<div class="kpis" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:12px">'+
+     kpi('Comprobantes',tot,'#0ea5e9')+kpi('Compras',compras+' · '+cfMon(mCompra))+kpi('Ventas',ventas+' · '+cfMon(mVenta))+
+     kpi('IGV compras (crédito)',cfMon(igvC),'#16a34a')+kpi('IGV ventas (débito)',cfMon(igvV),'#f59e0b')+kpi('Por revisar',rev,rev?'#ef4444':'#64748b')+'</div>';
+  h+=cfChart();
+  h+='<div class="card" style="padding:9px;margin-bottom:8px"><div style="display:flex;gap:7px;flex-wrap:wrap;align-items:center">'+
+     '<input placeholder="🔎 Buscar (emisor, RUC, número, item)..." value="'+cfHE(_cfFiltro.q)+'" oninput="_cfFiltro.q=this.value;cfTabla()" style="flex:1;min-width:180px;padding:7px 9px;border:1px solid var(--bd);border-radius:8px;background:var(--pane);color:var(--tx);font-size:12px">'+
+     '<select onchange="_cfFiltro.tipo=this.value;cfTabla()" style="padding:7px;border:1px solid var(--bd);border-radius:8px;background:var(--pane);color:var(--tx);font-size:11px"><option value="">Tipo</option><option>FACTURA</option><option>BOLETA</option><option>NOTA_CREDITO</option><option>NOTA_DEBITO</option></select>'+
+     '<select onchange="_cfFiltro.cv=this.value;cfTabla()" style="padding:7px;border:1px solid var(--bd);border-radius:8px;background:var(--pane);color:var(--tx);font-size:11px"><option value="">Compra/Venta</option><option>COMPRA</option><option>VENTA</option></select>'+
+     '<input placeholder="Mes YYYY-MM" value="'+cfHE(_cfFiltro.mes)+'" oninput="_cfFiltro.mes=this.value;cfTabla()" style="width:100px;padding:7px;border:1px solid var(--bd);border-radius:8px;background:var(--pane);color:var(--tx);font-size:11px">'+
+     '<select onchange="_cfFiltro.estado=this.value;cfTabla()" style="padding:7px;border:1px solid var(--bd);border-radius:8px;background:var(--pane);color:var(--tx);font-size:11px"><option value="">Estado</option><option value="rev">Por revisar</option><option value="ok">Aprobados</option></select>'+
+     '</div></div>';
+  h+='<div id="cfTablaWrap"></div>';
+  return h;
+}
+function cfChart(){
+  var meses={};
+  CONTFACT.forEach(function(f){var m=(f.fecha_emision||'').slice(0,7);if(!m)return;meses[m]=meses[m]||{c:0,v:0};if(f.cv==='COMPRA')meses[m].c+=(+f.total||0);if(f.cv==='VENTA')meses[m].v+=(+f.total||0);});
+  var keys=Object.keys(meses).sort().slice(-6);
+  if(!keys.length)return '';
+  var mx=1;keys.forEach(function(k){mx=Math.max(mx,meses[k].c,meses[k].v);});
+  var b='<div class="card" style="padding:12px;margin-bottom:10px"><div style="font-size:12px;font-weight:700;color:var(--tx);margin-bottom:8px">Compras vs Ventas por mes</div><div style="display:flex;gap:14px;align-items:flex-end;height:90px">';
+  keys.forEach(function(k){var d=meses[k];
+    b+='<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px"><div style="display:flex;gap:3px;align-items:flex-end;height:64px">'+
+       '<div title="Compras '+cfMon(d.c)+'" style="width:16px;height:'+Math.max(3,Math.round(d.c/mx*60))+'px;background:#ef4444;border-radius:3px 3px 0 0"></div>'+
+       '<div title="Ventas '+cfMon(d.v)+'" style="width:16px;height:'+Math.max(3,Math.round(d.v/mx*60))+'px;background:#16a34a;border-radius:3px 3px 0 0"></div></div>'+
+       '<div style="font-size:9px;color:var(--tmuted)">'+k.slice(2)+'</div></div>';});
+  b+='</div><div style="font-size:10px;color:var(--tmuted);margin-top:4px"><span style="color:#ef4444">■</span> Compras &nbsp;<span style="color:#16a34a">■</span> Ventas</div></div>';
+  return b;
+}
+function cfFiltradas(){
+  var f=_cfFiltro;
+  return CONTFACT.filter(function(x){
+    if(f.tipo&&x.tipo_doc!==f.tipo)return false;
+    if(f.cv&&x.cv!==f.cv)return false;
+    if(f.mes&&(x.fecha_emision||'').slice(0,7)!==f.mes)return false;
+    if(f.estado==='rev'&&!x.revision)return false;
+    if(f.estado==='ok'&&x.revision)return false;
+    if(f.q){var blob=[x.serie_numero,(x.emisor||{}).razon,(x.emisor||{}).ruc,(x.receptor||{}).razon,(x.receptor||{}).ruc,(x.items||[]).map(function(i){return i.desc;}).join(' ')].join(' ').toLowerCase();if(!blob.includes(f.q.toLowerCase()))return false;}
+    return true;
+  });
+}
+function cfTabla(){
+  var w=$('cfTablaWrap');if(!w)return;
+  var list=cfFiltradas();
+  if(!list.length){w.innerHTML='<div class="card" style="padding:24px;text-align:center;color:var(--tmuted)">Sin comprobantes. Carga manual o envíalos al bot de Telegram.</div>';return;}
+  var t='<div class="card" style="padding:0;overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr style="background:var(--pane2,rgba(0,0,0,.03))">';
+  ['Fecha','Tipo','C/V','Número','Emisor','Total','IGV','Conf.','Estado','Origen',''].forEach(function(x){t+='<th style="text-align:left;padding:7px;font-size:10px;color:var(--tmuted);text-transform:uppercase;white-space:nowrap">'+x+'</th>';});
+  t+='</tr></thead><tbody>';
+  list.forEach(function(f){
+    var cvB=f.cv==='COMPRA'?'<span style="background:#ef444422;color:#ef4444;padding:2px 7px;border-radius:999px;font-size:10px;font-weight:700">COMPRA</span>':(f.cv==='VENTA'?'<span style="background:#16a34a22;color:#16a34a;padding:2px 7px;border-radius:999px;font-size:10px;font-weight:700">VENTA</span>':'<span style="color:var(--tmuted);font-size:10px">?</span>');
+    var est=f.revision?'<span style="background:#f59e0b22;color:#f59e0b;padding:2px 7px;border-radius:999px;font-size:10px;font-weight:700">REVISAR</span>':'<span style="background:#16a34a22;color:#16a34a;padding:2px 7px;border-radius:999px;font-size:10px;font-weight:700">OK</span>';
+    t+='<tr style="border-top:1px solid var(--bd)">'+
+      '<td style="padding:7px;white-space:nowrap">'+cfHE(f.fecha_emision||'—')+'</td>'+
+      '<td style="padding:7px;font-size:10px">'+cfHE(f.tipo_doc)+'</td>'+
+      '<td style="padding:7px">'+cvB+'</td>'+
+      '<td style="padding:7px" class="mono">'+cfHE(f.serie_numero||'—')+'</td>'+
+      '<td style="padding:7px">'+cfHE((f.emisor||{}).razon||'—')+'<div style="font-size:10px;color:var(--tmuted)">'+cfHE((f.emisor||{}).ruc||'')+'</div></td>'+
+      '<td style="padding:7px;text-align:right;white-space:nowrap" class="mono">'+cfMon(f.total,f.moneda)+'</td>'+
+      '<td style="padding:7px;text-align:right;white-space:nowrap" class="mono">'+cfMon(f.igv,f.moneda)+'</td>'+
+      '<td style="padding:7px;text-align:center;font-weight:700;color:'+(f.confianza>=90?'#16a34a':'#f59e0b')+'">'+f.confianza+'%</td>'+
+      '<td style="padding:7px">'+est+'</td>'+
+      '<td style="padding:7px;font-size:10px;color:var(--tmuted)">'+(f.origen==='telegram'?'📱 TG':'📤 Manual')+'</td>'+
+      '<td style="padding:7px;white-space:nowrap"><button onclick="cfVer(\''+f.id+'\')" style="background:var(--pane);border:1px solid var(--bd);color:var(--tx);padding:3px 8px;border-radius:7px;font-size:11px;cursor:pointer">Ver</button> '+(f.revision?'<button onclick="cfAprobar(\''+f.id+'\')" style="background:#16a34a;border:none;color:#fff;padding:3px 8px;border-radius:7px;font-size:11px;cursor:pointer">✓</button> ':'')+'<button onclick="cfDel(\''+f.id+'\')" style="background:#fee2e2;border:none;color:#b91c1c;padding:3px 8px;border-radius:7px;font-size:11px;cursor:pointer">🗑</button></td></tr>';
+  });
+  t+='</tbody></table></div>';
+  var sum=list.reduce(function(a,f){return a+(+f.total||0);},0);
+  t+='<div style="font-size:11px;color:var(--tmuted);margin-top:5px">'+list.length+' comprobante(s) · Total filtrado: '+cfMon(sum)+'</div>';
+  w.innerHTML=t;
+}
+/* ── Carga manual con IA ── */
+function cfSubir(files){
+  var arr=[].slice.call(files||[]); if(!arr.length)return;
+  var st=$('cfStatus');var i=0,okc=0,dupc=0,errc=0;
+  function next(){
+    if(i>=arr.length){if(st)st.innerHTML='<b>✓ '+okc+' registrados</b>'+(dupc?' · ⚠ '+dupc+' duplicados omitidos':'')+(errc?' · ✕ '+errc+' con error':'');_contaPaint();return;}
+    var f=arr[i];
+    if(f.size>20*1024*1024){errc++;i++;return next();}
+    if(st)st.innerHTML='⏳ Extrayendo con IA: <b>'+cfHE(f.name)+'</b> ('+(i+1)+'/'+arr.length+')...';
+    var rd=new FileReader();
+    rd.onload=function(e){
+      var b64=String(e.target.result).split(',')[1];
+      var chk=_prepararArchivoIA(b64,f.type||'');
+      if(!chk.ok){errc++;i++;return next();}
+      fetch('/api/gemini',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt:CF_PROMPT,imageBase64:b64,mimeType:chk.mimeType})}).then(function(r){return r.json();}).then(function(d){
+        var tx='';if(d&&d.candidates&&d.candidates[0]&&d.candidates[0].content&&d.candidates[0].content.parts)tx=d.candidates[0].content.parts.map(function(p){return p.text||'';}).join('');
+        var m=tx.replace(/```json/g,'').replace(/```/g,'').match(/\{[\s\S]*\}/);
+        if(!m){errc++;i++;return next();}
+        try{
+          var fact=cfArmar(JSON.parse(m[0]),'manual');
+          if(cfDup(fact)){dupc++;}else{CONTFACT.unshift(fact);saveCONTFACT();okc++;}
+        }catch(e2){errc++;}
+        i++;next();
+      }).catch(function(){errc++;i++;next();});
+    };
+    rd.readAsDataURL(f);
+  }
+  next();
+}
+/* ── Detalle (Facturas + DetalleFactura) ── */
+function cfVer(id){
+  var f=CONTFACT.filter(function(x){return x.id===id;})[0];if(!f)return;
+  var h='<div style="position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:999;display:flex;align-items:center;justify-content:center;padding:16px" onclick="if(event.target===this)this.remove()">';
+  h+='<div class="card" style="max-width:640px;width:100%;max-height:86vh;overflow:auto;padding:16px">';
+  h+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><div style="font-size:15px;font-weight:800;color:var(--tx)">'+cfHE(f.tipo_doc)+' '+cfHE(f.serie_numero||'')+'</div><span style="cursor:pointer;color:var(--tmuted);font-size:18px" onclick="this.closest(\'div[style*=fixed]\').remove()">✕</span></div>';
+  function row(k,v){return '<div style="display:grid;grid-template-columns:150px 1fr;gap:8px;padding:4px 0;border-bottom:1px solid var(--bd);font-size:12px"><div style="color:var(--tmuted);font-weight:600">'+k+'</div><div style="color:var(--tx)">'+cfHE(v==null||v===''?'—':v)+'</div></div>';}
+  h+=row('Clasificación',f.cv+' · origen '+f.origen);
+  h+=row('Fecha emisión',f.fecha_emision);
+  h+=row('Emisor',((f.emisor||{}).razon||'—')+' · RUC '+((f.emisor||{}).ruc||'—'));
+  h+=row('Receptor',((f.receptor||{}).razon||'—')+' · '+((f.receptor||{}).ruc||'—'));
+  h+=row('Subtotal',cfMon(f.subtotal,f.moneda));
+  h+=row('IGV',cfMon(f.igv,f.moneda));
+  if(f.percepcion)h+=row('Percepción',cfMon(f.percepcion,f.moneda));
+  if(f.retencion)h+=row('Retención',cfMon(f.retencion,f.moneda));
+  h+=row('TOTAL',cfMon(f.total,f.moneda));
+  h+=row('Confianza IA',f.confianza+'%'+(f.revision?' · ⚠ REQUIERE REVISIÓN':' · ✓'));
+  if(f.calidad)h+=row('Calidad imagen',f.calidad);
+  if((f.validaciones||[]).length)h+=row('Validaciones','⚠ '+f.validaciones.join(' · '));
+  h+='<div style="font-size:12px;font-weight:700;color:var(--tx);margin:10px 0 4px">Detalle de ítems ('+(f.items||[]).length+')</div>';
+  h+='<table style="width:100%;border-collapse:collapse;font-size:11px"><thead><tr style="background:var(--pane2,rgba(0,0,0,.03))"><th style="text-align:left;padding:5px">Descripción</th><th style="padding:5px">Cant.</th><th style="padding:5px">Und.</th><th style="text-align:right;padding:5px">P.Unit</th><th style="text-align:right;padding:5px">Total</th></tr></thead><tbody>';
+  (f.items||[]).forEach(function(it){h+='<tr style="border-top:1px solid var(--bd)"><td style="padding:5px">'+cfHE(it.desc||'—')+'</td><td style="padding:5px;text-align:center">'+cfHE(it.cant!=null?it.cant:'—')+'</td><td style="padding:5px;text-align:center">'+cfHE(it.unidad||'—')+'</td><td style="padding:5px;text-align:right" class="mono">'+(it.punit!=null?(+it.punit).toFixed(2):'—')+'</td><td style="padding:5px;text-align:right" class="mono">'+(it.total!=null?(+it.total).toFixed(2):'—')+'</td></tr>';});
+  if(!(f.items||[]).length)h+='<tr><td colspan="5" style="padding:10px;text-align:center;color:var(--tmuted)">Sin ítems extraídos.</td></tr>';
+  h+='</tbody></table>';
+  if(f.revision)h+='<button onclick="cfAprobar(\''+f.id+'\');this.closest(\'div[style*=fixed]\').remove()" style="background:#16a34a;color:#fff;border:none;padding:9px 16px;border-radius:9px;font-weight:700;cursor:pointer;margin-top:12px">✓ Marcar como revisado/aprobado</button>';
+  h+='</div></div>';
+  var d=document.createElement('div');d.innerHTML=h;document.body.appendChild(d.firstChild);
+}
+function cfAprobar(id){var f=CONTFACT.filter(function(x){return x.id===id;})[0];if(!f)return;f.revision=false;f.aprobado_por=EMP?EMP.nombre:'usuario';f.aprobado_en=new Date().toISOString();saveCONTFACT();_contaPaint();toast('Comprobante aprobado');}
+function cfDel(id){if(!confirm('¿Eliminar este comprobante?'))return;CONTFACT=CONTFACT.filter(function(x){return x.id!==id;});saveCONTFACT();_contaPaint();}
+/* ── Telegram ── */
+function cfActivarTg(){
+  if(!confirm('¿Activar la recepción de facturas por Telegram? Envía fotos/PDF al bot de alertas SIGMA y se registran solos.'))return;
+  fetch('/api/contfact/activar',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'}).then(function(r){return r.json();}).then(function(d){
+    if(d&&d.ok)toast('📱 Recepción Telegram activada');
+    else alert('Error: '+((d&&d.error)||'no se pudo activar'));
+  }).catch(function(){alert('Sin conexión');});
+}
+/* ── Exportaciones (Excel/CSV/PDF/Sheets) ── */
+function cfExport(mode){
+  var list=cfFiltradas();if(!list.length){toast('Sin datos para exportar');return;}
+  var rows=[['Fecha','Tipo','Compra/Venta','Numero','Emisor','RUC Emisor','Receptor','RUC Receptor','Moneda','Subtotal','IGV','Percepcion','Retencion','Total','Confianza','Estado','Origen']];
+  list.forEach(function(f){rows.push([f.fecha_emision||'',f.tipo_doc,f.cv,f.serie_numero||'',(f.emisor||{}).razon||'',(f.emisor||{}).ruc||'',(f.receptor||{}).razon||'',(f.receptor||{}).ruc||'',f.moneda,(+f.subtotal||0).toFixed(2),(+f.igv||0).toFixed(2),(+f.percepcion||0).toFixed(2),(+f.retencion||0).toFixed(2),(+f.total||0).toFixed(2),f.confianza+'%',f.revision?'REVISAR':'OK',f.origen]);});
+  if(mode==='csv'){var csv=rows.map(function(r){return r.map(function(c){return '"'+String(c).replace(/"/g,'""')+'"';}).join(',');}).join('\n');var bl=new Blob(['﻿'+csv],{type:'text/csv'});var a=document.createElement('a');a.href=URL.createObjectURL(bl);a.download='facturas_extraccion_ia.csv';a.click();}
+  else if(mode==='sheets'){var tsv=rows.map(function(r){return r.join('\t');}).join('\n');navigator.clipboard.writeText(tsv).then(function(){toast('Tabla copiada — pégala en Google Sheets');window.open('https://sheets.new','_blank');});}
+  else if(mode==='print'){
+    var w=window.open('','_blank');
+    var tb='<table border="1" cellspacing="0" cellpadding="4" style="border-collapse:collapse;font-size:11px;width:100%">'+rows.map(function(r,ix){return '<tr>'+r.map(function(c){return (ix===0?'<th style="background:#0d3b6e;color:#fff;padding:5px">':'<td>')+String(c)+(ix===0?'</th>':'</td>');}).join('')+'</tr>';}).join('')+'</table>';
+    w.document.write('<html><head><title>Facturas — Extracción IA</title></head><body style="font-family:Arial;padding:16px"><h3>Extracción Inteligente de Facturas — '+(EMP?EMP.nombre:'')+'</h3>'+tb+'</body></html>');
+    w.document.close();setTimeout(function(){w.print();},400);
+  }
 }
 
 </script>

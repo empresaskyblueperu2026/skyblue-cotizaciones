@@ -1130,6 +1130,103 @@ app.get('/api/exp/file',async function(req,res){
     res.set('Content-Type',ct2);return res.send(Buffer.from(ab2));
   }catch(e){res.status(500).end();}
 });
+
+/* ══════════════ EXTRACCION INTELIGENTE DE FACTURAS (submodulo de Contabilidad) ══════════════
+   Recepcion de comprobantes: Telegram (webhook del bot de alertas SIGMA) + carga manual (frontend).
+   WhatsApp Business requiere Meta Cloud API (no conectada); mientras tanto se reenvia al bot de Telegram.
+   Extraccion: Gemini 2.5-flash con OCR nativo. Persistencia: global.json -> contfact_<empId> (aislado por empresa).
+   Cada registro = tabla "Facturas"; su arreglo items[] = tabla "DetalleFactura". */
+var CONTFACT_PROMPT='Eres un extractor contable peruano experto con OCR. Analiza este comprobante y devuelve SOLO JSON valido sin markdown: {"tipo_doc":"FACTURA|BOLETA|NOTA_CREDITO|NOTA_DEBITO|OTRO","numero":"serie-numero ej F001-123","fecha":"YYYY-MM-DD","emisor":"razon social del emisor","ruc_emisor":"RUC 11 digitos","dir_emisor":null,"receptor":"razon social del receptor/cliente","ruc_receptor":"RUC o DNI","moneda":"PEN|USD","subtotal":numero_o_null,"igv":numero_o_null,"percepcion":numero_o_null,"retencion":numero_o_null,"total":numero_o_null,"items":[{"desc":"descripcion","cant":numero,"unidad":"unidad","punit":precio_unitario,"total":importe}],"calidad":"BUENA|REGULAR|MALA segun legibilidad de la imagen","confianza":0_a_100,"observacion":null}. REGLAS: 1) NUNCA inventes: si un dato no se lee pon null. 2) total = importe total impreso. 3) Extrae TODOS los items individualmente. 4) confianza segun legibilidad y completitud. 5) fecha formato YYYY-MM-DD.';
+async function contfactExtraer(b64,mime){
+  var k=process.env.GEMINI_API_KEY; if(!k)return null;
+  var body={contents:[{parts:[{text:CONTFACT_PROMPT},{inline_data:{mime_type:mime||'image/jpeg',data:b64}}]}],generationConfig:{temperature:0.1,maxOutputTokens:4000,thinkingConfig:{thinkingBudget:0}}};
+  try{
+    var r=await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key='+k,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    var d=await r.json(),tx='';try{tx=d.candidates[0].content.parts.map(function(p){return p.text||''}).join('');}catch(e){}
+    var m=tx.replace(/```json/g,'').replace(/```/g,'').match(/\{[\s\S]*\}/);
+    return m?JSON.parse(m[0]):null;
+  }catch(e){return null;}
+}
+/* Normaliza el JSON crudo de Gemini: clasifica compra/venta segun RUC de la empresa,
+   valida consistencia de totales y calidad, calcula confianza y marca revision humana (<90). */
+function contfactArmar(o,origen,empRuc){
+  o=o||{}; var R=String(empRuc||'20610723501');
+  var cv='NO_DETERMINADO';
+  if(String(o.ruc_emisor||'')===R)cv='VENTA'; else if(String(o.ruc_receptor||'')===R)cv='COMPRA';
+  var sub=+o.subtotal||0, igv=+o.igv||0, tot=+o.total||0, per=+o.percepcion||0, ret=+o.retencion||0;
+  var vals=[];
+  if(tot>0&&sub>0&&Math.abs((sub+igv)-tot)>0.5&&Math.abs((sub+igv+per)-tot)>0.5)vals.push('Totales no cuadran: subtotal+IGV='+(sub+igv).toFixed(2)+' vs total='+tot.toFixed(2));
+  if(!o.numero)vals.push('Numero de comprobante no detectado');
+  if(!o.ruc_emisor)vals.push('RUC emisor no detectado');
+  if(o.calidad==='MALA')vals.push('Calidad de imagen baja');
+  var conf=Math.max(0,Math.min(100,+o.confianza||0)); if(vals.length)conf=Math.min(conf,85);
+  return {id:'cf'+Date.now().toString(36)+Math.random().toString(36).slice(2,6),tipo_doc:o.tipo_doc||'OTRO',cv:cv,serie_numero:o.numero||null,fecha_emision:o.fecha||null,
+    emisor:{razon:o.emisor||null,ruc:o.ruc_emisor||null,dir:o.dir_emisor||null},receptor:{razon:o.receptor||null,ruc:o.ruc_receptor||null},
+    moneda:(o.moneda==='USD'?'USD':'PEN'),subtotal:sub||null,igv:igv||null,percepcion:per||null,retencion:ret||null,total:tot||null,
+    items:Array.isArray(o.items)?o.items:[],calidad:o.calidad||null,confianza:conf,revision:conf<90,validaciones:vals,origen:origen||'manual',creado:new Date().toISOString()};
+}
+/* Guarda en la nube con validacion de duplicados (misma serie-numero + RUC emisor). */
+async function contfactGuardarNube(f,empId){
+  var data=await sbGetData()||{}; var key='contfact_'+(empId||SKYBLUE_EMPID);
+  var list=Array.isArray(data[key])?data[key]:[];
+  var dup=list.some(function(x){return x.serie_numero&&f.serie_numero&&x.serie_numero===f.serie_numero&&String((x.emisor&&x.emisor.ruc)||'')===String((f.emisor&&f.emisor.ruc)||'');});
+  if(dup)return {ok:false,dup:true};
+  list.unshift(f); data[key]=list;
+  await sbPutData(data); try{writeData(data);}catch(e){}
+  return {ok:true,fact:f};
+}
+/* Activa la recepcion por Telegram: registra el webhook del bot de alertas hacia /api/contfact/webhook. */
+app.post('/api/contfact/activar',async function(req,res){
+  try{
+    if(!sbReady())return proxyCloud(req,res);
+    var cfg=await sbGetConfig();
+    var tok=cfg.tgToken||process.env.TELEGRAM_BOT_TOKEN;
+    if(!tok)return res.status(400).json({error:'Primero conecta el bot de Telegram en Configuracion'});
+    if(!cfg.contfactSecret){cfg.contfactSecret=Math.random().toString(36).slice(2)+Date.now().toString(36);await sbPutConfig(cfg);}
+    var r=await fetch('https://api.telegram.org/bot'+tok+'/setWebhook',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url:PROD_URL+'/api/contfact/webhook',secret_token:cfg.contfactSecret,allowed_updates:['message']})});
+    var d=await r.json();
+    if(!d.ok)return res.status(500).json({error:'setWebhook: '+(d.description||'fallo')});
+    res.json({ok:true,msg:'Recepcion por Telegram activada. Envia fotos o PDF de facturas al bot de alertas SIGMA.'});
+  }catch(e){res.status(500).json({error:e.message});}
+});
+/* Webhook: recibe fotos/PDF del bot, extrae con IA, valida, guarda y responde el resumen. */
+app.post('/api/contfact/webhook',async function(req,res){
+  res.json({ok:true}); // responder rapido a Telegram
+  try{
+    if(!sbReady())return;
+    var cfg=await sbGetConfig();
+    var tok=cfg.tgToken||process.env.TELEGRAM_BOT_TOKEN; if(!tok)return;
+    var sec=req.headers['x-telegram-bot-api-secret-token'];
+    if(cfg.contfactSecret&&sec!==cfg.contfactSecret)return; // seguridad: solo Telegram con nuestro secreto
+    var msg=(req.body||{}).message; if(!msg||!msg.chat)return;
+    if(cfg.tgChatId&&String(msg.chat.id)!==String(cfg.tgChatId))return; // solo el chat autorizado (Diego)
+    async function reply(t){try{await fetch('https://api.telegram.org/bot'+tok+'/sendMessage',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({chat_id:msg.chat.id,text:t})});}catch(e){}}
+    var fileId=null,mime='image/jpeg';
+    if(msg.photo&&msg.photo.length){fileId=msg.photo[msg.photo.length-1].file_id;}
+    else if(msg.document){fileId=msg.document.file_id;mime=msg.document.mime_type||'application/pdf';}
+    if(!fileId){ if((msg.text||'').toLowerCase().indexOf('factura')>=0)await reply('📎 Enviame la FOTO o el PDF del comprobante y lo registro automaticamente en Contabilidad.'); return; }
+    await reply('🧾 Comprobante recibido. Extrayendo datos con IA...');
+    var gf=await (await fetch('https://api.telegram.org/bot'+tok+'/getFile?file_id='+fileId)).json();
+    if(!gf.ok||!gf.result||!gf.result.file_path){await reply('❌ No pude descargar el archivo.');return;}
+    var fb=await fetch('https://api.telegram.org/file/bot'+tok+'/'+gf.result.file_path);
+    var ab=await fb.arrayBuffer(); var b64=Buffer.from(ab).toString('base64');
+    if(b64.length>20*1024*1024){await reply('❌ Archivo muy grande (max ~15MB).');return;}
+    var raw=await contfactExtraer(b64,mime);
+    if(!raw){await reply('❌ La IA no pudo leer el comprobante. Intenta con una foto mas clara o carga manual en SIGMA → Contabilidad → Extraccion IA.');return;}
+    var f=contfactArmar(raw,'telegram','20610723501');
+    var g=await contfactGuardarNube(f,SKYBLUE_EMPID);
+    if(g.dup){await reply('⚠️ DUPLICADO: el comprobante '+(f.serie_numero||'')+' ya esta registrado. No se guardo de nuevo.');return;}
+    var mon=f.moneda==='USD'?'US$':'S/';
+    await reply('✅ REGISTRADO EN CONTABILIDAD\n'+
+      '📄 '+f.tipo_doc+' '+(f.serie_numero||'s/n')+' · '+(f.cv==='COMPRA'?'🛒 COMPRA':(f.cv==='VENTA'?'💰 VENTA':'❓'))+'\n'+
+      '🏢 '+(f.emisor.razon||'—')+' (RUC '+(f.emisor.ruc||'—')+')\n'+
+      '📅 '+(f.fecha_emision||'—')+' · '+f.items.length+' item(s)\n'+
+      '💵 Total: '+mon+' '+((+f.total||0).toFixed(2))+' (IGV '+mon+' '+((+f.igv||0).toFixed(2))+')\n'+
+      '🎯 Confianza IA: '+f.confianza+'%'+(f.revision?'\n⚠️ Marcado para REVISION HUMANA':'')+
+      (f.validaciones.length?'\n🔎 '+f.validaciones.join(' · '):''));
+  }catch(e){console.error('contfact webhook:',e.message);}
+});
+
 app.get('/health',function(req,res){res.status(200).json({status:'ok',version:'2.3'});});
 app.get('/api/diag',function(req,res){
   res.json({
