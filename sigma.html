@@ -3537,11 +3537,11 @@ function renderExperiencia(){
   h+='<div><div style="font-size:20px;font-weight:800;color:var(--tx)">EXPERIENCIA EMPRESARIAL — IA</div>'+
      '<div style="font-size:12px;color:var(--tmuted)">'+expHE(EMP?EMP.nombre:'')+' · base histórica de experiencias acreditables</div></div>';
   h+='<div style="display:flex;gap:8px;flex-wrap:wrap">'+
-     '<button class="btn" onclick="expNueva()" style="background:var(--acc);color:#fff;font-weight:700">+ NUEVA EXPERIENCIA</button>'+
-     '<button class="btn2" onclick="expCuadro()">📋 Cuadro de experiencia</button>'+
-     '<button class="btn2" onclick="expSelMonto()">🎯 Selección por monto</button>'+
-     '<button class="btn2" onclick="expTDR()">📑 Compatibilidad TDR</button>'+
-     (EXP.length?'':'<button class="btn2" onclick="expCargarEjemplos()">✨ Cargar 2 ejemplos</button>')+
+     '<button onclick="expNueva()" style="background:#0ea5e9;color:#fff;font-weight:800;border:none;padding:10px 16px;border-radius:10px;cursor:pointer;font-size:13px;box-shadow:0 2px 8px rgba(14,165,233,.35)">+ NUEVA EXPERIENCIA</button>'+
+     '<button onclick="expCuadro()" style="background:#8b5cf6;color:#fff;font-weight:700;border:none;padding:10px 14px;border-radius:10px;cursor:pointer;font-size:12.5px;box-shadow:0 2px 8px rgba(139,92,246,.35)">📋 Cuadro de experiencia</button>'+
+     '<button onclick="expSelMonto()" style="background:#f59e0b;color:#fff;font-weight:700;border:none;padding:10px 14px;border-radius:10px;cursor:pointer;font-size:12.5px;box-shadow:0 2px 8px rgba(245,158,11,.35)">🎯 Selección por monto</button>'+
+     '<button onclick="expTDR()" style="background:#16a34a;color:#fff;font-weight:700;border:none;padding:10px 14px;border-radius:10px;cursor:pointer;font-size:12.5px;box-shadow:0 2px 8px rgba(22,163,74,.35)">📑 Compatibilidad TDR</button>'+
+     (EXP.length?'':'<button onclick="expCargarEjemplos()" style="background:#475569;color:#fff;font-weight:700;border:none;padding:10px 14px;border-radius:10px;cursor:pointer;font-size:12.5px">✨ Cargar 2 ejemplos</button>')+
      '</div></div>';
   // KPIs
   h+='<div class="kpis" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:14px">';
@@ -3561,7 +3561,7 @@ function renderExperiencia(){
   // toolbar filtros
   h+='<div class="card" style="padding:10px;margin-bottom:10px"><div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">';
   h+='<input id="expQ" placeholder="🔎 Buscar (objeto, ítem, marca, cliente, palabra clave)..." value="'+expHE(_expFiltro.q)+'" oninput="_expFiltro.q=this.value;expRenderTabla()" style="flex:1;min-width:220px;padding:8px 10px;border:1px solid var(--bd);border-radius:8px;background:var(--pane);color:var(--tx);font-size:13px">';
-  h+='<button class="btn2" onclick="expSemantica()">🧠 Búsqueda IA</button>';
+  h+='<button onclick="expSemantica()" style="background:#0d3b6e;color:#fff;font-weight:700;border:none;padding:8px 12px;border-radius:8px;cursor:pointer;font-size:12px">🧠 Búsqueda IA</button>';
   h+='<select onchange="_expFiltro.tipo=this.value;expRenderTabla()" class="expsel">'+expOpts(['','BIENES','SERVICIOS','OBRAS','CONSULTORIA','MIXTA'],_expFiltro.tipo,'Tipo')+'</select>';
   h+='<select onchange="_expFiltro.pub=this.value;expRenderTabla()" class="expsel">'+expOpts(['','PUBLICO','PRIVADO'],_expFiltro.pub,'Sector')+'</select>';
   h+='<select onchange="_expFiltro.estado=this.value;expRenderTabla()" class="expsel">'+expOpts(['','COMPLETA','PARCIAL','INCONSISTENTE','REQUIERE_REVISION'],_expFiltro.estado,'Estado')+'</select>';
