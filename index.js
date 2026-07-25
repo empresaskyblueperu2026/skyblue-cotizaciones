@@ -1138,14 +1138,23 @@ app.get('/api/exp/file',async function(req,res){
    Cada registro = tabla "Facturas"; su arreglo items[] = tabla "DetalleFactura". */
 var CONTFACT_PROMPT='Eres un extractor contable peruano experto con OCR. Analiza este comprobante y devuelve SOLO JSON valido sin markdown: {"tipo_doc":"FACTURA|BOLETA|NOTA_CREDITO|NOTA_DEBITO|OTRO","numero":"serie-numero ej F001-123","fecha":"YYYY-MM-DD","emisor":"razon social del emisor","ruc_emisor":"RUC 11 digitos","dir_emisor":null,"receptor":"razon social del receptor/cliente","ruc_receptor":"RUC o DNI","moneda":"PEN|USD","subtotal":numero_o_null,"igv":numero_o_null,"percepcion":numero_o_null,"retencion":numero_o_null,"total":numero_o_null,"items":[{"desc":"descripcion","cant":numero,"unidad":"unidad","punit":precio_unitario,"total":importe}],"calidad":"BUENA|REGULAR|MALA segun legibilidad de la imagen","confianza":0_a_100,"observacion":null}. REGLAS: 1) NUNCA inventes: si un dato no se lee pon null. 2) total = importe total impreso. 3) Extrae TODOS los items individualmente. 4) confianza segun legibilidad y completitud. 5) fecha formato YYYY-MM-DD.';
 async function contfactExtraer(b64,mime){
-  var k=process.env.GEMINI_API_KEY; if(!k)return null;
-  var body={contents:[{parts:[{text:CONTFACT_PROMPT},{inline_data:{mime_type:mime||'image/jpeg',data:b64}}]}],generationConfig:{temperature:0.1,maxOutputTokens:4000,thinkingConfig:{thinkingBudget:0}}};
+  var k=process.env.GEMINI_API_KEY; if(!k)return {__err:'sin GEMINI_API_KEY'};
+  var body={contents:[{parts:[{text:CONTFACT_PROMPT},{inline_data:{mime_type:mime||'image/jpeg',data:b64}}]}],generationConfig:{temperature:0.1,maxOutputTokens:8192,thinkingConfig:{thinkingBudget:0}}};
+  var url='https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key='+k;
   try{
-    var r=await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key='+k,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
-    var d=await r.json(),tx='';try{tx=d.candidates[0].content.parts.map(function(p){return p.text||''}).join('');}catch(e){}
-    var m=tx.replace(/```json/g,'').replace(/```/g,'').match(/\{[\s\S]*\}/);
-    return m?JSON.parse(m[0]):null;
-  }catch(e){return null;}
+    var d,st=0,waits=[0,4000,10000];
+    for(var w=0;w<waits.length;w++){
+      if(w>0)await new Promise(function(rs){setTimeout(rs,waits[w]);});
+      var r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+      st=r.status; d=await r.json();
+      if(st!==429&&st!==503)break;
+    }
+    if(d&&d.error)return {__err:((d.error.message||('HTTP '+st))+'').slice(0,120)};
+    var tx='';try{tx=d.candidates[0].content.parts.map(function(p){return p.text||''}).join('');}catch(e){return {__err:'respuesta vacia (HTTP '+st+')'};}
+    var m=tx.replace(/```json/g,'').replace(/```/g,'').match(/{[sS]*}/);
+    if(!m)return {__err:'sin JSON en respuesta'};
+    try{return JSON.parse(m[0]);}catch(e){return {__err:'JSON invalido'};}
+  }catch(e){return {__err:(e.message+'').slice(0,120)};}
 }
 /* Normaliza el JSON crudo de Gemini: clasifica compra/venta segun RUC de la empresa,
    valida consistencia de totales y calidad, calcula confianza y marca revision humana (<90). */
@@ -1221,7 +1230,7 @@ app.post('/api/contfact/webhook',async function(req,res){
     var ab=await fb.arrayBuffer(); var b64=Buffer.from(ab).toString('base64');
     if(b64.length>20*1024*1024){await reply('❌ Archivo muy grande (max ~15MB).');return;}
     var raw=await contfactExtraer(b64,mime);
-    if(!raw){await reply('❌ La IA no pudo leer el comprobante. Intenta con una foto mas clara o carga manual en SIGMA → Contabilidad → Extraccion IA.');return;}
+    if(!raw||raw.__err){await reply('❌ La IA no pudo leer el comprobante'+((raw&&raw.__err)?(' ['+raw.__err+']'):'')+'. Espera unos segundos y reenvia la foto, o carga manual en SIGMA → Contabilidad → Extraccion IA.');return;}
     var f=contfactArmar(raw,'telegram','20610723501');
     var g=await contfactGuardarNube(f,SKYBLUE_EMPID);
     if(g.dup){await reply('⚠️ DUPLICADO: el comprobante '+(f.serie_numero||'')+' ya esta registrado. No se guardo de nuevo.');return;}
