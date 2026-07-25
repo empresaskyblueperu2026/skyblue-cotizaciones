@@ -1137,7 +1137,7 @@ app.get('/api/exp/file',async function(req,res){
    Extraccion: Gemini 2.5-flash con OCR nativo. Persistencia: global.json -> contfact_<empId> (aislado por empresa).
    Cada registro = tabla "Facturas"; su arreglo items[] = tabla "DetalleFactura". */
 var CONTFACT_PROMPT='Eres un extractor contable peruano experto con OCR. Analiza este comprobante y devuelve SOLO JSON valido sin markdown: {"tipo_doc":"FACTURA|BOLETA|NOTA_CREDITO|NOTA_DEBITO|OTRO","numero":"serie-numero ej F001-123","fecha":"YYYY-MM-DD","emisor":"razon social del emisor","ruc_emisor":"RUC 11 digitos","dir_emisor":null,"receptor":"razon social del receptor/cliente","ruc_receptor":"RUC o DNI","moneda":"PEN|USD","subtotal":numero_o_null,"igv":numero_o_null,"percepcion":numero_o_null,"retencion":numero_o_null,"total":numero_o_null,"items":[{"desc":"descripcion","cant":numero,"unidad":"unidad","punit":precio_unitario,"total":importe}],"calidad":"BUENA|REGULAR|MALA segun legibilidad de la imagen","confianza":0_a_100,"observacion":null}. REGLAS: 1) NUNCA inventes: si un dato no se lee pon null. 2) total = importe total impreso. 3) Extrae TODOS los items individualmente. 4) confianza segun legibilidad y completitud. 5) fecha formato YYYY-MM-DD.';
-async function contfactExtraer(b64,mime){
+async function contfactGemini(b64,mime){
   var k=process.env.GEMINI_API_KEY; if(!k)return {__err:'sin GEMINI_API_KEY'};
   var body={contents:[{parts:[{text:CONTFACT_PROMPT},{inline_data:{mime_type:mime||'image/jpeg',data:b64}}]}],generationConfig:{temperature:0.1,maxOutputTokens:8192,thinkingConfig:{thinkingBudget:0}}};
   var url='https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key='+k;
@@ -1155,6 +1155,32 @@ async function contfactExtraer(b64,mime){
     if(!m)return {__err:'sin JSON en respuesta'};
     try{return JSON.parse(m[0]);}catch(e){return {__err:'JSON invalido'};}
   }catch(e){return {__err:(e.message+'').slice(0,120)};}
+}
+/* Respaldo con Claude cuando Gemini falla (cuota agotada, 5xx, etc). Usa vision nativa (imagen inline en el mensaje). */
+async function contfactClaude(b64,mime){
+  var k=process.env.ANTHROPIC_API_KEY; if(!k)return {__err:'sin ANTHROPIC_API_KEY'};
+  var isPdf=(mime||'').indexOf('pdf')>=0;
+  var block=isPdf?{type:'document',source:{type:'base64',media_type:'application/pdf',data:b64}}:{type:'image',source:{type:'base64',media_type:mime||'image/jpeg',data:b64}};
+  var body={model:'claude-sonnet-4-5',max_tokens:4096,messages:[{role:'user',content:[block,{type:'text',text:CONTFACT_PROMPT}]}]};
+  try{
+    var r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':k,'anthropic-version':'2023-06-01','anthropic-beta':'pdfs-2024-09-25'},body:JSON.stringify(body)});
+    var d=await r.json();
+    if(d&&d.error)return {__err:((d.error.message||('HTTP '+r.status))+'').slice(0,120)};
+    var tx='';try{tx=(d.content||[]).map(function(c){return c.text||'';}).join('');}catch(e){return {__err:'respuesta vacia claude'};}
+    var m=tx.replace(/```json/g,'').replace(/```/g,'').match(/{[sS]*}/);
+    if(!m)return {__err:'sin JSON en respuesta claude'};
+    try{var o=JSON.parse(m[0]);o.__motor='claude';return o;}catch(e){return {__err:'JSON invalido claude'};}
+  }catch(e){return {__err:(e.message+'').slice(0,120)};}
+}
+/* Orquesta: intenta Gemini; si falla por cuota/servidor, usa Claude como respaldo automatico. */
+async function contfactExtraer(b64,mime){
+  var g=await contfactGemini(b64,mime);
+  if(!g.__err)return g;
+  var esCuotaOServidor=/quota|429|503|billing|credit/i.test(g.__err);
+  if(!esCuotaOServidor)return g;
+  var c=await contfactClaude(b64,mime);
+  if(!c.__err)return c;
+  return {__err:'Gemini: '+g.__err+' | Claude: '+c.__err};
 }
 /* Normaliza el JSON crudo de Gemini: clasifica compra/venta segun RUC de la empresa,
    valida consistencia de totales y calidad, calcula confianza y marca revision humana (<90). */
