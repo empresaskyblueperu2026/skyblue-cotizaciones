@@ -1180,13 +1180,20 @@ app.post('/api/contfact/activar',async function(req,res){
   try{
     if(!sbReady())return proxyCloud(req,res);
     var cfg=await sbGetConfig();
-    var tok=cfg.tgToken||process.env.TELEGRAM_BOT_TOKEN;
-    if(!tok)return res.status(400).json({error:'Primero conecta el bot de Telegram en Configuracion'});
-    if(!cfg.contfactSecret){cfg.contfactSecret=Math.random().toString(36).slice(2)+Date.now().toString(36);await sbPutConfig(cfg);}
-    var r=await fetch('https://api.telegram.org/bot'+tok+'/setWebhook',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url:PROD_URL+'/api/contfact/webhook',secret_token:cfg.contfactSecret,allowed_updates:['message']})});
+    var tok=((req.body&&req.body.token)||'').trim()||(cfg.contfactBot&&cfg.contfactBot.token)||'';
+    if(!tok)return res.status(400).json({error:'Pega el token del bot CONTABILIDAD SKY BLUE (creado en @BotFather)'});
+    var me=await (await fetch('https://api.telegram.org/bot'+tok+'/getMe')).json();
+    if(!me.ok)return res.status(400).json({error:'Token invalido: '+(me.description||'verifica en BotFather')});
+    var sec=(cfg.contfactBot&&cfg.contfactBot.secret)||(Math.random().toString(36).slice(2)+Date.now().toString(36));
+    cfg.contfactBot={token:tok,secret:sec,username:me.result.username,nombre:me.result.first_name};
+    await sbPutConfig(cfg);
+    // limpiar webhook del bot de alertas si quedo apuntando aqui (activacion antigua)
+    if(cfg.tgToken&&cfg.tgToken!==tok){try{await fetch('https://api.telegram.org/bot'+cfg.tgToken+'/deleteWebhook');}catch(e){}}
+    var r=await fetch('https://api.telegram.org/bot'+tok+'/setWebhook',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url:PROD_URL+'/api/contfact/webhook',secret_token:sec,allowed_updates:['message']})});
     var d=await r.json();
     if(!d.ok)return res.status(500).json({error:'setWebhook: '+(d.description||'fallo')});
-    res.json({ok:true,msg:'Recepcion por Telegram activada. Envia fotos o PDF de facturas al bot de alertas SIGMA.'});
+    try{await fetch('https://api.telegram.org/bot'+tok+'/sendMessage',{method:'POST',headers:{'Content-Type':'application/json'},body:cfg.tgChatId?JSON.stringify({chat_id:cfg.tgChatId,text:'🧾 Bot CONTABILIDAD SKY BLUE activado. Enviame fotos o PDF de facturas/boletas y las registro automaticamente en SIGMA → Contabilidad → Extraccion IA.'}):'{}'});}catch(e){}
+    res.json({ok:true,bot:'@'+me.result.username,msg:'Bot de contabilidad activado. Envia los comprobantes a @'+me.result.username});
   }catch(e){res.status(500).json({error:e.message});}
 });
 /* Webhook: recibe fotos/PDF del bot, extrae con IA, valida, guarda y responde el resumen. */
@@ -1195,9 +1202,11 @@ app.post('/api/contfact/webhook',async function(req,res){
   try{
     if(!sbReady())return;
     var cfg=await sbGetConfig();
-    var tok=cfg.tgToken||process.env.TELEGRAM_BOT_TOKEN; if(!tok)return;
+    var bot=cfg.contfactBot||{};
+    var tok=bot.token||cfg.tgToken||process.env.TELEGRAM_BOT_TOKEN; if(!tok)return;
     var sec=req.headers['x-telegram-bot-api-secret-token'];
-    if(cfg.contfactSecret&&sec!==cfg.contfactSecret)return; // seguridad: solo Telegram con nuestro secreto
+    var esperado=bot.secret||cfg.contfactSecret;
+    if(esperado&&sec!==esperado)return; // seguridad: solo Telegram con nuestro secreto
     var msg=(req.body||{}).message; if(!msg||!msg.chat)return;
     if(cfg.tgChatId&&String(msg.chat.id)!==String(cfg.tgChatId))return; // solo el chat autorizado (Diego)
     async function reply(t){try{await fetch('https://api.telegram.org/bot'+tok+'/sendMessage',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({chat_id:msg.chat.id,text:t})});}catch(e){}}

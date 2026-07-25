@@ -4185,7 +4185,7 @@ function extfactHTML(){
   h+='<div style="font-size:15px;font-weight:800;color:var(--tx)">🧾 Extracción Inteligente de Facturas</div>';
   h+='<div style="display:flex;gap:8px;flex-wrap:wrap">'+
      '<button onclick="$(\'cfFileInput\').click()" style="background:linear-gradient(135deg,#7c3aed,#0ea5e9);color:#fff;font-weight:800;border:none;padding:9px 16px;border-radius:9px;cursor:pointer;font-size:12.5px;box-shadow:0 2px 8px rgba(124,58,237,.35)">📤 Cargar comprobantes</button>'+
-     '<button onclick="cfActivarTg()" style="background:#0d3b6e;color:#fff;font-weight:700;border:none;padding:9px 14px;border-radius:9px;cursor:pointer;font-size:12px">📱 Activar recepción Telegram</button>'+
+     '<button onclick="cfActivarTg()" style="background:#0d3b6e;color:#fff;font-weight:700;border:none;padding:9px 14px;border-radius:9px;cursor:pointer;font-size:12px">📱 Bot CONTABILIDAD (Telegram)</button>'+
      '<button onclick="cfExport(\'csv\')" style="background:#16a34a;color:#fff;font-weight:700;border:none;padding:9px 12px;border-radius:9px;cursor:pointer;font-size:12px">⬇ Excel/CSV</button>'+
      '<button onclick="cfExport(\'print\')" style="background:#ef4444;color:#fff;font-weight:700;border:none;padding:9px 12px;border-radius:9px;cursor:pointer;font-size:12px">🖨 PDF</button>'+
      '<button onclick="cfExport(\'sheets\')" style="background:#f59e0b;color:#fff;font-weight:700;border:none;padding:9px 12px;border-radius:9px;cursor:pointer;font-size:12px">📊 Sheets</button>'+
@@ -4323,9 +4323,10 @@ function cfAprobar(id){var f=CONTFACT.filter(function(x){return x.id===id;})[0];
 function cfDel(id){if(!confirm('¿Eliminar este comprobante?'))return;CONTFACT=CONTFACT.filter(function(x){return x.id!==id;});saveCONTFACT();_contaPaint();}
 /* ── Telegram ── */
 function cfActivarTg(){
-  if(!confirm('¿Activar la recepción de facturas por Telegram? Envía fotos/PDF al bot de alertas SIGMA y se registran solos.'))return;
-  fetch('/api/contfact/activar',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'}).then(function(r){return r.json();}).then(function(d){
-    if(d&&d.ok)toast('📱 Recepción Telegram activada');
+  var tok=prompt('BOT CONTABILIDAD SKY BLUE\n\n1) Abre @BotFather en Telegram\n2) /newbot → nombre: CONTABILIDAD SKY BLUE\n3) Pega aquí el token (ej: 123456:ABC-...)\n\nSi ya lo activaste antes, deja vacío y acepta para reactivar:','');
+  if(tok===null)return;
+  fetch('/api/contfact/activar',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token:(tok||'').trim()})}).then(function(r){return r.json();}).then(function(d){
+    if(d&&d.ok){toast('🧾 Bot activado: '+(d.bot||''));alert('✅ '+(d.msg||'Bot de contabilidad activado')+'\n\nAbre el bot en Telegram, tócale INICIAR y envíale las facturas (foto o PDF).');}
     else alert('Error: '+((d&&d.error)||'no se pudo activar'));
   }).catch(function(){alert('Sin conexión');});
 }
