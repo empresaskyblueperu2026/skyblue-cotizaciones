@@ -1372,6 +1372,30 @@ app.post('/api/contfact/reparar',async function(req,res){
     res.json({ok:true,antes:list.length,ahora:out.length,tiposNormalizados:norm,duplicadosEliminados:dups});
   }catch(e){res.status(500).json({error:e.message});}
 });
+/* Actualiza un comprobante existente (revision humana). Guarda quien edito y que cambio. */
+app.post('/api/contfact/actualizar',async function(req,res){
+  try{
+    if(!sbReady())return proxyCloud(req,res);
+    var b=req.body||{};
+    if(!b.id||!b.cambios)return res.status(400).json({error:'falta id o cambios'});
+    var data=await sbGetData()||{}; var key='contfact_'+(b.emp||SKYBLUE_EMPID);
+    var list=Array.isArray(data[key])?data[key]:[];
+    var reg=null;for(var i=0;i<list.length;i++){if(list[i].id===b.id){reg=list[i];break;}}
+    if(!reg)return res.status(404).json({error:'comprobante no encontrado'});
+    var audit=[];
+    Object.keys(b.cambios).forEach(function(k){
+      var antes=JSON.stringify(reg[k]), ahora=JSON.stringify(b.cambios[k]);
+      if(antes!==ahora){audit.push({campo:k,antes:reg[k],ahora:b.cambios[k]});reg[k]=b.cambios[k];}
+    });
+    if(audit.length){
+      reg.editado=[].concat(reg.editado||[],[{por:b.usuario||'usuario',fecha:new Date().toISOString(),cambios:audit}]);
+      reg.editado_manual=true;
+    }
+    data[key]=list;
+    await sbPutData(data); try{writeData(data);}catch(e){}
+    res.json({ok:true,cambios:audit.length,fact:reg});
+  }catch(e){res.status(500).json({error:e.message});}
+});
 /* Elimina un comprobante por id. */
 app.post('/api/contfact/borrar',async function(req,res){
   try{

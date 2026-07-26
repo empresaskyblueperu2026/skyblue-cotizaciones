@@ -4377,34 +4377,145 @@ function cfSubir(files){
   next();
 }
 /* ── Detalle (Facturas + DetalleFactura) ── */
+/* Modal de revision EDITABLE: permite corregir todos los campos extraidos por la IA,
+   incluido si el comprobante es COMPRA o VENTA. Los cambios quedan auditados. */
 function cfVer(id){
   var f=CONTFACT.filter(function(x){return x.id===id;})[0];if(!f)return;
+  function inp(campo,valor,tipo,ancho){
+    return '<input id="cfe_'+campo+'" type="'+(tipo||'text')+'" value="'+cfHE(valor==null?'':valor)+'" style="width:'+(ancho||'100%')+';padding:6px 8px;border:1px solid var(--bd);border-radius:7px;background:var(--pane);color:var(--tx);font-size:12px;box-sizing:border-box">';
+  }
+  function sel(campo,valor,opciones){
+    var o=opciones.map(function(x){var v=(x instanceof Array)?x[0]:x, t=(x instanceof Array)?x[1]:x;
+      return '<option value="'+cfHE(v)+'"'+(String(valor)===String(v)?' selected':'')+'>'+cfHE(t)+'</option>';}).join('');
+    return '<select id="cfe_'+campo+'" style="width:100%;padding:6px 8px;border:1px solid var(--bd);border-radius:7px;background:var(--pane);color:var(--tx);font-size:12px">'+o+'</select>';
+  }
+  function fila(lbl,control){
+    return '<div style="display:grid;grid-template-columns:130px 1fr;gap:8px;align-items:center;padding:4px 0"><div style="color:var(--tmuted);font-weight:600;font-size:11px">'+lbl+'</div><div>'+control+'</div></div>';
+  }
   var h='<div style="position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:999;display:flex;align-items:center;justify-content:center;padding:16px" onclick="if(event.target===this)this.remove()">';
-  h+='<div class="card" style="max-width:640px;width:100%;max-height:86vh;overflow:auto;padding:16px">';
-  h+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><div style="font-size:15px;font-weight:800;color:var(--tx)">'+cfHE(f.tipo_doc)+' '+cfHE(f.serie_numero||'')+'</div><span style="cursor:pointer;color:var(--tmuted);font-size:18px" onclick="this.closest(\'div[style*=fixed]\').remove()">✕</span></div>';
-  function row(k,v){return '<div style="display:grid;grid-template-columns:150px 1fr;gap:8px;padding:4px 0;border-bottom:1px solid var(--bd);font-size:12px"><div style="color:var(--tmuted);font-weight:600">'+k+'</div><div style="color:var(--tx)">'+cfHE(v==null||v===''?'—':v)+'</div></div>';}
-  h+=row('Clasificación',f.cv+' · origen '+f.origen);
-  h+=row('Fecha emisión',f.fecha_emision);
-  h+=row('Emisor',((f.emisor||{}).razon||'—')+' · RUC '+((f.emisor||{}).ruc||'—'));
-  h+=row('Receptor',((f.receptor||{}).razon||'—')+' · '+((f.receptor||{}).ruc||'—'));
-  h+=row('Subtotal',cfMon(f.subtotal,f.moneda));
-  h+=row('IGV',cfMon(f.igv,f.moneda));
-  if(f.percepcion)h+=row('Percepción',cfMon(f.percepcion,f.moneda));
-  if(f.retencion)h+=row('Retención',cfMon(f.retencion,f.moneda));
-  h+=row('TOTAL',cfMon(f.total,f.moneda));
-  h+=row('Confianza IA',f.confianza+'%'+(f.revision?' · ⚠ REQUIERE REVISIÓN':' · ✓'));
-  if(f.calidad)h+=row('Calidad imagen',f.calidad);
-  if((f.validaciones||[]).length)h+=row('Validaciones','⚠ '+f.validaciones.join(' · '));
-  h+='<div style="font-size:12px;font-weight:700;color:var(--tx);margin:10px 0 4px">Detalle de ítems ('+(f.items||[]).length+')</div>';
-  h+='<table style="width:100%;border-collapse:collapse;font-size:11px"><thead><tr style="background:var(--pane2,rgba(0,0,0,.03))"><th style="text-align:left;padding:5px">Descripción</th><th style="padding:5px">Cant.</th><th style="padding:5px">Und.</th><th style="text-align:right;padding:5px">P.Unit</th><th style="text-align:right;padding:5px">Total</th></tr></thead><tbody>';
-  (f.items||[]).forEach(function(it){h+='<tr style="border-top:1px solid var(--bd)"><td style="padding:5px">'+cfHE(it.desc||'—')+'</td><td style="padding:5px;text-align:center">'+cfHE(it.cant!=null?it.cant:'—')+'</td><td style="padding:5px;text-align:center">'+cfHE(it.unidad||'—')+'</td><td style="padding:5px;text-align:right" class="mono">'+(it.punit!=null?(+it.punit).toFixed(2):'—')+'</td><td style="padding:5px;text-align:right" class="mono">'+(it.total!=null?(+it.total).toFixed(2):'—')+'</td></tr>';});
-  if(!(f.items||[]).length)h+='<tr><td colspan="5" style="padding:10px;text-align:center;color:var(--tmuted)">Sin ítems extraídos.</td></tr>';
-  h+='</tbody></table>';
-  if(f.revision)h+='<button onclick="cfAprobar(\''+f.id+'\');this.closest(\'div[style*=fixed]\').remove()" style="background:#16a34a;color:#fff;border:none;padding:9px 16px;border-radius:9px;font-weight:700;cursor:pointer;margin-top:12px">✓ Marcar como revisado/aprobado</button>';
+  h+='<div class="card" style="max-width:660px;width:100%;max-height:88vh;overflow:auto;padding:16px">';
+  h+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">'+
+     '<div><div style="font-size:15px;font-weight:800;color:var(--tx)">Revisar comprobante</div>'+
+     '<div style="font-size:11px;color:var(--tmuted)">Confianza IA '+f.confianza+'%'+(f.revision?' · ⚠ requiere revisión':' · ✓ aprobado')+' · origen '+cfHE(f.origen||'')+(f.motor?(' · '+cfHE(f.motor)):'')+'</div></div>'+
+     '<span style="cursor:pointer;color:var(--tmuted);font-size:20px" onclick="this.closest(\'div[style*=fixed]\').remove()">✕</span></div>';
+  if((f.validaciones||[]).length)h+='<div style="background:#f59e0b18;border-left:3px solid #f59e0b;border-radius:6px;padding:7px 10px;font-size:11px;color:var(--tx);margin-bottom:10px">⚠ '+cfHE(f.validaciones.join(' · '))+'</div>';
+  /* ── Clasificación (lo mas importante de la revision) ── */
+  h+='<div style="background:var(--pane);border:1px solid var(--bd);border-radius:9px;padding:10px;margin-bottom:10px">';
+  h+='<div style="font-size:11px;font-weight:800;color:var(--acc);margin-bottom:6px">CLASIFICACIÓN</div>';
+  h+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">';
+  h+='<div>'+fila('Tipo',sel('tipo_doc',f.tipo_doc,[['FACTURA','FACTURA'],['BOLETA','BOLETA'],['NOTA_CREDITO','NOTA DE CRÉDITO'],['NOTA_DEBITO','NOTA DE DÉBITO'],['COMPROBANTE_PERCEPCION','COMPROBANTE PERCEPCIÓN'],['COMPROBANTE_RETENCION','COMPROBANTE RETENCIÓN'],['RECIBO_HONORARIOS','RECIBO POR HONORARIOS'],['TICKET','TICKET'],['OTRO','OTRO']]))+'</div>';
+  h+='<div>'+fila('Compra/Venta',sel('cv',f.cv,[['COMPRA','🛒 COMPRA (nos facturan)'],['VENTA','💰 VENTA (nosotros facturamos)'],['NO_DETERMINADO','❓ Sin determinar']]))+'</div>';
+  h+='</div>';
+  h+='<div style="font-size:10px;color:var(--tmuted);margin-top:4px">Regla: si '+cfHE(EMP?EMP.nombre:'la empresa')+' es el <b>emisor</b> → VENTA; si es el <b>receptor</b> → COMPRA.</div>';
+  h+='</div>';
+  /* ── Datos del documento ── */
+  h+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">';
+  h+='<div>'+fila('N° comprobante',inp('serie_numero',f.serie_numero))+'</div>';
+  h+='<div>'+fila('Fecha emisión',inp('fecha_emision',f.fecha_emision,'date'))+'</div>';
+  h+='</div>';
+  h+='<div style="font-size:11px;font-weight:800;color:var(--acc);margin:10px 0 2px">EMISOR (quien emite)</div>';
+  h+=fila('Razón social',inp('emisor_razon',(f.emisor||{}).razon));
+  h+=fila('RUC',inp('emisor_ruc',(f.emisor||{}).ruc));
+  h+='<div style="font-size:11px;font-weight:800;color:var(--acc);margin:10px 0 2px">RECEPTOR (quien recibe)</div>';
+  h+=fila('Razón social',inp('receptor_razon',(f.receptor||{}).razon));
+  h+=fila('RUC / DNI',inp('receptor_ruc',(f.receptor||{}).ruc));
+  h+='<div style="font-size:11px;font-weight:800;color:var(--acc);margin:10px 0 2px">IMPORTES</div>';
+  h+='<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">';
+  h+='<div>'+fila('Moneda',sel('moneda',f.moneda,[['PEN','S/ Soles'],['USD','US$ Dólares']]))+'</div>';
+  h+='<div>'+fila('Subtotal',inp('subtotal',f.subtotal,'number'))+'</div>';
+  h+='<div>'+fila('IGV',inp('igv',f.igv,'number'))+'</div>';
+  h+='</div>';
+  h+='<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">';
+  h+='<div>'+fila('Percepción',inp('percepcion',f.percepcion,'number'))+'</div>';
+  h+='<div>'+fila('Retención',inp('retencion',f.retencion,'number'))+'</div>';
+  h+='<div>'+fila('TOTAL',inp('total',f.total,'number'))+'</div>';
+  h+='</div>';
+  /* ── Ítems editables ── */
+  h+='<div style="display:flex;justify-content:space-between;align-items:center;margin:12px 0 4px">'+
+     '<div style="font-size:11px;font-weight:800;color:var(--acc)">ÍTEMS ('+(f.items||[]).length+')</div>'+
+     '<button onclick="cfItemAdd()" style="background:var(--pane);border:1px solid var(--bd);color:var(--tx);padding:3px 9px;border-radius:7px;font-size:11px;cursor:pointer">+ Agregar ítem</button></div>';
+  h+='<div id="cfeItems"></div>';
+  /* ── Historial de ediciones ── */
+  if((f.editado||[]).length){
+    h+='<div style="font-size:11px;font-weight:800;color:var(--acc);margin:12px 0 4px">HISTORIAL DE CORRECCIONES</div>';
+    f.editado.slice().reverse().forEach(function(e){
+      h+='<div style="font-size:10.5px;color:var(--tmuted);border-bottom:1px solid var(--bd);padding:4px 0">'+
+         cfHE(String(e.fecha).slice(0,16).replace('T',' '))+' · '+cfHE(e.por)+': '+
+         (e.cambios||[]).map(function(c){return cfHE(c.campo)+' “'+cfHE(c.antes)+'” → “'+cfHE(c.ahora)+'”';}).join(' · ')+'</div>';
+    });
+  }
+  /* ── Acciones ── */
+  h+='<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px;position:sticky;bottom:0;background:var(--card,var(--pane));padding-top:8px">';
+  h+='<button onclick="cfGuardarEdicion(\''+f.id+'\')" style="background:#0ea5e9;color:#fff;border:none;padding:9px 16px;border-radius:9px;font-weight:800;cursor:pointer;font-size:12.5px">💾 Guardar cambios</button>';
+  h+='<button onclick="cfGuardarEdicion(\''+f.id+'\',true)" style="background:#16a34a;color:#fff;border:none;padding:9px 16px;border-radius:9px;font-weight:800;cursor:pointer;font-size:12.5px">✓ Guardar y aprobar</button>';
+  h+='<button onclick="this.closest(\'div[style*=fixed]\').remove()" style="background:var(--pane);border:1px solid var(--bd);color:var(--tx);padding:9px 14px;border-radius:9px;cursor:pointer;font-size:12.5px">Cancelar</button>';
+  h+='</div>';
   h+='</div></div>';
   var d=document.createElement('div');d.innerHTML=h;document.body.appendChild(d.firstChild);
+  _cfEditItems=JSON.parse(JSON.stringify(f.items||[]));
+  cfPintarItems();
 }
-function cfAprobar(id){var f=CONTFACT.filter(function(x){return x.id===id;})[0];if(!f)return;f.revision=false;f.aprobado_por=EMP?EMP.nombre:'usuario';f.aprobado_en=new Date().toISOString();saveCONTFACT();_contaPaint();toast('Comprobante aprobado');}
+var _cfEditItems=[];
+function cfPintarItems(){
+  var w=document.getElementById('cfeItems');if(!w)return;
+  var h='';
+  if(!_cfEditItems.length)h='<div style="font-size:11px;color:var(--tmuted);font-style:italic;padding:4px 0">Sin ítems.</div>';
+  _cfEditItems.forEach(function(it,ix){
+    h+='<div style="display:grid;grid-template-columns:1fr 55px 55px 70px 75px 26px;gap:5px;margin-bottom:5px;align-items:center">'+
+      '<input value="'+cfHE(it.desc||'')+'" placeholder="Descripción" oninput="_cfEditItems['+ix+'].desc=this.value" style="padding:5px 7px;border:1px solid var(--bd);border-radius:6px;background:var(--pane);color:var(--tx);font-size:11px">'+
+      '<input value="'+cfHE(it.cant==null?'':it.cant)+'" placeholder="Cant" type="number" oninput="_cfEditItems['+ix+'].cant=this.value===\'\'?null:+this.value" style="padding:5px 4px;border:1px solid var(--bd);border-radius:6px;background:var(--pane);color:var(--tx);font-size:11px">'+
+      '<input value="'+cfHE(it.unidad||'')+'" placeholder="Und" oninput="_cfEditItems['+ix+'].unidad=this.value" style="padding:5px 4px;border:1px solid var(--bd);border-radius:6px;background:var(--pane);color:var(--tx);font-size:11px">'+
+      '<input value="'+cfHE(it.punit==null?'':it.punit)+'" placeholder="P.Unit" type="number" oninput="_cfEditItems['+ix+'].punit=this.value===\'\'?null:+this.value" style="padding:5px 4px;border:1px solid var(--bd);border-radius:6px;background:var(--pane);color:var(--tx);font-size:11px">'+
+      '<input value="'+cfHE(it.total==null?'':it.total)+'" placeholder="Total" type="number" oninput="_cfEditItems['+ix+'].total=this.value===\'\'?null:+this.value" style="padding:5px 4px;border:1px solid var(--bd);border-radius:6px;background:var(--pane);color:var(--tx);font-size:11px">'+
+      '<span onclick="_cfEditItems.splice('+ix+',1);cfPintarItems()" style="cursor:pointer;color:#ef4444;text-align:center;font-size:14px">✕</span>'+
+      '</div>';
+  });
+  w.innerHTML=h;
+}
+function cfItemAdd(){_cfEditItems.push({desc:'',cant:null,unidad:'',punit:null,total:null});cfPintarItems();}
+/* Guarda las correcciones: actualiza local, sube a la nube y recalcula validaciones. */
+function cfGuardarEdicion(id,aprobar){
+  var f=CONTFACT.filter(function(x){return x.id===id;})[0];if(!f)return;
+  function v(campo){var e=document.getElementById('cfe_'+campo);return e?e.value:null;}
+  function num(campo){var s=v(campo);if(s===null||s==='')return null;var n=parseFloat(s);return isNaN(n)?null:n;}
+  var cambios={
+    tipo_doc:v('tipo_doc')||f.tipo_doc,
+    cv:v('cv')||f.cv,
+    serie_numero:(v('serie_numero')||'').trim()||null,
+    fecha_emision:(v('fecha_emision')||'').trim()||null,
+    emisor:{razon:(v('emisor_razon')||'').trim()||null,ruc:(v('emisor_ruc')||'').trim()||null,dir:(f.emisor||{}).dir||null},
+    receptor:{razon:(v('receptor_razon')||'').trim()||null,ruc:(v('receptor_ruc')||'').trim()||null},
+    moneda:v('moneda')||f.moneda,
+    subtotal:num('subtotal'),igv:num('igv'),percepcion:num('percepcion'),retencion:num('retencion'),total:num('total'),
+    items:_cfEditItems.filter(function(it){return (it.desc&&String(it.desc).trim())||it.total!=null;})
+  };
+  /* revalidar totales tras la correccion */
+  var vals=[];
+  var esPR=(cambios.tipo_doc==='COMPROBANTE_PERCEPCION'||cambios.tipo_doc==='COMPROBANTE_RETENCION');
+  var sub=+cambios.subtotal||0,igv=+cambios.igv||0,tot=+cambios.total||0,per=+cambios.percepcion||0;
+  if(!esPR&&tot>0&&sub>0&&Math.abs((sub+igv)-tot)>0.5&&Math.abs((sub+igv+per)-tot)>0.5)vals.push('Totales no cuadran: '+(sub+igv).toFixed(2)+' vs '+tot.toFixed(2));
+  if(!cambios.serie_numero)vals.push('Sin número de comprobante');
+  if(!cambios.emisor.ruc)vals.push('Sin RUC emisor');
+  if(cambios.cv==='NO_DETERMINADO')vals.push('Falta indicar si es compra o venta');
+  cambios.validaciones=vals;
+  if(aprobar){cambios.revision=false;cambios.confianza=100;cambios.aprobado_por=(EMP?EMP.nombre:'usuario');cambios.aprobado_en=new Date().toISOString();}
+  else if(!vals.length&&f.revision){cambios.revision=false;}
+  /* aplicar local */
+  Object.keys(cambios).forEach(function(k){f[k]=cambios[k];});
+  f.editado_manual=true;
+  saveCONTFACT();
+  /* subir a la nube */
+  fetch('/api/contfact/actualizar',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:id,emp:(EMP?EMP.id:''),usuario:(EMP?EMP.nombre:'usuario'),cambios:cambios})})
+    .then(function(r){return r.json();}).then(function(d){
+      if(d&&d.ok)toast('Cambios guardados'+(aprobar?' y aprobado':'')+(d.cambios?(' ('+d.cambios+' campo(s))'):''));
+      else toast('Guardado local; la nube responderá luego');
+    }).catch(function(){toast('Guardado local (sin conexión)');});
+  var modal=document.querySelector('div[style*="position:fixed"][style*="z-index:999"]');
+  if(modal)modal.remove();
+  _contaPaint();
+}
+
+function cfAprobar(id){var f=CONTFACT.filter(function(x){return x.id===id;})[0];if(!f)return;f.revision=false;f.aprobado_por=EMP?EMP.nombre:'usuario';f.aprobado_en=new Date().toISOString();saveCONTFACT();fetch('/api/contfact/actualizar',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:id,emp:(EMP?EMP.id:''),usuario:(EMP?EMP.nombre:'usuario'),cambios:{revision:false,confianza:100,aprobado_por:f.aprobado_por,aprobado_en:f.aprobado_en}})}).catch(function(){});_contaPaint();toast('Comprobante aprobado');}
 function cfDel(id){if(!confirm('¿Eliminar este comprobante?'))return;CONTFACT=CONTFACT.filter(function(x){return x.id!==id;});saveCONTFACT();_contaPaint();}
 /* Repara el historial en la nube: normaliza tipos de comprobante y elimina duplicados ya guardados. */
 function cfReparar(){
