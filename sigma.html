@@ -487,6 +487,31 @@ aside.rpanel{width:284px;flex-shrink:0;background:linear-gradient(180deg,var(--c
 </head>
 <body>
 
+<!-- LOGIN -->
+<div id="login" style="position:fixed;inset:0;z-index:2000;background:linear-gradient(135deg,#0d3b6e,#0a2a4f 60%,#061a33);display:flex;align-items:center;justify-content:center;padding:20px">
+  <div style="width:100%;max-width:380px;background:#fff;border-radius:16px;padding:28px;box-shadow:0 20px 60px rgba(0,0,0,.35)">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
+      <div style="width:38px;height:38px;border-radius:10px;background:#0d3b6e;display:flex;align-items:center;justify-content:center">
+        <svg viewBox="0 0 24 24" fill="none" style="width:22px;height:22px"><path d="M4 7l8-4 8 4-8 4-8-4z" stroke="#fff" stroke-width="1.7" stroke-linejoin="round"/><path d="M4 12l8 4 8-4M4 17l8 4 8-4" stroke="#fff" stroke-width="1.7" stroke-linejoin="round" opacity=".72"/></svg>
+      </div>
+      <div><div style="font-size:19px;font-weight:800;color:#0f172a;letter-spacing:-.4px">SIGMA</div>
+      <div style="font-size:11px;color:#64748b">Plataforma ERP · IA</div></div>
+    </div>
+    <div style="font-size:13px;color:#475569;margin:14px 0 16px">Ingresa con tu usuario para acceder a tu empresa.</div>
+    <div style="margin-bottom:12px">
+      <label style="display:block;font-size:11px;font-weight:700;color:#334155;margin-bottom:5px;letter-spacing:.4px">USUARIO</label>
+      <input id="lgUser" autocomplete="username" placeholder="usuario" style="width:100%;padding:11px 12px;border:2px solid #cbd5e1;border-radius:9px;font-size:14px;color:#0f172a;box-sizing:border-box;outline:none" onfocus="this.style.borderColor='#0d3b6e'" onblur="this.style.borderColor='#cbd5e1'">
+    </div>
+    <div style="margin-bottom:16px">
+      <label style="display:block;font-size:11px;font-weight:700;color:#334155;margin-bottom:5px;letter-spacing:.4px">CONTRASEÑA</label>
+      <input id="lgPass" type="password" autocomplete="current-password" placeholder="••••••••" style="width:100%;padding:11px 12px;border:2px solid #cbd5e1;border-radius:9px;font-size:14px;color:#0f172a;box-sizing:border-box;outline:none" onfocus="this.style.borderColor='#0d3b6e'" onblur="this.style.borderColor='#cbd5e1'" onkeydown="if(event.key==='Enter')authLogin()">
+    </div>
+    <div id="lgMsg" style="display:none;font-size:12px;padding:9px 11px;border-radius:8px;margin-bottom:12px"></div>
+    <button id="lgBtn" onclick="authLogin()" style="width:100%;padding:12px;background:#0d3b6e;color:#fff;border:none;border-radius:9px;font-size:14px;font-weight:800;cursor:pointer;letter-spacing:.3px">INGRESAR</button>
+    <div style="font-size:11px;color:#94a3b8;margin-top:14px;text-align:center;line-height:1.5">Cada empresa maneja sus propios productos, precios y formatos.<br>El usuario maestro accede a todas.</div>
+  </div>
+</div>
+
 <!-- PORTAL -->
 <div id="portal">
   <div class="brandbig">
@@ -1702,6 +1727,8 @@ function exportReporteCSV(){
 /* ===== Módulo: Configuración ===== */
 function renderConfig(){
   var h='<div class="pmod-head fade"><div><h1 style="font-size:23px;font-weight:700;letter-spacing:-.6px">Configuración</h1><div style="font-size:13px;color:var(--tmuted);margin-top:4px">Ajustes del sistema · '+(EMP?EMP.nombre:'')+'</div></div></div>';
+  h+=usuariosHTML();
+  setTimeout(usrCargar,120);
   /* ── Agente de Ventas IA (Telegram) ── */
   h+='<div class="card fade" style="margin-bottom:14px;border-left:3px solid #14b8a6"><div class="ct" style="font-weight:600;margin-bottom:6px">🤖 Agente de Ventas IA (Telegram)</div>'+
     '<div id="vbEstado" style="font-size:12px;color:var(--tmuted);margin-bottom:10px">Consultando estado…</div>'+
@@ -3500,11 +3527,8 @@ function subirBovedaDrive(){
 function quickNew(){window.location.href='/cotizador?tab=cot'}
 function toggleMenu(open){var s=$('sidebar'),o=$('ovl');if(!s)return;if(open){s.classList.add('open');o&&o.classList.add('show')}else{s.classList.remove('open');o&&o.classList.remove('show')}}
 
-fetch('/api/empresas').then(function(r){return r.json()}).then(function(list){
-  EMPRESAS=Array.isArray(list)?list:[];renderPortal();
-  var saved=localStorage.getItem('sigma_empresa');
-  if(saved){var e=EMPRESAS.filter(function(x){return x.id===saved})[0];if(e)selectEmpresa(e)}
-}).catch(function(){$('ecards').innerHTML='<div style="grid-column:1/-1;text-align:center;color:var(--tmuted);font-size:13px;padding:30px">No se pudo conectar. Reintenta.</div>'});
+/* El acceso requiere sesion: authIniciar decide si muestra el login o entra al portal. */
+authIniciar();
 
 /* ═══════ MODULO EXPERIENCIA IA (inyectado) ═══════ */
 /* ═══════════════════ MÓDULO EXPERIENCIA IA (aislado por empresa: sigma_exp_<EMP.id>) ═══════════════════ */
@@ -4550,6 +4574,196 @@ function cfExport(mode){
     w.document.write('<html><head><title>Facturas — Extracción IA</title></head><body style="font-family:Arial;padding:16px"><h3>Extracción Inteligente de Facturas — '+(EMP?EMP.nombre:'')+'</h3>'+tb+'</body></html>');
     w.document.close();setTimeout(function(){w.print();},400);
   }
+}
+
+
+/* ═══════ SESION Y USUARIOS ═══════ */
+/* ══════════ GESTION DE USUARIOS (solo rol maestro) ══════════ */
+function usuariosHTML(){
+  if(!SESION)return '';
+  var h='<div class="card" style="padding:14px;margin-top:14px">';
+  h+='<div style="font-size:14px;font-weight:800;color:var(--tx);margin-bottom:4px">👤 Usuarios y accesos</div>';
+  h+='<div style="font-size:12px;color:var(--tmuted);margin-bottom:10px">Sesión: <b>'+cfHE(SESION.nombre||SESION.usuario)+'</b> ('+cfHE(SESION.rol)+')</div>';
+  h+='<button onclick="usrCambiarClave()" style="background:#0d3b6e;color:#fff;border:none;padding:9px 14px;border-radius:9px;font-weight:700;cursor:pointer;font-size:12.5px">🔑 Cambiar mi contraseña</button>';
+  if(SESION.rol==='master'){
+    h+=' <button onclick="usrNuevo()" style="background:#16a34a;color:#fff;border:none;padding:9px 14px;border-radius:9px;font-weight:700;cursor:pointer;font-size:12.5px">+ Nuevo usuario</button>';
+    h+='<div id="usrLista" style="margin-top:12px"><div style="font-size:12px;color:var(--tmuted)">Cargando usuarios…</div></div>';
+  }
+  h+='</div>';
+  return h;
+}
+function usrCargar(){
+  if(!SESION||SESION.rol!=='master')return;
+  fetch('/api/auth/usuarios',{headers:authHeaders()}).then(function(r){return r.json();}).then(function(d){
+    var w=$('usrLista'); if(!w)return;
+    if(!d||!d.ok){w.innerHTML='<div style="font-size:12px;color:#ef4444">'+cfHE((d&&d.error)||'No se pudo cargar')+'</div>';return;}
+    var h='<table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr style="background:var(--pane2,rgba(0,0,0,.03))">';
+    ['Usuario','Nombre','Rol','Empresas con acceso',''].forEach(function(x){h+='<th style="text-align:left;padding:7px;font-size:10px;color:var(--tmuted);text-transform:uppercase">'+x+'</th>';});
+    h+='</tr></thead><tbody>';
+    (d.usuarios||[]).forEach(function(u){
+      var emps=(u.empresas==='*'||u.rol==='master')?'<b style="color:#f59e0b">TODAS</b>':
+        ((u.empresas||[]).map(function(id){var e=EMPRESAS.filter(function(x){return x.id===id;})[0];return e?cfHE(e.nombre):id.slice(0,8);}).join(', ')||'<i style="color:var(--tmuted)">ninguna</i>');
+      h+='<tr style="border-top:1px solid var(--bd)">'+
+        '<td style="padding:7px"><b>'+cfHE(u.usuario)+'</b></td>'+
+        '<td style="padding:7px">'+cfHE(u.nombre||'')+'</td>'+
+        '<td style="padding:7px">'+(u.rol==='master'?'<span style="background:#f59e0b22;color:#b45309;padding:2px 8px;border-radius:999px;font-size:10px;font-weight:700">MAESTRO</span>':'<span style="background:#0ea5e922;color:#0369a1;padding:2px 8px;border-radius:999px;font-size:10px;font-weight:700">EMPRESA</span>')+'</td>'+
+        '<td style="padding:7px;font-size:11px">'+emps+'</td>'+
+        '<td style="padding:7px;white-space:nowrap">'+
+          '<button onclick="usrEditar(\''+cfHE(u.usuario)+'\')" style="background:var(--pane);border:1px solid var(--bd);color:var(--tx);padding:3px 9px;border-radius:7px;font-size:11px;cursor:pointer">Editar</button> '+
+          (u.usuario===SESION.usuario?'':'<button onclick="usrEliminar(\''+cfHE(u.usuario)+'\')" style="background:#fee2e2;border:none;color:#b91c1c;padding:3px 9px;border-radius:7px;font-size:11px;cursor:pointer">🗑</button>')+
+        '</td></tr>';
+    });
+    h+='</tbody></table>';
+    w.innerHTML=h;
+  }).catch(function(){var w=$('usrLista');if(w)w.innerHTML='<div style="font-size:12px;color:#ef4444">Sin conexión</div>';});
+}
+function usrCambiarClave(){
+  var actual=prompt('Contraseña actual:');if(actual===null)return;
+  var nueva=prompt('Nueva contraseña (mínimo 6 caracteres):');if(nueva===null)return;
+  if(String(nueva).length<6){alert('La contraseña debe tener al menos 6 caracteres');return;}
+  var conf=prompt('Repite la nueva contraseña:');if(conf===null)return;
+  if(nueva!==conf){alert('Las contraseñas no coinciden');return;}
+  fetch('/api/auth/clave',{method:'POST',headers:authHeaders({'Content-Type':'application/json'}),body:JSON.stringify({actual:actual,nueva:nueva})})
+    .then(function(r){return r.json();}).then(function(d){
+      if(d&&d.ok)alert('✅ Contraseña actualizada');
+      else alert('Error: '+((d&&d.error)||'no se pudo cambiar'));
+    }).catch(function(){alert('Sin conexión');});
+}
+/* Selector de empresas para asignar accesos. */
+function usrPedirEmpresas(actuales){
+  var lista=EMPRESAS.map(function(e,i){return (i+1)+') '+e.nombre;}).join('\n');
+  var sel=prompt('¿A qué empresas tendrá acceso?\n\n'+lista+'\n\nEscribe los números separados por coma (ej: 1,3)\nO escribe TODAS para acceso maestro:', (actuales||[]).map(function(id){
+    var ix=-1;EMPRESAS.forEach(function(e,i){if(e.id===id)ix=i;});return ix>=0?(ix+1):'';
+  }).filter(Boolean).join(','));
+  if(sel===null)return null;
+  if(String(sel).toUpperCase().indexOf('TODA')>=0)return '*';
+  var ids=[];
+  String(sel).split(',').forEach(function(n){
+    var ix=parseInt(String(n).trim(),10)-1;
+    if(ix>=0&&EMPRESAS[ix])ids.push(EMPRESAS[ix].id);
+  });
+  return ids;
+}
+function usrNuevo(){
+  var usuario=prompt('Nombre de usuario (sin espacios, ej: skyblue):');if(!usuario)return;
+  var nombre=prompt('Nombre para mostrar:',usuario);if(nombre===null)return;
+  var clave=prompt('Contraseña (mínimo 6 caracteres):');if(!clave)return;
+  if(String(clave).length<6){alert('La contraseña debe tener al menos 6 caracteres');return;}
+  var emps=usrPedirEmpresas([]);if(emps===null)return;
+  var rol=(emps==='*')?'master':'empresa';
+  fetch('/api/auth/usuarios',{method:'POST',headers:authHeaders({'Content-Type':'application/json'}),
+    body:JSON.stringify({accion:'crear',usuario:usuario,clave:clave,nombre:nombre,rol:rol,empresas:(emps==='*'?[]:emps)})})
+    .then(function(r){return r.json();}).then(function(d){
+      if(d&&d.ok){toast('Usuario creado');usrCargar();}
+      else alert('Error: '+((d&&d.error)||'no se pudo crear'));
+    }).catch(function(){alert('Sin conexión');});
+}
+function usrEditar(usuario){
+  var opc=prompt('¿Qué deseas cambiar de "'+usuario+'"?\n\n1) Empresas con acceso\n2) Contraseña\n3) Nombre\n\nEscribe 1, 2 o 3:');
+  if(!opc)return;
+  var body={accion:'editar',usuario:usuario};
+  if(opc.indexOf('1')>=0){
+    var emps=usrPedirEmpresas([]);if(emps===null)return;
+    if(emps==='*'){body.rol='master';}else{body.rol='empresa';body.empresas=emps;}
+  } else if(opc.indexOf('2')>=0){
+    var c=prompt('Nueva contraseña (mínimo 6 caracteres):');if(!c)return;
+    if(String(c).length<6){alert('Mínimo 6 caracteres');return;}
+    body.clave=c;
+  } else if(opc.indexOf('3')>=0){
+    var n=prompt('Nuevo nombre para mostrar:');if(n===null)return;body.nombre=n;
+  } else return;
+  fetch('/api/auth/usuarios',{method:'POST',headers:authHeaders({'Content-Type':'application/json'}),body:JSON.stringify(body)})
+    .then(function(r){return r.json();}).then(function(d){
+      if(d&&d.ok){toast('Usuario actualizado');usrCargar();}
+      else alert('Error: '+((d&&d.error)||'no se pudo actualizar'));
+    }).catch(function(){alert('Sin conexión');});
+}
+function usrEliminar(usuario){
+  if(!confirm('¿Eliminar el usuario "'+usuario+'"? Perderá el acceso al sistema.'))return;
+  fetch('/api/auth/usuarios',{method:'POST',headers:authHeaders({'Content-Type':'application/json'}),body:JSON.stringify({accion:'eliminar',usuario:usuario})})
+    .then(function(r){return r.json();}).then(function(d){
+      if(d&&d.ok){toast('Usuario eliminado');usrCargar();}
+      else alert('Error: '+((d&&d.error)||'no se pudo eliminar'));
+    }).catch(function(){alert('Sin conexión');});
+}
+
+/* ══════════ SESION DE USUARIO ══════════
+   El acceso a cada empresa requiere usuario y contrasena. El usuario maestro entra a todas.
+   El token se guarda en localStorage y se envia en cada peticion protegida. */
+var SESION=null;
+function authToken(){try{return localStorage.getItem('sigma_token')||'';}catch(e){return '';}}
+function authHeaders(extra){
+  var h=extra||{};
+  var t=authToken(); if(t)h['Authorization']='Bearer '+t;
+  return h;
+}
+function authMsg(txt,tipo){
+  var m=$('lgMsg'); if(!m)return;
+  if(!txt){m.style.display='none';return;}
+  m.style.display='block';
+  m.textContent=txt;
+  if(tipo==='ok'){m.style.background='#dcfce7';m.style.color='#166534';}
+  else{m.style.background='#fee2e2';m.style.color='#b91c1c';}
+}
+function authLogin(){
+  var u=($('lgUser')||{}).value||'', c=($('lgPass')||{}).value||'';
+  if(!u.trim()||!c){authMsg('Ingresa usuario y contraseña');return;}
+  var b=$('lgBtn'); if(b){b.disabled=true;b.textContent='INGRESANDO…';b.style.opacity='.7';}
+  authMsg('');
+  fetch('/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({usuario:u.trim(),clave:c})})
+    .then(function(r){return r.json().then(function(d){return {ok:r.ok,d:d};});})
+    .then(function(res){
+      if(b){b.disabled=false;b.textContent='INGRESAR';b.style.opacity='1';}
+      if(!res.ok||!res.d||!res.d.ok){authMsg((res.d&&res.d.error)||'No se pudo ingresar');return;}
+      try{localStorage.setItem('sigma_token',res.d.token);}catch(e){}
+      SESION=res.d.usuario;
+      EMPRESAS=Array.isArray(res.d.empresas)?res.d.empresas:[];
+      authEntrar(res.d.debeCambiarClave);
+    })
+    .catch(function(){if(b){b.disabled=false;b.textContent='INGRESAR';b.style.opacity='1';}authMsg('Sin conexión con el servidor');});
+}
+/* Muestra el portal ya autenticado. Si el usuario tiene una sola empresa, entra directo. */
+function authEntrar(avisoClave){
+  var lg=$('login'); if(lg)lg.style.display='none';
+  renderPortal();
+  authPintarSesion();
+  if(avisoClave)setTimeout(function(){alert('Estás usando la contraseña inicial del usuario maestro.\n\nPor seguridad cámbiala en Configuración → Usuarios.');},600);
+  var saved=null; try{saved=localStorage.getItem('sigma_empresa');}catch(e){}
+  var e=saved?EMPRESAS.filter(function(x){return x.id===saved;})[0]:null;
+  if(e)selectEmpresa(e);
+  else if(EMPRESAS.length===1)selectEmpresa(EMPRESAS[0]);
+}
+/* Agrega el nombre del usuario y el boton de salir en el portal. */
+function authPintarSesion(){
+  var cont=$('portal'); if(!cont||!SESION)return;
+  var old=document.getElementById('sesionBox'); if(old)old.remove();
+  var d=document.createElement('div');
+  d.id='sesionBox';
+  d.style.cssText='position:absolute;top:16px;right:18px;display:flex;align-items:center;gap:10px;color:#fff;font-size:12px';
+  d.innerHTML='<span style="opacity:.85">'+(SESION.nombre||SESION.usuario)+
+    (SESION.rol==='master'?' <b style="background:#f59e0b;color:#000;padding:1px 7px;border-radius:999px;font-size:10px">MAESTRO</b>':'')+
+    '</span><button onclick="authSalir()" style="background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);color:#fff;padding:5px 11px;border-radius:8px;font-size:11px;cursor:pointer">Salir</button>';
+  cont.style.position='relative';
+  cont.appendChild(d);
+}
+function authSalir(){
+  try{localStorage.removeItem('sigma_token');localStorage.removeItem('sigma_empresa');}catch(e){}
+  SESION=null;EMPRESAS=[];
+  location.reload();
+}
+/* Al abrir la app: valida la sesion guardada; si no hay, muestra el login. */
+function authIniciar(){
+  var t=authToken();
+  if(!t){var lg=$('login');if(lg)lg.style.display='flex';return;}
+  fetch('/api/auth/sesion',{method:'POST',headers:authHeaders({'Content-Type':'application/json'}),body:JSON.stringify({token:t})})
+    .then(function(r){return r.json().then(function(d){return {ok:r.ok,d:d};});})
+    .then(function(res){
+      if(!res.ok||!res.d||!res.d.ok){try{localStorage.removeItem('sigma_token');}catch(e){}var lg=$('login');if(lg)lg.style.display='flex';return;}
+      SESION=res.d.usuario;
+      EMPRESAS=Array.isArray(res.d.empresas)?res.d.empresas:[];
+      authEntrar(false);
+    })
+    .catch(function(){var lg=$('login');if(lg)lg.style.display='flex';});
 }
 
 </script>
