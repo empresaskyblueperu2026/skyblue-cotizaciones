@@ -1147,6 +1147,8 @@ async function contfactGemini(b64,mime){
       if(w>0)await new Promise(function(rs){setTimeout(rs,waits[w]);});
       var r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
       st=r.status; d=await r.json();
+      /* si es cuota agotada (no transitorio) no reintentar: pasar de una al respaldo */
+      if(d&&d.error&&/quota|billing/i.test(d.error.message||''))break;
       if(st!==429&&st!==503)break;
     }
     if(d&&d.error)return {__err:((d.error.message||('HTTP '+st))+'').slice(0,120)};
