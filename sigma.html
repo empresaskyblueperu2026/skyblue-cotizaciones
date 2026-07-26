@@ -4357,7 +4357,7 @@ function cfSubir(files){
       var chk=_prepararArchivoIA(b64,f.type||'');
       if(!chk.ok){errc++;i++;return next();}
       /* 1) extrae con el pipeline del servidor (Gemini y, si falla, Claude) */
-      fetch('/api/contfact/extraer',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({b64:b64,mime:chk.mimeType,origen:'manual',empRuc:(EMP?EMP.ruc:'')})}).then(function(r){return r.json();}).then(function(d){
+      fetch('/api/contfact/extraer',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({b64:b64,mime:chk.mimeType,origen:'manual',empRuc:(EMP?EMP.ruc:''),empNombre:(EMP?EMP.nombre:'')})}).then(function(r){return r.json();}).then(function(d){
         if(!d||!d.ok||!d.fact){errc++;_cfUltError=(d&&d.error)||'extraccion fallida';i++;return next();}
         var fact=d.fact;
         /* 2) dedupe local inmediato (evita reprocesar lo que ya tengo a la vista) */
