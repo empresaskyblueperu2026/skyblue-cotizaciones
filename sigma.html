@@ -4325,6 +4325,21 @@ function cfSyncNube(){
       if(_contaTab==='extfact')_contaPaint();
       toast(nuevos+' comprobante(s) del bot sincronizado(s)');
     }
+    /* sube a la nube los que solo existen en este equipo (el servidor deduplica) */
+    var faltan=CONTFACT.filter(function(f){
+      if(!f||!f.id)return false;
+      if(d.lista.some(function(x){return x.id===f.id;}))return false;
+      return !d.lista.some(function(x){return cfMismo(x,f);});
+    });
+    if(faltan.length){
+      var subidos=0;
+      faltan.forEach(function(f){
+        fetch('/api/contfact/guardar',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({fact:f,emp:(EMP?EMP.id:'')})})
+          .then(function(r){return r.json();}).then(function(g){
+            if(g&&g.ok){subidos++;if(subidos===1)toast('Respaldando comprobantes locales en la nube...');}
+          }).catch(function(){});
+      });
+    }
   }).catch(function(){_cfSyncing=false;});
 }
 /* ── Carga manual con IA ── */
