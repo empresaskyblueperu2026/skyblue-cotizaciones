@@ -1136,7 +1136,7 @@ app.get('/api/exp/file',async function(req,res){
    WhatsApp Business requiere Meta Cloud API (no conectada); mientras tanto se reenvia al bot de Telegram.
    Extraccion: Gemini 2.5-flash con OCR nativo. Persistencia: global.json -> contfact_<empId> (aislado por empresa).
    Cada registro = tabla "Facturas"; su arreglo items[] = tabla "DetalleFactura". */
-var CONTFACT_PROMPT='Eres un extractor contable peruano experto con OCR. Analiza este comprobante y devuelve SOLO JSON valido sin markdown: {"tipo_doc":"FACTURA|BOLETA|NOTA_CREDITO|NOTA_DEBITO|OTRO","numero":"serie-numero ej F001-123","fecha":"YYYY-MM-DD","emisor":"razon social del emisor","ruc_emisor":"RUC 11 digitos","dir_emisor":null,"receptor":"razon social del receptor/cliente","ruc_receptor":"RUC o DNI","moneda":"PEN|USD","subtotal":numero_o_null,"igv":numero_o_null,"percepcion":numero_o_null,"retencion":numero_o_null,"total":numero_o_null,"items":[{"desc":"descripcion","cant":numero,"unidad":"unidad","punit":precio_unitario,"total":importe}],"calidad":"BUENA|REGULAR|MALA segun legibilidad de la imagen","confianza":0_a_100,"observacion":null}. REGLAS: 1) NUNCA inventes: si un dato no se lee pon null. 2) total = importe total impreso. 3) Extrae TODOS los items individualmente. 4) confianza segun legibilidad y completitud. 5) fecha formato YYYY-MM-DD.';
+var CONTFACT_PROMPT='Eres un extractor contable peruano experto con OCR. Analiza este comprobante y devuelve SOLO JSON valido sin markdown: {"tipo_doc":"FACTURA|BOLETA|NOTA_CREDITO|NOTA_DEBITO|COMPROBANTE_PERCEPCION|COMPROBANTE_RETENCION|RECIBO_HONORARIOS|TICKET|OTRO","numero":"serie-numero ej F001-123","fecha":"YYYY-MM-DD","emisor":"razon social del emisor","ruc_emisor":"RUC 11 digitos","dir_emisor":null,"receptor":"razon social del receptor/cliente","ruc_receptor":"RUC o DNI","moneda":"PEN|USD","subtotal":numero_o_null,"igv":numero_o_null,"percepcion":numero_o_null,"retencion":numero_o_null,"tasa":numero_o_null,"base_imponible":numero_o_null,"doc_relacionado":"numero del comprobante al que afecta (NC/ND/percepcion/retencion) o null","total":numero_o_null,"items":[{"desc":"descripcion","cant":numero,"unidad":"unidad","punit":precio_unitario,"total":importe}],"calidad":"BUENA|REGULAR|MALA segun legibilidad de la imagen","confianza":0_a_100,"observacion":null}. REGLAS: 1) NUNCA inventes: si un dato no se lee pon null. 2) total = importe total impreso. 3) Extrae TODOS los items individualmente. 4) confianza segun legibilidad y completitud. 5) fecha formato YYYY-MM-DD. 6) COMPROBANTE_PERCEPCION: dice "COMPROBANTE DE PERCEPCION" (venta interna, suele ser 2% del precio de venta); pon el monto percibido en percepcion, la tasa en tasa y el comprobante afectado en doc_relacionado. 7) COMPROBANTE_RETENCION: dice "COMPROBANTE DE RETENCION" (suele ser 3% del importe pagado); pon el monto retenido en retencion, la tasa en tasa y el comprobante afectado en doc_relacionado. 8) En percepcion/retencion el total es el importe total del documento afectado si aparece; si no, usa el monto percibido/retenido.';
 async function contfactGemini(b64,mime){
   var k=process.env.GEMINI_API_KEY; if(!k)return {__err:'sin GEMINI_API_KEY'};
   var body={contents:[{parts:[{text:CONTFACT_PROMPT},{inline_data:{mime_type:mime||'image/jpeg',data:b64}}]}],generationConfig:{temperature:0.1,maxOutputTokens:8192,thinkingConfig:{thinkingBudget:0}}};
@@ -1218,26 +1218,66 @@ function contfactArmar(o,origen,empRuc){
   var cv='NO_DETERMINADO';
   if(String(o.ruc_emisor||'')===R)cv='VENTA'; else if(String(o.ruc_receptor||'')===R)cv='COMPRA';
   var sub=+o.subtotal||0, igv=+o.igv||0, tot=+o.total||0, per=+o.percepcion||0, ret=+o.retencion||0;
+  var tipo=o.tipo_doc||'OTRO';
+  var esPerRet=(tipo==='COMPROBANTE_PERCEPCION'||tipo==='COMPROBANTE_RETENCION');
   var vals=[];
-  if(tot>0&&sub>0&&Math.abs((sub+igv)-tot)>0.5&&Math.abs((sub+igv+per)-tot)>0.5)vals.push('Totales no cuadran: subtotal+IGV='+(sub+igv).toFixed(2)+' vs total='+tot.toFixed(2));
+  /* los comprobantes de percepcion/retencion no cuadran subtotal+IGV: se valida distinto */
+  if(!esPerRet&&tot>0&&sub>0&&Math.abs((sub+igv)-tot)>0.5&&Math.abs((sub+igv+per)-tot)>0.5)vals.push('Totales no cuadran: subtotal+IGV='+(sub+igv).toFixed(2)+' vs total='+tot.toFixed(2));
+  if(esPerRet&&!per&&!ret)vals.push('No se detecto el monto percibido/retenido');
   if(!o.numero)vals.push('Numero de comprobante no detectado');
   if(!o.ruc_emisor)vals.push('RUC emisor no detectado');
   if(o.calidad==='MALA')vals.push('Calidad de imagen baja');
   var conf=Math.max(0,Math.min(100,+o.confianza||0)); if(vals.length)conf=Math.min(conf,85);
-  return {id:'cf'+Date.now().toString(36)+Math.random().toString(36).slice(2,6),tipo_doc:o.tipo_doc||'OTRO',cv:cv,serie_numero:o.numero||null,fecha_emision:o.fecha||null,
+  return {id:'cf'+Date.now().toString(36)+Math.random().toString(36).slice(2,6),tipo_doc:tipo,cv:cv,serie_numero:o.numero||null,fecha_emision:o.fecha||null,
     emisor:{razon:o.emisor||null,ruc:o.ruc_emisor||null,dir:o.dir_emisor||null},receptor:{razon:o.receptor||null,ruc:o.ruc_receptor||null},
-    moneda:(o.moneda==='USD'?'USD':'PEN'),subtotal:sub||null,igv:igv||null,percepcion:per||null,retencion:ret||null,total:tot||null,
+    moneda:(o.moneda==='USD'?'USD':'PEN'),subtotal:sub||null,igv:igv||null,percepcion:per||null,retencion:ret||null,
+    tasa:+o.tasa||null,base_imponible:+o.base_imponible||null,doc_relacionado:o.doc_relacionado||null,total:tot||null,
     items:Array.isArray(o.items)?o.items:[],calidad:o.calidad||null,confianza:conf,revision:conf<90,validaciones:vals,origen:origen||'manual',creado:new Date().toISOString()};
 }
-/* Guarda en la nube con validacion de duplicados (misma serie-numero + RUC emisor). */
+/* ── Deteccion de duplicados (compartida por bot y carga manual) ──
+   Normaliza el numero de comprobante (quita ceros/guiones/espacios) y compara por varias señales:
+   1) mismo numero + mismo RUC emisor            -> duplicado seguro
+   2) mismo RUC emisor + misma fecha + mismo total -> duplicado (numero ilegible)
+   3) mismo RUC emisor + mismo total + mismos items -> duplicado (fecha ilegible) */
+function contfactNumNorm(n){
+  n=(''+(n||'')).toUpperCase();
+  var out='';for(var i=0;i<n.length;i++){var c=n.charAt(i);if((c>='A'&&c<='Z')||(c>='0'&&c<='9'))out+=c;}
+  /* quita ceros a la izquierda del correlativo para que F001-0000123 == F001-123 */
+  return out.replace(/([A-Z]+[0-9]*?)0*([0-9]{1,})$/,'$1$2');
+}
+function contfactItemsHuella(f){
+  var it=(f&&f.items)||[];
+  return it.map(function(x){
+    var d=(''+((x&&x.desc)||'')).toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,18);
+    return d+':'+(Math.round((+((x&&x.total))||0)*100));
+  }).sort().join('|');
+}
+function contfactMismo(a,b){
+  var rucA=String((a.emisor&&a.emisor.ruc)||''), rucB=String((b.emisor&&b.emisor.ruc)||'');
+  var totA=Math.round((+a.total||0)*100), totB=Math.round((+b.total||0)*100);
+  var numA=contfactNumNorm(a.serie_numero), numB=contfactNumNorm(b.serie_numero);
+  if(numA&&numB&&numA===numB&&rucA&&rucB&&rucA===rucB)return 'numero+RUC';
+  if(numA&&numB&&numA===numB&&totA&&totA===totB)return 'numero+monto';
+  if(!rucA||!rucB||rucA!==rucB)return null;
+  if(a.fecha_emision&&b.fecha_emision&&a.fecha_emision===b.fecha_emision&&totA&&totA===totB)return 'RUC+fecha+monto';
+  var hA=contfactItemsHuella(a), hB=contfactItemsHuella(b);
+  if(totA&&totA===totB&&hA&&hA===hB)return 'RUC+monto+items';
+  return null;
+}
+function contfactBuscarDup(list,f){
+  for(var i=0;i<list.length;i++){var m=contfactMismo(list[i],f);if(m)return {reg:list[i],motivo:m};}
+  return null;
+}
+/* Guarda en la nube con validacion de duplicados robusta. Es el UNICO punto de escritura
+   (lo usan el bot de Telegram y la carga manual del panel) para evitar duplicados y carreras. */
 async function contfactGuardarNube(f,empId){
   var data=await sbGetData()||{}; var key='contfact_'+(empId||SKYBLUE_EMPID);
   var list=Array.isArray(data[key])?data[key]:[];
-  var dup=list.some(function(x){return x.serie_numero&&f.serie_numero&&x.serie_numero===f.serie_numero&&String((x.emisor&&x.emisor.ruc)||'')===String((f.emisor&&f.emisor.ruc)||'');});
-  if(dup)return {ok:false,dup:true};
+  var dup=contfactBuscarDup(list,f);
+  if(dup)return {ok:false,dup:true,motivo:dup.motivo,existente:dup.reg};
   list.unshift(f); data[key]=list;
   await sbPutData(data); try{writeData(data);}catch(e){}
-  return {ok:true,fact:f};
+  return {ok:true,fact:f,total:list.length};
 }
 /* Extraccion de un comprobante con la cadena completa (Gemini -> Claude de respaldo).
    Lo usa la carga manual del panel y sirve para diagnostico. Body: {b64, mime}. */
@@ -1248,7 +1288,41 @@ app.post('/api/contfact/extraer',async function(req,res){
     if(!process.env.GEMINI_API_KEY&&!process.env.ANTHROPIC_API_KEY)return proxyCloud(req,res);
     var raw=await contfactExtraer(b.b64,b.mime||'image/jpeg');
     if(!raw||raw.__err)return res.status(502).json({error:(raw&&raw.__err)||'extraccion fallida'});
-    res.json({ok:true,motor:raw.__motor||'gemini',data:raw});
+    /* arma la ficha con la misma logica que usa el bot (clasificacion, validaciones, confianza) */
+    var fact=contfactArmar(raw,b.origen||'manual',b.empRuc||'20610723501');
+    fact.motor=raw.__motor||'gemini';
+    res.json({ok:true,motor:fact.motor,data:raw,fact:fact});
+  }catch(e){res.status(500).json({error:e.message});}
+});
+/* Guarda un comprobante ya extraido, con dedupe robusto. Punto unico de escritura del panel. */
+app.post('/api/contfact/guardar',async function(req,res){
+  try{
+    if(!sbReady())return proxyCloud(req,res);
+    var b=req.body||{};
+    if(!b.fact)return res.status(400).json({error:'falta fact'});
+    var g=await contfactGuardarNube(b.fact,b.emp||SKYBLUE_EMPID);
+    res.json(g);
+  }catch(e){res.status(500).json({error:e.message});}
+});
+/* Lista los comprobantes de la empresa (fuente de verdad para el panel). */
+app.get('/api/contfact/lista',async function(req,res){
+  try{
+    if(!sbReady())return proxyCloud(req,res);
+    var data=await sbGetData()||{}; var key='contfact_'+(req.query.emp||SKYBLUE_EMPID);
+    res.json({ok:true,lista:Array.isArray(data[key])?data[key]:[]});
+  }catch(e){res.status(500).json({error:e.message});}
+});
+/* Elimina un comprobante por id. */
+app.post('/api/contfact/borrar',async function(req,res){
+  try{
+    if(!sbReady())return proxyCloud(req,res);
+    var b=req.body||{}; if(!b.id)return res.status(400).json({error:'falta id'});
+    var data=await sbGetData()||{}; var key='contfact_'+(b.emp||SKYBLUE_EMPID);
+    var list=Array.isArray(data[key])?data[key]:[];
+    var antes=list.length;
+    data[key]=list.filter(function(x){return x.id!==b.id;});
+    await sbPutData(data); try{writeData(data);}catch(e){}
+    res.json({ok:true,borrados:antes-data[key].length});
   }catch(e){res.status(500).json({error:e.message});}
 });
 /* Activa la recepcion por Telegram: registra el webhook del bot de alertas hacia /api/contfact/webhook. */
@@ -1300,13 +1374,26 @@ app.post('/api/contfact/webhook',async function(req,res){
     if(!raw||raw.__err){await reply('❌ La IA no pudo leer el comprobante'+((raw&&raw.__err)?(' ['+raw.__err+']'):'')+'. Espera unos segundos y reenvia la foto, o carga manual en SIGMA → Contabilidad → Extraccion IA.');return;}
     var f=contfactArmar(raw,'telegram','20610723501');
     var g=await contfactGuardarNube(f,SKYBLUE_EMPID);
-    if(g.dup){await reply('⚠️ DUPLICADO: el comprobante '+(f.serie_numero||'')+' ya esta registrado. No se guardo de nuevo.');return;}
+    if(g.dup){
+      var ex=g.existente||{};
+      await reply('⚠️ DUPLICADO — no se guardo de nuevo.\n'+
+        '📄 '+(f.tipo_doc||'')+' '+(f.serie_numero||'s/n')+'\n'+
+        '🔁 Coincide con: '+(ex.tipo_doc||'')+' '+(ex.serie_numero||'s/n')+' de '+((ex.emisor&&ex.emisor.razon)||'—')+'\n'+
+        '🔎 Detectado por: '+(g.motivo||'coincidencia')+
+        (ex.creado?('\n📅 Registrado el '+String(ex.creado).slice(0,10)+' via '+(ex.origen||'—')):''));
+      return;
+    }
     var mon=f.moneda==='USD'?'US$':'S/';
+    var esPR=(f.tipo_doc==='COMPROBANTE_PERCEPCION'||f.tipo_doc==='COMPROBANTE_RETENCION');
+    var etiq={COMPROBANTE_PERCEPCION:'🧾 PERCEPCION',COMPROBANTE_RETENCION:'🧾 RETENCION'}[f.tipo_doc]||('📄 '+f.tipo_doc);
     await reply('✅ REGISTRADO EN CONTABILIDAD\n'+
-      '📄 '+f.tipo_doc+' '+(f.serie_numero||'s/n')+' · '+(f.cv==='COMPRA'?'🛒 COMPRA':(f.cv==='VENTA'?'💰 VENTA':'❓'))+'\n'+
+      etiq+' '+(f.serie_numero||'s/n')+' · '+(f.cv==='COMPRA'?'🛒 COMPRA':(f.cv==='VENTA'?'💰 VENTA':'❓'))+'\n'+
       '🏢 '+(f.emisor.razon||'—')+' (RUC '+(f.emisor.ruc||'—')+')\n'+
-      '📅 '+(f.fecha_emision||'—')+' · '+f.items.length+' item(s)\n'+
-      '💵 Total: '+mon+' '+((+f.total||0).toFixed(2))+' (IGV '+mon+' '+((+f.igv||0).toFixed(2))+')\n'+
+      '📅 '+(f.fecha_emision||'—')+(esPR?'':' · '+f.items.length+' item(s)')+'\n'+
+      (esPR
+        ? ('💰 '+(f.tipo_doc==='COMPROBANTE_PERCEPCION'?'Percibido':'Retenido')+': '+mon+' '+((+(f.percepcion||f.retencion)||0).toFixed(2))+(f.tasa?(' ('+f.tasa+'%)'):'')+'\n'+
+           (f.doc_relacionado?('🔗 Afecta a: '+f.doc_relacionado+'\n'):''))
+        : ('💵 Total: '+mon+' '+((+f.total||0).toFixed(2))+' (IGV '+mon+' '+((+f.igv||0).toFixed(2))+')\n'))+
       '🎯 Confianza IA: '+f.confianza+'%'+(f.revision?'\n⚠️ Marcado para REVISION HUMANA':'')+
       (f.validaciones.length?'\n🔎 '+f.validaciones.join(' · '):''));
   }catch(e){console.error('contfact webhook:',e.message);}
