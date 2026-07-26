@@ -1479,6 +1479,10 @@ function smartMerge(base,inc){
 app.post('/api/data',async function(req,res){
   try{
     var emp=(req.query.emp||'').trim();var body=req.body||{};
+    /* Los comprobantes (contfact_*) solo se escriben por /api/contfact/guardar, que aplica
+       deduplicacion. Se ignoran aqui para que ningun panel abierto (o version antigua)
+       sobrescriba con una copia local desactualizada y reviva duplicados. */
+    Object.keys(body).forEach(function(k){if(k.indexOf('contfact_')===0)delete body[k];});
     function mergeInto(store){store=store||{};if(emp&&emp!==SKYBLUE_EMPID){store.emp=store.emp||{};store.emp[emp]=smartMerge(store.emp[emp]||{},body);}else{store=smartMerge(store,body);}return store;}
     if(!sbReady()){
       try{writeData(mergeInto(readData()));}catch(e){}
