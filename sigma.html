@@ -4227,6 +4227,7 @@ function extfactHTML(){
      '<button onclick="cfExport(\'csv\')" style="background:#16a34a;color:#fff;font-weight:700;border:none;padding:9px 12px;border-radius:9px;cursor:pointer;font-size:12px">⬇ Excel/CSV</button>'+
      '<button onclick="cfExport(\'print\')" style="background:#ef4444;color:#fff;font-weight:700;border:none;padding:9px 12px;border-radius:9px;cursor:pointer;font-size:12px">🖨 PDF</button>'+
      '<button onclick="cfExport(\'sheets\')" style="background:#f59e0b;color:#fff;font-weight:700;border:none;padding:9px 12px;border-radius:9px;cursor:pointer;font-size:12px">📊 Sheets</button>'+
+     '<button onclick="cfReparar()" style="background:#64748b;color:#fff;font-weight:700;border:none;padding:9px 12px;border-radius:9px;cursor:pointer;font-size:12px">🧹 Quitar duplicados</button>'+
      '</div></div>';
   h+='<input type="file" id="cfFileInput" multiple accept=".pdf,.jpg,.jpeg,.png,.webp,application/pdf,image/*" style="display:none" onchange="cfSubir(this.files)">';
   h+='<div style="font-size:11px;color:var(--tmuted);margin-bottom:10px">Recepción: 📱 Telegram (envía la foto/PDF al bot SIGMA) · 📤 carga manual · WhatsApp Business: requiere Meta Cloud API — mientras tanto reenvía el documento al bot de Telegram.</div>';
@@ -4390,6 +4391,17 @@ function cfVer(id){
 }
 function cfAprobar(id){var f=CONTFACT.filter(function(x){return x.id===id;})[0];if(!f)return;f.revision=false;f.aprobado_por=EMP?EMP.nombre:'usuario';f.aprobado_en=new Date().toISOString();saveCONTFACT();_contaPaint();toast('Comprobante aprobado');}
 function cfDel(id){if(!confirm('¿Eliminar este comprobante?'))return;CONTFACT=CONTFACT.filter(function(x){return x.id!==id;});saveCONTFACT();_contaPaint();}
+/* Repara el historial en la nube: normaliza tipos de comprobante y elimina duplicados ya guardados. */
+function cfReparar(){
+  if(!confirm('¿Revisar el historial y eliminar comprobantes duplicados?'))return;
+  fetch('/api/contfact/reparar',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({emp:(EMP?EMP.id:'')})}).then(function(r){return r.json();}).then(function(d){
+    if(!d||!d.ok){alert('Error: '+((d&&d.error)||'no se pudo'));return;}
+    var det=(d.duplicadosEliminados||[]).map(function(x){return '• '+x.eliminado+' ('+x.motivo+')';}).join('\n');
+    alert('✅ Historial revisado\n\nAntes: '+d.antes+' comprobantes\nAhora: '+d.ahora+'\nDuplicados eliminados: '+(d.duplicadosEliminados||[]).length+(det?('\n'+det):'')+'\nTipos normalizados: '+d.tiposNormalizados);
+    try{localStorage.removeItem(contfactKey());}catch(e){}
+    CONTFACT=[];cfSyncNube();
+  }).catch(function(){alert('Sin conexión');});
+}
 /* ── Telegram ── */
 function cfActivarTg(){
   var tok=prompt('BOT CONTABILIDAD SKY BLUE\n\n1) Abre @BotFather en Telegram\n2) /newbot → nombre: CONTABILIDAD SKY BLUE\n3) Pega aquí el token (ej: 123456:ABC-...)\n\nSi ya lo activaste antes, deja vacío y acepta para reactivar:','');

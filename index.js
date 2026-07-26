@@ -1213,12 +1213,27 @@ async function contfactExtraer(b64,mime){
 }
 /* Normaliza el JSON crudo de Gemini: clasifica compra/venta segun RUC de la empresa,
    valida consistencia de totales y calidad, calcula confianza y marca revision humana (<90). */
+/* Normaliza el tipo de comprobante: la IA puede devolver variantes con espacios/acentos
+   ("COMPROBANTE DE RETENCION", "Nota de Credito"...). Devuelve siempre el codigo canonico. */
+function contfactTipoNorm(t){
+  var s=(''+(t||'')).toUpperCase().replace(/[ÁÀÄÂ]/g,'A').replace(/[ÉÈËÊ]/g,'E').replace(/[ÍÌÏÎ]/g,'I').replace(/[ÓÒÖÔ]/g,'O').replace(/[ÚÙÜÛ]/g,'U');
+  s=s.replace(/[^A-Z]/g,' ');
+  if(s.indexOf('RETENCION')>=0)return 'COMPROBANTE_RETENCION';
+  if(s.indexOf('PERCEPCION')>=0)return 'COMPROBANTE_PERCEPCION';
+  if(s.indexOf('CREDITO')>=0)return 'NOTA_CREDITO';
+  if(s.indexOf('DEBITO')>=0)return 'NOTA_DEBITO';
+  if(s.indexOf('HONORARIO')>=0)return 'RECIBO_HONORARIOS';
+  if(s.indexOf('BOLETA')>=0)return 'BOLETA';
+  if(s.indexOf('FACTURA')>=0)return 'FACTURA';
+  if(s.indexOf('TICKET')>=0)return 'TICKET';
+  return 'OTRO';
+}
 function contfactArmar(o,origen,empRuc){
   o=o||{}; var R=String(empRuc||'20610723501');
   var cv='NO_DETERMINADO';
   if(String(o.ruc_emisor||'')===R)cv='VENTA'; else if(String(o.ruc_receptor||'')===R)cv='COMPRA';
   var sub=+o.subtotal||0, igv=+o.igv||0, tot=+o.total||0, per=+o.percepcion||0, ret=+o.retencion||0;
-  var tipo=o.tipo_doc||'OTRO';
+  var tipo=contfactTipoNorm(o.tipo_doc);
   var esPerRet=(tipo==='COMPROBANTE_PERCEPCION'||tipo==='COMPROBANTE_RETENCION');
   var vals=[];
   /* los comprobantes de percepcion/retencion no cuadran subtotal+IGV: se valida distinto */
@@ -1310,6 +1325,33 @@ app.get('/api/contfact/lista',async function(req,res){
     if(!sbReady())return proxyCloud(req,res);
     var data=await sbGetData()||{}; var key='contfact_'+(req.query.emp||SKYBLUE_EMPID);
     res.json({ok:true,lista:Array.isArray(data[key])?data[key]:[]});
+  }catch(e){res.status(500).json({error:e.message});}
+});
+/* Repara el historial: normaliza tipos de comprobante y elimina duplicados ya guardados
+   (conserva el registro con mayor confianza; ante empate, el mas antiguo). */
+app.post('/api/contfact/reparar',async function(req,res){
+  try{
+    if(!sbReady())return proxyCloud(req,res);
+    var b=req.body||{};
+    var data=await sbGetData()||{}; var key='contfact_'+(b.emp||SKYBLUE_EMPID);
+    var list=Array.isArray(data[key])?data[key]:[];
+    var norm=0;
+    list.forEach(function(f){var t=contfactTipoNorm(f.tipo_doc);if(t!==f.tipo_doc){f.tipo_doc=t;norm++;}});
+    /* ordena por confianza desc y creado asc para que el "mejor" quede primero */
+    var orden=list.slice().sort(function(a,b2){
+      var d=(+b2.confianza||0)-(+a.confianza||0); if(d)return d;
+      return String(a.creado||'').localeCompare(String(b2.creado||''));
+    });
+    var out=[],dups=[];
+    orden.forEach(function(f){
+      var d=contfactBuscarDup(out,f);
+      if(d)dups.push({eliminado:f.serie_numero||f.id,motivo:d.motivo});
+      else out.push(f);
+    });
+    out.sort(function(a,b2){return String(b2.creado||'').localeCompare(String(a.creado||''));});
+    data[key]=out;
+    await sbPutData(data); try{writeData(data);}catch(e){}
+    res.json({ok:true,antes:list.length,ahora:out.length,tiposNormalizados:norm,duplicadosEliminados:dups});
   }catch(e){res.status(500).json({error:e.message});}
 });
 /* Elimina un comprobante por id. */
