@@ -363,8 +363,16 @@ async function tgSend(text){
   if(!d.ok)throw new Error('Telegram: '+(d.description||r.status));
   return d;
 }
+/* Envia con un token/chat especifico (bots dedicados: SEACE, contabilidad, etc). */
+async function tgSendVia(tok,chat,text){
+  if(!tok||!chat)throw new Error('Bot dedicado no configurado (falta token o chatId)');
+  var r=await fetch('https://api.telegram.org/bot'+tok+'/sendMessage',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({chat_id:chat,text:text,parse_mode:'HTML',disable_web_page_preview:true})});
+  var d=await r.json();
+  if(!d.ok)throw new Error('Telegram: '+(d.description||r.status));
+  return d;
+}
 // Envia textos largos partidos en bloques (limite Telegram 4096) respetando saltos de linea
-async function tgSendLong(text){
+async function tgSendLong(text,botDedicado){
   var MAX=3800, parts=[], cur='';
   String(text).split('\n').forEach(function(ln){
     if((cur+'\n'+ln).length>MAX){ if(cur)parts.push(cur); cur=ln; }
@@ -373,7 +381,8 @@ async function tgSendLong(text){
   if(cur)parts.push(cur);
   for(var i=0;i<parts.length;i++){
     var sufijo=parts.length>1?('\n\n📄 '+(i+1)+'/'+parts.length):'';
-    await tgSend(parts[i]+sufijo);
+    if(botDedicado)await tgSendVia(botDedicado.token,botDedicado.chatId,parts[i]+sufijo);
+    else await tgSend(parts[i]+sufijo);
     if(i<parts.length-1)await new Promise(function(r){setTimeout(r,350);});
   }
   return parts.length;
@@ -537,7 +546,7 @@ async function runSeaceDigest(slot,force){
     }).join('\n');
     var head='🏛 <b>SEACE — TODAS las oportunidades ≤8 UIT</b> · La Libertad · '+(slot==='AM'?'🌅 mañana':'🌙 noche')+'\n'+
       '🎯 Total cotizables: <b>'+o.length+'</b>  ·  📦 Bienes: '+nB+'  ·  🛠 Servicios: '+nS+(nO>0?('  ·  🏗 Otros: '+nO):'')+(nuevas>0?('\n🆕 '+nuevas+' nuevas desde el último aviso'):'')+'\n';
-    await tgSendLong(head+'\n'+lineas+'\n👉 Elige en SIGMA → Oportunidades: ✅ Participar · 🤔 Pensando · ❌ Descartar.');
+    await tgSendLong(head+'\n'+lineas+'\n👉 Elige en SIGMA → Oportunidades: ✅ Participar · 🤔 Pensando · ❌ Descartar.',cfg.seaceBot);
     cfg=await sbGetConfig();
     cfg.seaceSeen=o.map(function(x){return x.id}).concat(vistos).slice(0,300);
     cfg[key]=hoy; await sbPutConfig(cfg);
@@ -547,6 +556,47 @@ async function runSeaceDigest(slot,force){
 app.get('/api/seace/notify',async function(req,res){
   if(!sbReady())return proxyCloud(req,res);
   try{ res.json(await runSeaceDigest(req.query.slot==='PM'?'PM':'AM',true)); }catch(e){res.status(500).json({error:e.message});}
+});
+/* Activa/reconecta un bot dedicado a las alertas SEACE (ej. recuperar un bot creado antes en BotFather). */
+app.post('/api/seace/bot/activar',async function(req,res){
+  try{
+    if(!sbReady())return proxyCloud(req,res);
+    var cfg=await sbGetConfig();
+    var tok=((req.body&&req.body.token)||'').trim()||(cfg.seaceBot&&cfg.seaceBot.token)||'';
+    if(!tok)return res.status(400).json({error:'Pega el token del bot de alertas SEACE (creado en @BotFather)'});
+    var me=await (await fetch('https://api.telegram.org/bot'+tok+'/getMe')).json();
+    if(!me.ok)return res.status(400).json({error:'Token invalido: '+(me.description||'verifica en BotFather')});
+    var sec=(cfg.seaceBot&&cfg.seaceBot.secret)||(Math.random().toString(36).slice(2)+Date.now().toString(36));
+    var chatId=(req.body&&req.body.chatId)||(cfg.seaceBot&&cfg.seaceBot.chatId)||cfg.tgChatId||'';
+    if(!chatId){
+      try{
+        var gu=await (await fetch('https://api.telegram.org/bot'+tok+'/getUpdates')).json();
+        if(gu.ok&&gu.result&&gu.result.length){for(var i=gu.result.length-1;i>=0;i--){if(gu.result[i].message){chatId=String(gu.result[i].message.chat.id);break;}}}
+      }catch(e){}
+    }
+    cfg.seaceBot={token:tok,chatId:chatId,secret:sec,username:me.result.username,nombre:me.result.first_name};
+    await sbPutConfig(cfg);
+    var r=await fetch('https://api.telegram.org/bot'+tok+'/setWebhook',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url:PROD_URL+'/api/seace/bot/webhook',secret_token:sec,allowed_updates:['message']})});
+    var d=await r.json();
+    if(!d.ok)return res.status(500).json({error:'setWebhook: '+(d.description||'fallo')});
+    if(chatId){try{await fetch('https://api.telegram.org/bot'+tok+'/sendMessage',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({chat_id:chatId,text:'🏛 Bot de alertas SEACE ≤8 UIT reconectado a SIGMA. Recibiras el listado completo de oportunidades cada manana (8am) y noche (8pm), hora Peru.'})});}catch(e){}}
+    res.json({ok:true,bot:'@'+me.result.username,chatId:chatId||null,msg:'Bot SEACE activado'+(chatId?'':' (falta chatId: escribele algo al bot y reactiva)')});
+  }catch(e){res.status(500).json({error:e.message});}
+});
+/* Webhook del bot SEACE: solo mantiene el chat vivo y responde con info; el envio real es por el cron. */
+app.post('/api/seace/bot/webhook',async function(req,res){
+  res.json({ok:true});
+  try{
+    if(!sbReady())return;
+    var cfg=await sbGetConfig();
+    var bot=cfg.seaceBot||{}; if(!bot.token)return;
+    var sec=req.headers['x-telegram-bot-api-secret-token'];
+    if(bot.secret&&sec!==bot.secret)return;
+    var msg=(req.body||{}).message; if(!msg||!msg.chat)return;
+    if(!bot.chatId){bot.chatId=String(msg.chat.id);cfg.seaceBot=bot;await sbPutConfig(cfg);}
+    if(String(msg.chat.id)!==String(bot.chatId))return;
+    await tgSendVia(bot.token,bot.chatId,'🏛 Bot de alertas SEACE ≤8 UIT activo. Te aviso automaticamente cada manana (8am) y noche (8pm) con las oportunidades disponibles en La Libertad.\n\nUsa SIGMA → Oportunidades para participar, pensar o descartar cada una.');
+  }catch(e){console.error('seace bot webhook:',e.message);}
 });
 async function runReporteDiario(force){
   try{
