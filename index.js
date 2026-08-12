@@ -517,11 +517,32 @@ app.get('/api/backup/run',async function(req,res){
 // ---- SEACE: oportunidades 8 UIT (Vigente, La Libertad, que se pueden cotizar) ----
 async function seaceFetch(){
   var anio=new Date().getFullYear();
-  var url='https://prod6.seace.gob.pe/v1/s8uit-services/buscadorpublico/contrataciones/buscador?page=1&page_size=50&anio='+anio+'&estado=2&codigo_departamento=13';
+  /* Se piden mas de 50 porque luego se descartan los vencidos: asi quedan 50 activos reales. */
+  var url='https://prod6.seace.gob.pe/v1/s8uit-services/buscadorpublico/contrataciones/buscador?page=1&page_size=90&anio='+anio+'&estado=2&codigo_departamento=13';
   var r=await fetch(url,{headers:{'Accept':'application/json','User-Agent':'Mozilla/5.0'}});
   if(!r.ok)throw new Error('SEACE '+r.status);
   var d=await r.json(); var arr=(d&&d.data)||[];
-  return arr.filter(function(x){return x.cotizar}).map(function(x){return {id:x.idContrato,codigo:x.desContratacion,objeto:x.nomObjetoContrato,desc:x.desObjetoContrato,entidad:x.nomEntidad,fechaFin:x.fecFinCotizacion,fechaPub:x.fecPublica,url:'https://prod6.seace.gob.pe/buscador-publico/contrataciones/'+x.idContrato};});
+  /* Devuelve los procesos VIGENTES: los que ya se pueden cotizar y los que abren pronto.
+     Se descartan los que ya vencieron (su plazo de cotizacion cerro). */
+  var ahora=new Date();
+  function aFecha(f){ /* "dd/mm/aaaa hh:mm:ss" -> Date */
+    try{var p=String(f||'').split(' ');var dmy=p[0].split('/');var hms=(p[1]||'00:00:00').split(':');
+      return new Date(+dmy[2],+dmy[1]-1,+dmy[0],+hms[0]||0,+hms[1]||0,+hms[2]||0);}catch(e){return null;}
+  }
+  /* SEACE devuelve comillas mal codificadas como "¿": se limpian para que el texto se lea bien. */
+  function limpia(t){
+    return String(t||'').replace(/¿/g,'"').replace(/\s*"\s*$/,'').replace(/^\s*"\s*/,'').replace(/\s+/g,' ').trim();
+  }
+  return arr.map(function(x){
+    var ini=aFecha(x.fecIniCotizacion), fin=aFecha(x.fecFinCotizacion);
+    var vencido=fin?(fin<ahora):false;
+    var abierto=!!x.cotizar&&!vencido;
+    var porAbrir=!x.cotizar&&!vencido&&ini&&ini>ahora;
+    return {id:x.idContrato,codigo:x.desContratacion,objeto:x.nomObjetoContrato,desc:limpia(x.desObjetoContrato),
+      entidad:limpia(x.nomEntidad),fechaIni:x.fecIniCotizacion,fechaFin:x.fecFinCotizacion,fechaPub:x.fecPublica,
+      estado:x.nomEstadoContrato,cotizar:!!x.cotizar,abierto:abierto,porAbrir:!!porAbrir,vencido:vencido,
+      url:'https://prod6.seace.gob.pe/buscador-publico/contrataciones/'+x.idContrato};
+  }).filter(function(x){return x.abierto||x.porAbrir;}).slice(0,50);
 }
 app.get('/api/seace',async function(req,res){ try{ var o=await seaceFetch(); res.json({total:o.length,oportunidades:o}); }catch(e){ res.status(502).json({error:e.message}); } });
 async function runSeaceDigest(slot,force){
@@ -531,21 +552,57 @@ async function runSeaceDigest(slot,force){
     var o=await seaceFetch();
     var vistos=Array.isArray(cfg.seaceSeen)?cfg.seaceSeen:[];
     var icObj=function(ob){ob=(ob||'').toLowerCase();if(ob.indexOf('bien')>=0)return '📦';if(ob.indexOf('servicio')>=0)return '🛠';if(ob.indexOf('consultor')>=0)return '📐';if(ob.indexOf('obra')>=0)return '🏗';return '📄';};
-    var diasCierre=function(f){try{var p=(f||'').split(' ')[0].split('/');var d=new Date(+p[2],+p[1]-1,+p[0]);return Math.ceil((d-new Date())/86400000);}catch(e){return null;}};
+    var aFecha=function(f){try{var p=String(f||'').split(' ');var dmy=p[0].split('/');var hms=(p[1]||'00:00:00').split(':');
+      return new Date(+dmy[2],+dmy[1]-1,+dmy[0],+hms[0]||0,+hms[1]||0,+hms[2]||0);}catch(e){return null;}};
+    var fmtFecha=function(f){var s=String(f||'');var p=s.split(' ');return p[0]+(p[1]?(' '+p[1].slice(0,5)):'');};
+    /* Tiempo restante en lenguaje natural (dias / horas). */
+    var restante=function(fecha){
+      var d=aFecha(fecha); if(!d)return null;
+      var ms=d-new Date(); if(ms<=0)return {vencido:true,txt:'vencido'};
+      var hrs=Math.floor(ms/3600000), dias=Math.floor(hrs/24);
+      if(dias>=1)return {dias:dias,txt:'quedan '+dias+' día'+(dias>1?'s':'')};
+      return {dias:0,horas:hrs,txt:hrs>=1?('quedan '+hrs+' hora'+(hrs>1?'s':'')):'quedan minutos'};
+    };
+    /* Decision clara: ¿se puede participar o no? */
+    var participar=function(x){
+      var r=restante(x.fechaFin);
+      if(!r||r.vencido)return {icono:'⛔',txt:'YA CERRÓ',puede:false};
+      if(x.abierto){
+        if(r.dias===0)return {icono:'🔥',txt:'SÍ PUEDES PARTICIPAR — ¡ÚLTIMAS HORAS!',puede:true};
+        if(r.dias<=1)return {icono:'⚡',txt:'SÍ PUEDES PARTICIPAR — cierra mañana',puede:true};
+        return {icono:'✅',txt:'SÍ PUEDES PARTICIPAR',puede:true};
+      }
+      var ri=restante(x.fechaIni);
+      return {icono:'🕐',txt:'AÚN NO ABRE — '+(ri&&!ri.vencido?('inicia en '+ri.txt.replace('quedan ','')):'proximamente'),puede:false};
+    };
     var nB=o.filter(function(x){return (x.objeto||'').toLowerCase().indexOf('bien')>=0}).length;
     var nS=o.filter(function(x){return (x.objeto||'').toLowerCase().indexOf('servicio')>=0}).length;
     var nO=o.length-nB-nS;
+    var nAbiertos=o.filter(function(x){return x.abierto}).length;
+    var nProximos=o.filter(function(x){return x.porAbrir}).length;
     var nuevas=o.filter(function(x){return vistos.indexOf(x.id)<0}).length;
-    // orden: primero las que cierran antes
-    var ord=o.slice().sort(function(a,b){return (diasCierre(a.fechaFin)||99)-(diasCierre(b.fechaFin)||99)});
+    /* Orden: primero los que YA se pueden cotizar y cierran antes; luego los que abren pronto. */
+    var ord=o.slice().sort(function(a,b){
+      if(a.abierto!==b.abierto)return a.abierto?-1:1;
+      var fa=aFecha(a.fechaFin),fb=aFecha(b.fechaFin);
+      return (fa?fa.getTime():9e15)-(fb?fb.getTime():9e15);
+    });
     var lineas=ord.map(function(x,i){
-      var dc=diasCierre(x.fechaFin);
-      var urg=dc===null?'':(dc<=0?' 🔴 ¡cierra HOY!':dc<=1?' 🟠 cierra mañana':(' ⏳ '+dc+'d'));
+      var p=participar(x);
+      var r=restante(x.fechaFin);
       var esNueva=vistos.indexOf(x.id)<0?' 🆕':'';
-      return (i+1)+'. '+icObj(x.objeto)+' <b>'+(x.objeto||'')+'</b>'+esNueva+'\n'+(x.desc||'').slice(0,90)+'…\n🏛 '+(x.entidad||'').slice(0,55)+'\n📅 cierra '+(x.fechaFin||'').split(' ')[0]+urg+'\n';
+      var tipo=(x.objeto||'').toUpperCase();
+      return (i+1)+'. '+icObj(x.objeto)+' <b>'+tipo+'</b> · '+p.icono+' <b>'+p.txt+'</b>'+esNueva+'\n'+
+        '📋 <code>'+(x.codigo||'')+'</code>\n'+
+        '<b>'+(x.desc||'')+'</b>\n'+
+        '🏛 '+(x.entidad||'')+'\n'+
+        '🟢 Inicio: '+fmtFecha(x.fechaIni)+'\n'+
+        '🔴 Cierre: '+fmtFecha(x.fechaFin)+(r&&!r.vencido?(' · ⏳ '+r.txt):'')+'\n'+
+        '🔗 <a href="'+x.url+'">Ver proceso en SEACE</a>\n';
     }).join('\n');
-    var head='🏛 <b>SEACE — TODAS las oportunidades ≤8 UIT</b> · La Libertad · '+(slot==='AM'?'🌅 mañana':'🌙 noche')+'\n'+
-      '🎯 Total cotizables: <b>'+o.length+'</b>  ·  📦 Bienes: '+nB+'  ·  🛠 Servicios: '+nS+(nO>0?('  ·  🏗 Otros: '+nO):'')+(nuevas>0?('\n🆕 '+nuevas+' nuevas desde el último aviso'):'')+'\n';
+    var head='🏛 <b>SEACE ≤8 UIT · LA LIBERTAD</b> · '+(slot==='AM'?'🌅 mañana':'🌙 noche')+'\n'+
+      '📊 <b>'+o.length+'</b> procesos activos  ·  ✅ <b>'+nAbiertos+'</b> puedes participar ya'+(nProximos>0?('  ·  🕐 '+nProximos+' abren pronto'):'')+'\n'+
+      '📦 Bienes: '+nB+'  ·  🛠 Servicios: '+nS+(nO>0?('  ·  🏗 Otros: '+nO):'')+(nuevas>0?('\n🆕 '+nuevas+' nuevos desde el último aviso'):'')+'\n';
     await tgSendLong(head+'\n'+lineas+'\n👉 Elige en SIGMA → Oportunidades: ✅ Participar · 🤔 Pensando · ❌ Descartar.',cfg.seaceBot);
     cfg=await sbGetConfig();
     cfg.seaceSeen=o.map(function(x){return x.id}).concat(vistos).slice(0,300);
