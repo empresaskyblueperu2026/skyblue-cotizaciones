@@ -4784,6 +4784,7 @@ function authEntrar(avisoClave){
   var lg=$('login'); if(lg)lg.style.display='none';
   renderPortal();
   authPintarSesion();
+  authPintarUsuarioSidebar();
   if(avisoClave)setTimeout(function(){alert('Estás usando la contraseña inicial del usuario maestro.\n\nPor seguridad cámbiala en Configuración → Usuarios.');},600);
   var saved=null; try{saved=localStorage.getItem('sigma_empresa');}catch(e){}
   var e=saved?EMPRESAS.filter(function(x){return x.id===saved;})[0]:null;
