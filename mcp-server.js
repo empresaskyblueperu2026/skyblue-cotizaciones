@@ -18,6 +18,11 @@
 const express = require('express');
 const router = express.Router();
 
+/* OAuth exige formularios urlencoded. Se aplica SOLO a este router: el resto del ERP
+   conserva su propio analizador JSON sin cambios. */
+router.use(express.urlencoded({ extended: false }));
+router.use(express.json({ limit: '1mb' }));
+
 const SERVER_NAME = 'sigma-erp';
 const SERVER_VERSION = '1.0.0';
 /* Version del protocolo MCP que implementa este servidor. */
@@ -575,7 +580,8 @@ function autorizado(req) {
   if (!esperado) return false;                         // sin token configurado: cerrado por defecto
   const h = req.headers['authorization'] || '';
   const recibido = h.indexOf('Bearer ') === 0 ? h.slice(7).trim() : '';
-  return tokensIguales(recibido, esperado);
+  if (tokensIguales(recibido, esperado)) return true;  // token maestro (Claude Code con cabecera)
+  return autorizadoOAuth(req);                         // sesion OAuth (conector de Claude.ai)
 }
 
 /* ─────────────────────────── Protocolo MCP (JSON-RPC 2.0) ─────────────────────────── */
@@ -627,6 +633,258 @@ async function manejarMensaje(msg) {
   return error(id, -32601, 'Metodo no soportado: ' + metodo);
 }
 
+
+/* ═══════════════════ OAuth 2.1 + PKCE (para conectores de Claude) ═══════════════════
+   Claude.ai no envia cabeceras personalizadas: descubre como autenticarse consultando
+   los metadatos del servidor. Aqui se implementa el flujo minimo que exige la especificacion:
+
+     1. /.well-known/oauth-protected-resource   -> dice quien autoriza este recurso
+     2. /.well-known/oauth-authorization-server -> dice donde estan authorize/token/register
+     3. POST /mcp/oauth/register                -> registro dinamico del cliente (RFC 7591)
+     4. GET  /mcp/oauth/authorize               -> la persona pega su token de acceso
+     5. POST /mcp/oauth/token                   -> canjea el codigo por un token de sesion
+
+   Los tokens emitidos se firman con HMAC (sin estado en memoria), asi un reinicio de
+   Railway no cierra la sesion del conector. */
+
+const crypto = require('crypto');
+
+function baseUrl(req) {
+  const proto = (req.headers['x-forwarded-proto'] || 'https').split(',')[0].trim();
+  const host = (req.headers['x-forwarded-host'] || req.headers.host || '').split(',')[0].trim();
+  return proto + '://' + host;
+}
+
+/* El secreto de firma deriva del token maestro: si se rota MCP_TOKEN, caducan las sesiones. */
+function secretoFirma() {
+  return 'oauth.' + (process.env.MCP_TOKEN || '') + '.' + (process.env.AUTH_SECRET || 'sigma');
+}
+
+function firmar(payload) {
+  const cuerpo = Buffer.from(JSON.stringify(payload)).toString('base64url');
+  const firma = crypto.createHmac('sha256', secretoFirma()).update(cuerpo).digest('base64url');
+  return cuerpo + '.' + firma;
+}
+
+function verificar(token) {
+  try {
+    const p = String(token || '').split('.');
+    if (p.length !== 2) return null;
+    const esperada = crypto.createHmac('sha256', secretoFirma()).update(p[0]).digest('base64url');
+    if (!tokensIguales(p[1], esperada)) return null;
+    const datos = JSON.parse(Buffer.from(p[0], 'base64url').toString('utf8'));
+    if (datos.exp && Date.now() > datos.exp) return null;
+    return datos;
+  } catch (e) { return null; }
+}
+
+/* Codigos de autorizacion: viven poco (5 min) y se usan una sola vez. */
+const CODIGOS = new Map();
+function limpiarCodigos() {
+  const ahora = Date.now();
+  for (const [k, v] of CODIGOS) if (v.exp < ahora) CODIGOS.delete(k);
+}
+
+/* Solo se admiten destinos de retorno de Claude o de desarrollo local. */
+function redirectPermitido(uri) {
+  if (!uri) return false;
+  try {
+    const u = new URL(uri);
+    if (u.protocol === 'http:' && (u.hostname === 'localhost' || u.hostname === '127.0.0.1')) return true;
+    if (u.protocol !== 'https:') return false;
+    return /(^|\.)(claude\.ai|anthropic\.com|claudeusercontent\.com)$/.test(u.hostname);
+  } catch (e) { return false; }
+}
+
+function esc(s) {
+  return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+/* ── Metadatos publicos (se montan en la raiz del dominio) ── */
+const wellKnown = express.Router();
+
+wellKnown.get('/oauth-protected-resource', function (req, res) {
+  const b = baseUrl(req);
+  res.json({
+    resource: b + '/mcp',
+    authorization_servers: [b],
+    scopes_supported: ['sigma:lectura'],
+    bearer_methods_supported: ['header'],
+    resource_name: 'SIGMA ERP (solo lectura)'
+  });
+});
+/* Algunos clientes consultan la variante con la ruta del recurso al final. */
+wellKnown.get('/oauth-protected-resource/mcp', function (req, res) {
+  const b = baseUrl(req);
+  res.json({
+    resource: b + '/mcp',
+    authorization_servers: [b],
+    scopes_supported: ['sigma:lectura'],
+    bearer_methods_supported: ['header'],
+    resource_name: 'SIGMA ERP (solo lectura)'
+  });
+});
+
+function metadatosServidor(req, res) {
+  const b = baseUrl(req);
+  res.json({
+    issuer: b,
+    authorization_endpoint: b + '/mcp/oauth/authorize',
+    token_endpoint: b + '/mcp/oauth/token',
+    registration_endpoint: b + '/mcp/oauth/register',
+    scopes_supported: ['sigma:lectura'],
+    response_types_supported: ['code'],
+    grant_types_supported: ['authorization_code', 'refresh_token'],
+    code_challenge_methods_supported: ['S256'],
+    token_endpoint_auth_methods_supported: ['none'],
+    service_documentation: b + '/mcp/salud'
+  });
+}
+wellKnown.get('/oauth-authorization-server', metadatosServidor);
+wellKnown.get('/oauth-authorization-server/mcp', metadatosServidor);
+wellKnown.get('/openid-configuration', metadatosServidor);
+
+/* ── Registro dinamico de cliente (RFC 7591) ──
+   El client_id se firma: no hace falta guardarlo, sobrevive a los reinicios. */
+router.post('/oauth/register', function (req, res) {
+  const b = req.body || {};
+  const redirects = Array.isArray(b.redirect_uris) ? b.redirect_uris : [];
+  if (!redirects.length || !redirects.every(redirectPermitido)) {
+    return res.status(400).json({ error: 'invalid_redirect_uri', error_description: 'Destino de retorno no permitido.' });
+  }
+  const clientId = firmar({ t: 'cliente', nombre: String(b.client_name || 'cliente-mcp').slice(0, 60), redirects: redirects, exp: 0 });
+  res.status(201).json({
+    client_id: clientId,
+    client_name: b.client_name || 'cliente-mcp',
+    redirect_uris: redirects,
+    grant_types: ['authorization_code', 'refresh_token'],
+    response_types: ['code'],
+    token_endpoint_auth_method: 'none',
+    client_id_issued_at: Math.floor(Date.now() / 1000)
+  });
+});
+
+/* ── Pantalla de autorizacion ── */
+router.get('/oauth/authorize', function (req, res) {
+  const q = req.query || {};
+  if (!redirectPermitido(q.redirect_uri)) {
+    return res.status(400).send('<h3>Destino de retorno no permitido</h3>');
+  }
+  if (q.response_type !== 'code') {
+    return res.redirect(q.redirect_uri + '?error=unsupported_response_type&state=' + encodeURIComponent(q.state || ''));
+  }
+  if (!q.code_challenge || q.code_challenge_method !== 'S256') {
+    return res.redirect(q.redirect_uri + '?error=invalid_request&error_description=' +
+      encodeURIComponent('Se requiere PKCE con S256') + '&state=' + encodeURIComponent(q.state || ''));
+  }
+  res.set('Content-Type', 'text/html; charset=utf-8').send(paginaLogin(q, ''));
+});
+
+router.post('/oauth/authorize', function (req, res) {
+  const b = req.body || {};
+  if (!redirectPermitido(b.redirect_uri)) return res.status(400).send('<h3>Destino de retorno no permitido</h3>');
+
+  if (!tokenEsperado()) {
+    return res.set('Content-Type', 'text/html; charset=utf-8')
+      .send(paginaLogin(b, 'El servidor aun no tiene configurada la variable MCP_TOKEN.'));
+  }
+  if (!tokensIguales(String(b.token || '').trim(), tokenEsperado())) {
+    return res.set('Content-Type', 'text/html; charset=utf-8')
+      .send(paginaLogin(b, 'Token incorrecto. Revisa el valor de MCP_TOKEN.'));
+  }
+
+  limpiarCodigos();
+  const codigo = crypto.randomBytes(24).toString('base64url');
+  CODIGOS.set(codigo, {
+    challenge: b.code_challenge,
+    redirect: b.redirect_uri,
+    exp: Date.now() + 5 * 60 * 1000
+  });
+  const sep = b.redirect_uri.indexOf('?') >= 0 ? '&' : '?';
+  res.redirect(b.redirect_uri + sep + 'code=' + encodeURIComponent(codigo) +
+    (b.state ? '&state=' + encodeURIComponent(b.state) : ''));
+});
+
+function paginaLogin(q, error) {
+  return '<!doctype html><html lang="es"><head><meta charset="utf-8">' +
+    '<meta name="viewport" content="width=device-width,initial-scale=1">' +
+    '<title>Conectar con SIGMA ERP</title><style>' +
+    'body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#0d3b6e,#0a2a4f 60%,#061a33);font-family:system-ui,-apple-system,Segoe UI,sans-serif;padding:20px}' +
+    '.c{width:100%;max-width:400px;background:#fff;border-radius:16px;padding:28px;box-shadow:0 20px 60px rgba(0,0,0,.35)}' +
+    'h1{font-size:19px;margin:0 0 4px;color:#0f172a}p{font-size:13px;color:#475569;margin:0 0 18px;line-height:1.5}' +
+    'label{display:block;font-size:11px;font-weight:700;color:#334155;margin-bottom:6px;letter-spacing:.4px}' +
+    'input{width:100%;padding:11px 12px;border:2px solid #cbd5e1;border-radius:9px;font-size:13px;box-sizing:border-box;font-family:ui-monospace,monospace}' +
+    'input:focus{outline:none;border-color:#0d3b6e}' +
+    'button{width:100%;margin-top:16px;padding:12px;background:#0d3b6e;color:#fff;border:none;border-radius:9px;font-size:14px;font-weight:800;cursor:pointer}' +
+    '.e{background:#fee2e2;color:#b91c1c;padding:9px 11px;border-radius:8px;font-size:12px;margin-bottom:14px}' +
+    '.n{font-size:11px;color:#94a3b8;margin-top:14px;text-align:center;line-height:1.5}' +
+    '</style></head><body><div class="c">' +
+    '<h1>Conectar con SIGMA ERP</h1>' +
+    '<p>Claude solicita acceso de <b>solo lectura</b> a productos, proveedores, clientes, cotizaciones y ventas.</p>' +
+    (error ? '<div class="e">' + esc(error) + '</div>' : '') +
+    '<form method="POST" action="/mcp/oauth/authorize">' +
+    '<input type="hidden" name="redirect_uri" value="' + esc(q.redirect_uri) + '">' +
+    '<input type="hidden" name="state" value="' + esc(q.state) + '">' +
+    '<input type="hidden" name="code_challenge" value="' + esc(q.code_challenge) + '">' +
+    '<label>TOKEN DE ACCESO</label>' +
+    '<input name="token" type="password" placeholder="sigma_mcp_..." autofocus autocomplete="off">' +
+    '<button type="submit">Autorizar</button></form>' +
+    '<div class="n">Este conector nunca devuelve documentos de identidad,<br>datos bancarios ni contrasenas.</div>' +
+    '</div></body></html>';
+}
+
+/* ── Canje del codigo por el token de sesion ── */
+router.post('/oauth/token', function (req, res) {
+  const b = req.body || {};
+  res.set('Cache-Control', 'no-store');
+
+  if (b.grant_type === 'refresh_token') {
+    const datos = verificar(b.refresh_token);
+    if (!datos || datos.t !== 'refresco') return res.status(400).json({ error: 'invalid_grant' });
+    return res.json(emitirTokens());
+  }
+
+  if (b.grant_type !== 'authorization_code') {
+    return res.status(400).json({ error: 'unsupported_grant_type' });
+  }
+
+  limpiarCodigos();
+  const guardado = CODIGOS.get(b.code);
+  if (!guardado) return res.status(400).json({ error: 'invalid_grant', error_description: 'Codigo invalido o vencido.' });
+  CODIGOS.delete(b.code);                                   // un solo uso
+
+  if (guardado.redirect !== b.redirect_uri) {
+    return res.status(400).json({ error: 'invalid_grant', error_description: 'El destino de retorno no coincide.' });
+  }
+  /* Verificacion PKCE: SHA-256 del verificador debe dar el desafio guardado. */
+  const calculado = crypto.createHash('sha256').update(String(b.code_verifier || '')).digest('base64url');
+  if (calculado !== guardado.challenge) {
+    return res.status(400).json({ error: 'invalid_grant', error_description: 'Verificacion PKCE fallida.' });
+  }
+  res.json(emitirTokens());
+});
+
+function emitirTokens() {
+  const duracion = 8 * 60 * 60 * 1000;                      // 8 horas
+  return {
+    access_token: firmar({ t: 'acceso', scope: 'sigma:lectura', exp: Date.now() + duracion }),
+    token_type: 'Bearer',
+    expires_in: Math.floor(duracion / 1000),
+    refresh_token: firmar({ t: 'refresco', exp: Date.now() + 30 * 24 * 60 * 60 * 1000 }),
+    scope: 'sigma:lectura'
+  };
+}
+
+/* Acepta el token maestro (Claude Code con cabecera) o un token OAuth emitido (Claude.ai). */
+function autorizadoOAuth(req) {
+  const h = req.headers['authorization'] || '';
+  if (h.indexOf('Bearer ') !== 0) return false;
+  const t = h.slice(7).trim();
+  const datos = verificar(t);
+  return !!(datos && datos.t === 'acceso');
+}
+
 /* ─────────────────────────── Transporte HTTP ─────────────────────────── */
 
 router.use(function (req, res, next) {
@@ -652,7 +910,8 @@ router.get('/salud', function (req, res) {
 /* Endpoint principal MCP (Streamable HTTP). */
 router.post('/', async function (req, res) {
   if (!autorizado(req)) {
-    res.setHeader('WWW-Authenticate', 'Bearer realm="sigma-erp-mcp"');
+    const meta = baseUrl(req) + '/.well-known/oauth-protected-resource';
+    res.setHeader('WWW-Authenticate', 'Bearer realm="sigma-erp-mcp", resource_metadata="' + meta + '"');
     return res.status(401).json(error(null, -32001, tokenEsperado()
       ? 'Token invalido o ausente.'
       : 'El servidor MCP no tiene token configurado (falta la variable MCP_TOKEN).'));
@@ -682,7 +941,8 @@ router.post('/', async function (req, res) {
 /* GET en el endpoint MCP: este servidor no abre flujos de eventos (SSE). */
 router.get('/', function (req, res) {
   if (!autorizado(req)) {
-    res.setHeader('WWW-Authenticate', 'Bearer realm="sigma-erp-mcp"');
+    const meta = baseUrl(req) + '/.well-known/oauth-protected-resource';
+    res.setHeader('WWW-Authenticate', 'Bearer realm="sigma-erp-mcp", resource_metadata="' + meta + '"');
     return res.status(401).json(error(null, -32001, 'Token invalido o ausente.'));
   }
   res.status(405).json(error(null, -32000, 'Este servidor no admite streaming por GET; usa POST.'));
@@ -690,4 +950,10 @@ router.get('/', function (req, res) {
 
 router.delete('/', function (req, res) { res.status(204).end(); });   // cierre de sesion: nada que liberar
 
-module.exports = { router: router, HERRAMIENTAS: HERRAMIENTAS, sanitizar: sanitizar, _acciones: ACCIONES };
+/* Registra el servidor MCP y sus metadatos OAuth en la app de Express. */
+function montar(app) {
+  app.use('/.well-known', wellKnown);   // descubrimiento de autenticacion (debe ir en la raiz)
+  app.use('/mcp', router);
+}
+
+module.exports = { montar: montar, router: router, wellKnown: wellKnown, HERRAMIENTAS: HERRAMIENTAS, sanitizar: sanitizar, _acciones: ACCIONES };
