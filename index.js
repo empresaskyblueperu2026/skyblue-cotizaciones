@@ -1590,6 +1590,8 @@ app.post('/api/contfact/webhook',async function(req,res){
   }catch(e){console.error('contfact webhook:',e.message);}
 });
 
+/* Servidor MCP (modulo aparte, solo lectura). No altera ninguna ruta existente. */
+app.use('/mcp',require('./mcp-server').router);
 app.get('/health',function(req,res){res.status(200).json({status:'ok',version:'2.3'});});
 app.get('/api/diag',function(req,res){
   res.json({
