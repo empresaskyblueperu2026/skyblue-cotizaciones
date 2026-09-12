@@ -1745,13 +1745,20 @@ app.post('/api/expfac/guardar', async function (req, res) {
     f.creado = (yaEsta && yaEsta.creado) || new Date().toISOString();
     f.actualizado = new Date().toISOString();
 
-    if (yaEsta) lista = lista.map(function (x) { return expfacNumNorm(x.serie_numero) === norm ? f : x; });
+    if (yaEsta) {
+      /* Se enriquece: lo nuevo manda, pero no se pierde el archivo ni los items
+         que ya estuvieran guardados si ahora llegan vacios. */
+      if (!f.archivo && yaEsta.archivo) f.archivo = yaEsta.archivo;
+      if ((!f.items || !f.items.length) && yaEsta.items && yaEsta.items.length) f.items = yaEsta.items;
+      if (!f.objeto_contrato && yaEsta.objeto_contrato) f.objeto_contrato = yaEsta.objeto_contrato;
+      lista = lista.map(function (x) { return expfacNumNorm(x.serie_numero) === norm ? f : x; });
+    }
     else lista.push(f);
 
     lista.sort(function (a, b2) { return String(b2.fecha_emision || '').localeCompare(String(a.fecha_emision || '')); });
     data[key] = lista;
     await sbPutData(data); try { writeData(data); } catch (e) { }
-    res.json({ ok: true, factura: f, total: lista.length });
+    res.json({ ok: true, factura: f, actualizada: !!yaEsta, total: lista.length });
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
 

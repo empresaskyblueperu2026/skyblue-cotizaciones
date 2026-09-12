@@ -4675,7 +4675,7 @@ function sbotProcesarPDFs(d, desde) {
   function paso() {
     if (i >= d.pdfs.length) {
       d.facturas = leidas;
-      d.resumen = nuevas + ' nueva(s)' + (repetidas ? (' · ' + repetidas + ' ya estaban') : '') + (fallidas ? (' · ' + fallidas + ' con error') : '');
+      d.resumen = nuevas + ' nueva(s)' + (repetidas ? (' · ' + repetidas + ' actualizada(s) con su PDF') : '') + (fallidas ? (' · ' + fallidas + ' con error') : '');
       sbotMostrar(d, 'Se procesaron ' + d.pdfs.length + ' factura(s) — ' + d.resumen);
       expfacCargarCobertura();
       return;
@@ -4691,9 +4691,9 @@ function sbotProcesarPDFs(d, desde) {
       leidas.push(e.data);
       return fetch('/api/expfac/guardar', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ emp: (EMP ? EMP.id : ''), factura: e.data, archivo_b64: p.b64, mime: 'application/pdf', origen: 'sunat' })
+        body: JSON.stringify({ emp: (EMP ? EMP.id : ''), factura: e.data, archivo_b64: p.b64, mime: 'application/pdf', origen: 'sunat', reemplazar: true })
       }).then(function (r) { return r.json(); }).then(function (g) {
-        if (g && g.ok) nuevas++; else if (g && g.duplicado) repetidas++; else fallidas++;
+        if (g && g.ok) { if (g.actualizada) repetidas++; else nuevas++; } else fallidas++;
         paso();
       });
     }).catch(function () { fallidas++; paso(); });
