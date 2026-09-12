@@ -4580,6 +4580,87 @@ function cfExport(mode){
 }
 
 
+/* ═══════ GOOGLE DRIVE ═══════ */
+/* ══════════ CONEXION CON GOOGLE DRIVE (cuenta del usuario) ══════════ */
+var DRIVEOAUTH = null;
+
+function driveCargarEstado() {
+  fetch('/api/drive/oauth/estado').then(function (r) { return r.json(); }).then(function (d) {
+    DRIVEOAUTH = d;
+    var c = $('drivePanel'); if (c) c.innerHTML = drivePanelHTML();
+  }).catch(function () { });
+}
+
+function driveHTML() {
+  return '<div class="card" style="padding:14px;margin-top:14px;border-left:4px solid #16a34a">' +
+    '<div style="font-size:14px;font-weight:800;color:var(--tx);margin-bottom:3px">📁 Archivado en Google Drive</div>' +
+    '<div style="font-size:12px;color:var(--tmuted);margin-bottom:10px">Las facturas emitidas se guardan en tu Drive, ordenadas por empresa, año y mes.</div>' +
+    '<div id="drivePanel"><div style="font-size:12px;color:var(--tmuted)">Comprobando…</div></div>' +
+    '</div>';
+}
+
+function drivePanelHTML() {
+  var d = DRIVEOAUTH || {};
+  var h = '';
+
+  if (d.conectado) {
+    h += '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px">';
+    h += '<span style="font-size:11px;padding:3px 10px;border-radius:999px;font-weight:700;background:#16a34a18;color:#166534">✓ Conectado' + (d.cuenta ? (' · ' + cfHE(d.cuenta)) : '') + '</span>';
+    h += '<button onclick="driveDesconectar()" style="background:var(--pane);border:1px solid var(--bd);color:var(--tx);padding:7px 12px;border-radius:8px;font-size:12px;cursor:pointer">Desconectar</button>';
+    h += '</div>';
+    h += '<div style="font-size:11.5px;color:var(--tmuted)">Estructura: <code>SIGMA / FACTURAS EMITIDAS / empresa / año / año-mes</code></div>';
+    return h;
+  }
+
+  if (!d.configurado) {
+    h += '<div style="background:#f8fafc;border:2px solid #cbd5e1;border-radius:10px;padding:12px">';
+    h += '<div style="font-size:12px;font-weight:800;color:#0f172a;margin-bottom:6px">Paso 1: crear la aplicación en Google</div>';
+    h += '<ol style="font-size:11.5px;color:#475569;line-height:1.7;margin:0 0 10px;padding-left:18px">';
+    h += '<li>Entra a <a href="https://console.cloud.google.com/apis/credentials" target="_blank" style="color:#0d3b6e;font-weight:700">console.cloud.google.com → Credenciales</a></li>';
+    h += '<li>Botón <b>Crear credenciales</b> → <b>ID de cliente de OAuth</b></li>';
+    h += '<li>Tipo: <b>Aplicación web</b></li>';
+    h += '<li>En <b>URI de redireccionamiento autorizados</b> pega exactamente:<br>' +
+      '<code style="display:block;background:#e2e8f0;padding:6px 8px;border-radius:6px;margin-top:4px;font-size:10.5px;word-break:break-all">' + cfHE(d.redirect || '') + '</code></li>';
+    h += '<li>Copia el <b>ID de cliente</b> y el <b>Secreto</b> y pégalos aquí abajo</li>';
+    h += '</ol>';
+    h += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">';
+    h += '<div><label style="display:block;font-size:10px;font-weight:700;color:#334155;margin-bottom:4px">ID DE CLIENTE</label>' +
+      '<input id="driveCid" placeholder="....apps.googleusercontent.com" style="width:100%;padding:8px 10px;border:2px solid #94a3b8;border-radius:8px;font-size:12px;box-sizing:border-box"></div>';
+    h += '<div><label style="display:block;font-size:10px;font-weight:700;color:#334155;margin-bottom:4px">SECRETO DE CLIENTE</label>' +
+      '<input id="driveCsec" type="password" placeholder="GOCSPX-..." autocomplete="new-password" style="width:100%;padding:8px 10px;border:2px solid #94a3b8;border-radius:8px;font-size:12px;box-sizing:border-box"></div>';
+    h += '</div>';
+    h += '<button onclick="driveGuardarCfg()" style="background:#0d3b6e;color:#fff;border:none;padding:9px 14px;border-radius:8px;font-weight:800;cursor:pointer;font-size:12.5px">🔒 Guardar</button>';
+    h += '</div>';
+    return h;
+  }
+
+  h += '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">';
+  h += '<span style="font-size:11px;padding:3px 10px;border-radius:999px;font-weight:700;background:#f59e0b18;color:#b45309">⚠ Falta autorizar</span>';
+  h += '<a href="/api/drive/oauth/iniciar" target="_blank" style="text-decoration:none;background:#16a34a;color:#fff;padding:9px 14px;border-radius:8px;font-weight:800;font-size:12.5px">Conectar con Google</a>';
+  h += '<button onclick="driveCargarEstado()" style="background:var(--pane);border:1px solid var(--bd);color:var(--tx);padding:9px 12px;border-radius:8px;font-size:12px;cursor:pointer">Ya autoricé</button>';
+  h += '</div>';
+  h += '<div style="font-size:11px;color:var(--tmuted);margin-top:8px">Se abrirá Google en otra pestaña. Solo se pide permiso sobre los archivos que crea SIGMA, no sobre el resto de tu Drive.</div>';
+  return h;
+}
+
+function driveGuardarCfg() {
+  var cid = ($('driveCid') || {}).value || '', sec = ($('driveCsec') || {}).value || '';
+  if (!cid.trim() || !sec.trim()) { alert('Pega el ID de cliente y el secreto.'); return; }
+  fetch('/api/drive/oauth/config', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ clientId: cid.trim(), clientSecret: sec.trim() })
+  }).then(function (r) { return r.json(); }).then(function (d) {
+    if (d && d.ok) { toast('Guardado. Ahora conecta tu cuenta.'); driveCargarEstado(); }
+    else alert('Error: ' + ((d && d.error) || 'no se pudo guardar'));
+  }).catch(function () { alert('Sin conexión'); });
+}
+
+function driveDesconectar() {
+  if (!confirm('¿Desconectar Google Drive? Las facturas seguirán guardadas en SIGMA.')) return;
+  fetch('/api/drive/oauth/desconectar', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })
+    .then(function () { toast('Drive desconectado'); driveCargarEstado(); });
+}
+
 /* ═══════ BOT SUNAT ═══════ */
 /* ══════════ PANEL DEL BOT SUNAT (dentro de Extraer Experiencia) ══════════
    La Clave SOL se escribe aquí y viaja cifrada al servidor; nunca se muestra de vuelta. */
@@ -4916,6 +4997,10 @@ function expfacHTML() {
   /* Bot de extraccion automatica */
   h += sbotHTML();
   setTimeout(sbotCargarEstado, 100);
+
+  /* Archivado en Google Drive */
+  h += driveHTML();
+  setTimeout(driveCargarEstado, 150);
 
   /* Paso 3: facturas del mes elegido */
   if (EXPFAC.periodoSel) h += expfacMesHTML();

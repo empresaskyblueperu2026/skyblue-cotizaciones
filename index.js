@@ -1710,6 +1710,152 @@ app.post('/api/expfac/extraer', async function (req, res) {
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
 
+/* ─────────── Conexion con la cuenta de Google del usuario (OAuth) ───────────
+   La cuenta de servicio no puede ser dueña de archivos (no tiene cuota), asi que
+   los comprobantes se suben a la cuenta del usuario. Se pide el permiso minimo
+   (drive.file): solo los archivos que crea este sistema, nada mas de su Drive.
+   El secreto y el token se guardan cifrados. */
+
+var _cifra = null;
+function driveCifra() {
+  if (!_cifra) { try { _cifra = require('./sunat-bot'); } catch (e) { _cifra = {}; } }
+  return _cifra;
+}
+function driveOAuthRedir() { return PROD_URL + '/api/drive/oauth/retorno'; }
+
+async function driveOAuthCfg() {
+  var cfg = await sbGetConfig();
+  return cfg.driveOAuth || {};
+}
+
+/* Datos de la aplicacion de Google (se cargan una vez desde SIGMA). */
+app.post('/api/drive/oauth/config', async function (req, res) {
+  try {
+    if (!sbReady()) return proxyCloud(req, res);
+    var b = req.body || {};
+    if (!b.clientId || !b.clientSecret) return res.status(400).json({ ok: false, error: 'Faltan el ID y el secreto de cliente.' });
+    var cfg = await sbGetConfig();
+    cfg.driveOAuth = cfg.driveOAuth || {};
+    cfg.driveOAuth.clientId = String(b.clientId).trim();
+    cfg.driveOAuth.clientSecret = driveCifra().cifrar(String(b.clientSecret).trim());
+    await sbPutConfig(cfg);
+    res.json({ ok: true, redirect: driveOAuthRedir() });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
+app.get('/api/drive/oauth/estado', async function (req, res) {
+  try {
+    if (!sbReady()) return proxyCloud(req, res);
+    var c = await driveOAuthCfg();
+    res.json({
+      ok: true,
+      configurado: !!c.clientId,
+      conectado: !!c.refreshToken,
+      cuenta: c.cuenta || null,
+      redirect: driveOAuthRedir()
+    });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
+/* Lleva al usuario a la pantalla de permiso de Google. */
+app.get('/api/drive/oauth/iniciar', async function (req, res) {
+  try {
+    if (!sbReady()) return proxyCloud(req, res);
+    var c = await driveOAuthCfg();
+    if (!c.clientId) return res.status(400).send('Primero carga el ID de cliente en SIGMA.');
+    var url = 'https://accounts.google.com/o/oauth2/v2/auth' +
+      '?client_id=' + encodeURIComponent(c.clientId) +
+      '&redirect_uri=' + encodeURIComponent(driveOAuthRedir()) +
+      '&response_type=code' +
+      '&scope=' + encodeURIComponent('https://www.googleapis.com/auth/drive.file') +
+      '&access_type=offline&prompt=consent&include_granted_scopes=true';
+    res.redirect(url);
+  } catch (e) { res.status(500).send(e.message); }
+});
+
+/* Google devuelve aqui el codigo; se canjea por un token duradero. */
+app.get('/api/drive/oauth/retorno', async function (req, res) {
+  function pagina(titulo, detalle, ok) {
+    return '<!doctype html><html lang="es"><head><meta charset="utf-8"><title>' + titulo + '</title></head>' +
+      '<body style="font-family:system-ui;background:#0d3b6e;color:#fff;display:flex;align-items:center;justify-content:center;height:100vh;margin:0">' +
+      '<div style="background:#fff;color:#0f172a;padding:28px;border-radius:14px;max-width:420px;text-align:center">' +
+      '<div style="font-size:34px">' + (ok ? '&#9989;' : '&#10060;') + '</div>' +
+      '<h2 style="margin:10px 0 6px;font-size:18px">' + titulo + '</h2>' +
+      '<p style="font-size:13px;color:#475569;line-height:1.5">' + detalle + '</p>' +
+      '<p style="font-size:12px;color:#94a3b8">Ya puedes cerrar esta ventana y volver a SIGMA.</p>' +
+      '</div></body></html>';
+  }
+  try {
+    if (!sbReady()) return proxyCloud(req, res);
+    var code = req.query.code;
+    if (!code) return res.send(pagina('No se recibio el permiso', 'Google no devolvio el codigo de autorizacion.', false));
+    var c = await driveOAuthCfg();
+    var secreto = driveCifra().descifrar(c.clientSecret);
+    if (!c.clientId || !secreto) return res.send(pagina('Falta configuracion', 'No estan cargados el ID y el secreto de cliente.', false));
+
+    var cuerpo = 'code=' + encodeURIComponent(code) +
+      '&client_id=' + encodeURIComponent(c.clientId) +
+      '&client_secret=' + encodeURIComponent(secreto) +
+      '&redirect_uri=' + encodeURIComponent(driveOAuthRedir()) +
+      '&grant_type=authorization_code';
+    var r = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: cuerpo
+    });
+    var d = await r.json();
+    if (!d || !d.refresh_token) {
+      return res.send(pagina('No se pudo conectar', 'Google respondio: ' + String((d && (d.error_description || d.error)) || 'sin token duradero') + '. Vuelve a intentarlo.', false));
+    }
+
+    /* Nombre de la cuenta, solo para mostrarlo. */
+    var cuenta = null;
+    try {
+      var ri = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', { headers: { Authorization: 'Bearer ' + d.access_token } });
+      var di = await ri.json();
+      cuenta = di && (di.email || di.name) || null;
+    } catch (e) { }
+
+    var cfg = await sbGetConfig();
+    cfg.driveOAuth = cfg.driveOAuth || {};
+    cfg.driveOAuth.refreshToken = driveCifra().cifrar(d.refresh_token);
+    cfg.driveOAuth.cuenta = cuenta;
+    cfg.driveOAuth.conectadoEn = new Date().toISOString();
+    await sbPutConfig(cfg);
+
+    res.send(pagina('Google Drive conectado', 'Las facturas se archivaran en el Drive de <b>' + (cuenta || 'tu cuenta') + '</b>.', true));
+  } catch (e) { res.send(pagina('Error al conectar', String(e.message).slice(0, 160), false)); }
+});
+
+app.post('/api/drive/oauth/desconectar', async function (req, res) {
+  try {
+    if (!sbReady()) return proxyCloud(req, res);
+    var cfg = await sbGetConfig();
+    if (cfg.driveOAuth) { delete cfg.driveOAuth.refreshToken; delete cfg.driveOAuth.cuenta; }
+    await sbPutConfig(cfg);
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
+/* Token de acceso del usuario (se renueva solo con el token duradero). */
+var _tokUsuario = { valor: null, vence: 0 };
+async function driveTokenUsuario() {
+  if (_tokUsuario.valor && Date.now() < _tokUsuario.vence) return _tokUsuario.valor;
+  var c = await driveOAuthCfg();
+  var refresh = driveCifra().descifrar(c.refreshToken);
+  var secreto = driveCifra().descifrar(c.clientSecret);
+  if (!c.clientId || !secreto || !refresh) return null;
+  var cuerpo = 'client_id=' + encodeURIComponent(c.clientId) +
+    '&client_secret=' + encodeURIComponent(secreto) +
+    '&refresh_token=' + encodeURIComponent(refresh) +
+    '&grant_type=refresh_token';
+  var r = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: cuerpo
+  });
+  var d = await r.json();
+  if (!d || !d.access_token) return null;
+  _tokUsuario = { valor: d.access_token, vence: Date.now() + ((d.expires_in || 3600) - 120) * 1000 };
+  return _tokUsuario.valor;
+}
+
 /* Archiva el comprobante en Drive: SIGMA / FACTURAS EMITIDAS / <empresa> / <anio> / <anio-mes>.
    Si Drive no esta configurado no hace nada: nunca bloquea el guardado de la factura. */
 async function expfacADrive(f, empNombre, b64, mime) {
@@ -1719,7 +1865,9 @@ async function expfacADrive(f, empNombre, b64, mime) {
     var anio = per.slice(0, 4) || 'sin-fecha';
     var mes = per ? (per.slice(0, 4) + '-' + per.slice(4, 6)) : 'sin-fecha';
     var ruta = ['SIGMA', 'FACTURAS EMITIDAS', String(empNombre || 'EMPRESA'), anio, mes];
-    var tok = await driveToken();
+    /* Con la cuenta del usuario los archivos son suyos y usan su cuota;
+       la cuenta de servicio solo sirve para crear carpetas. */
+    var tok = (await driveTokenUsuario()) || (await driveToken());
     var padre = await driveEnsurePath(ruta, tok);
     var nombre = (f.serie_numero || 'comprobante').replace(/[^A-Za-z0-9_-]/g, '') + (String(mime||'').indexOf('xml') >= 0 ? '.xml' : '.pdf');
     /* Si ya se subio antes, se reutiliza en vez de duplicar. */
