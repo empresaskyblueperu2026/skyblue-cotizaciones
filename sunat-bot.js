@@ -115,7 +115,7 @@ async function abrirNavegador() {
     headless: 'new',
     args: [
       '--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage',
-      '--disable-gpu', '--no-zygote', '--single-process',
+      '--disable-gpu',
       '--window-size=1400,900', '--lang=es-PE'
     ]
   };
@@ -223,7 +223,22 @@ async function sunatLogin(page, cred, traza) {
   await page.setViewport({ width: 1400, height: 900 });
   await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36');
 
-  await page.goto(SUNAT_LOGIN, { waitUntil: 'domcontentloaded', timeout: 45000 });
+  /* SUNAT a veces corta la conexion cuando detecta accesos seguidos: se reintenta
+     con mas margen y, si no responde, se dice con claridad en vez de dar un error tecnico. */
+  var abrio = false, ultimo = '';
+  for (var intento = 1; intento <= 3 && !abrio; intento++) {
+    try {
+      await page.goto(SUNAT_LOGIN, { waitUntil: 'domcontentloaded', timeout: 60000 });
+      abrio = true;
+    } catch (e) {
+      ultimo = String(e.message).slice(0, 70);
+      if (intento < 3) await new Promise(function (r) { setTimeout(r, 4000 * intento); });
+    }
+  }
+  if (!abrio) {
+    paso(traza, 'abrir pagina de login', false, 'SUNAT no respondio tras 3 intentos (' + ultimo + '). Suele ser un bloqueo temporal por consultas seguidas: espera unos minutos y reintenta.');
+    return false;
+  }
   paso(traza, 'abrir pagina de login', true, page.url().slice(0, 90));
 
   /* El formulario tarda en montarse. */
