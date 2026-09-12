@@ -1738,7 +1738,7 @@ async function expfacADrive(f, empNombre, b64, mime) {
     var r = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&supportsAllDrives=true&fields=id,webViewLink', {
       method: 'POST', headers: { Authorization: 'Bearer ' + tok, 'Content-Type': 'multipart/related; boundary=' + lim }, body: cuerpo });
     var d = await r.json();
-    if (!d || !d.id) return { error: 'Drive no devolvio el archivo' };
+    if (!d || !d.id) return { error: 'Drive (' + r.status + '): ' + String((d && d.error && d.error.message) || JSON.stringify(d || {})).slice(0, 160) };
     return { id: d.id, url: d.webViewLink, carpeta: ruta.join(' / ') };
   } catch (e) { return { error: String(e.message).slice(0, 90) }; }
 }
