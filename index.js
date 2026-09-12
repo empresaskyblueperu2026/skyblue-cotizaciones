@@ -1592,6 +1592,263 @@ app.post('/api/contfact/webhook',async function(req,res){
 
 /* Servidor MCP (modulo aparte, solo lectura). No altera ninguna ruta existente. */
 require('./mcp-server').montar(app);
+
+/* ══════════════ EXPERIENCIA POR FACTURAS DE VENTA (submodulo "Extraer Experiencia") ══════════════
+   Construye la experiencia comercial de la empresa a partir de las facturas que EMITIO.
+   Recorre mes a mes desde el inicio de actividades (dato de SUNAT) y registra, por cada
+   comprobante: el archivo original (PDF/XML) y su detalle estructurado.
+   Solo lectura de SUNAT: aqui nunca se emite ni modifica nada ante la administracion. */
+
+var EXPFAC_PROMPT = 'Eres un extractor de FACTURAS DE VENTA peruanas (SUNAT). Analiza el comprobante y devuelve SOLO un JSON valido, sin texto adicional, con esta forma exacta: {"tipo_doc":"FACTURA|BOLETA|NOTA_CREDITO|NOTA_DEBITO","serie_numero":"E001-1","fecha_emision":"AAAA-MM-DD","emisor":{"razon":"","ruc":""},"cliente":{"razon":"","ruc":"","direccion":""},"moneda":"PEN|USD","subtotal":0,"igv":0,"total":0,"forma_pago":"Contado|Credito","guia_remision":"","orden_compra":"","detraccion":{"tiene":false,"porcentaje":null,"monto":null},"retencion":{"tiene":false,"porcentaje":null,"monto":null},"items":[{"desc":"","cant":0,"unidad":"","punit":0,"total":0}],"objeto_contrato":"","rubro":"","confianza":0}. Reglas: (1) "objeto_contrato" es un resumen de 6 a 15 palabras de QUE se vendio, redactado como se describiria en una experiencia para licitaciones (ej. "Suministro de filtros y membranas para planta de tratamiento de agua"). (2) "rubro" clasifica en una de: BIENES, SERVICIOS, OBRAS, CONSULTORIA, SUMINISTRO, MANTENIMIENTO, ALQUILER, OTRO. (3) Copia los importes tal como figuran, sin recalcular. (4) "confianza" de 0 a 100 segun que tan legible este el documento. (5) Si un dato no aparece, usa null (no inventes).';
+
+
+/* Motores de extraccion propios: mismo patron ya probado en contabilidad, pero con el
+   prompt de facturas de venta. Se escriben aparte para no alterar el modulo existente. */
+async function expfacGemini(b64, mime) {
+  var k = process.env.GEMINI_API_KEY; if (!k) return { __err: 'sin GEMINI_API_KEY' };
+  var body = { contents: [{ parts: [{ text: EXPFAC_PROMPT }, { inline_data: { mime_type: mime || 'application/pdf', data: b64 } }] }], generationConfig: { temperature: 0.1, maxOutputTokens: 8192, thinkingConfig: { thinkingBudget: 0 } } };
+  var url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' + k;
+  try {
+    var d, st = 0, waits = [0, 4000, 10000];
+    for (var w = 0; w < waits.length; w++) {
+      if (w > 0) await new Promise(function (rs) { setTimeout(rs, waits[w]); });
+      var r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      st = r.status; d = await r.json();
+      if (d && d.error && /quota|billing/i.test(d.error.message || '')) break;
+      if (st !== 429 && st !== 503) break;
+    }
+    if (d && d.error) return { __err: ((d.error.message || ('HTTP ' + st)) + '').slice(0, 120) };
+    var tx = ''; try { tx = d.candidates[0].content.parts.map(function (p) { return p.text || ''; }).join(''); } catch (e) { return { __err: 'respuesta vacia (HTTP ' + st + ')' }; }
+    var lim = tx.replace(/```json/g, '').replace(/```/g, '');
+    var _a = lim.indexOf('{'), _b = lim.lastIndexOf('}');
+    if (_a < 0 || _b <= _a) return { __err: 'sin JSON en respuesta' };
+    try { return JSON.parse(lim.slice(_a, _b + 1)); } catch (e) { return { __err: 'JSON invalido' }; }
+  } catch (e) { return { __err: (e.message + '').slice(0, 120) }; }
+}
+async function expfacClaude(b64, mime) {
+  var k = process.env.ANTHROPIC_API_KEY; if (!k) return { __err: 'sin ANTHROPIC_API_KEY' };
+  var isPdf = (mime || '').indexOf('pdf') >= 0;
+  var mt = (mime || 'application/pdf').toLowerCase();
+  if (!isPdf && ['image/jpeg', 'image/png', 'image/gif', 'image/webp'].indexOf(mt) < 0) mt = 'image/jpeg';
+  var block = isPdf ? { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: b64 } }
+                    : { type: 'image', source: { type: 'base64', media_type: mt, data: b64 } };
+  var body = {
+    model: 'claude-sonnet-4-5', max_tokens: 8192,
+    system: 'Eres un extractor de comprobantes. Respondes UNICAMENTE con un objeto JSON valido, sin markdown ni explicaciones.',
+    messages: [{ role: 'user', content: [block, { type: 'text', text: EXPFAC_PROMPT }] }, { role: 'assistant', content: '{' }]
+  };
+  try {
+    var d, st = 0, waits = [0, 3000, 8000];
+    for (var w = 0; w < waits.length; w++) {
+      if (w > 0) await new Promise(function (rs) { setTimeout(rs, waits[w]); });
+      var r = await fetch('https://api.anthropic.com/v1/messages', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-api-key': k, 'anthropic-version': '2023-06-01', 'anthropic-beta': 'pdfs-2024-09-25' }, body: JSON.stringify(body) });
+      st = r.status; d = await r.json();
+      if (st !== 429 && st !== 529 && st < 500) break;
+    }
+    if (d && d.error) return { __err: ('claude ' + ((d.error.message || ('HTTP ' + st)) + '')).slice(0, 140) };
+    var tx = ''; try { tx = (d.content || []).map(function (c) { return c.text || ''; }).join(''); } catch (e) { }
+    if (!tx) return { __err: 'claude respuesta vacia (HTTP ' + st + ')' };
+    var full = ('{' + tx).replace(/```json/g, '').replace(/```/g, '');
+    var _a = full.indexOf('{'), _b = full.lastIndexOf('}');
+    var txt = (_a >= 0 && _b > _a) ? full.slice(_a, _b + 1) : full;
+    try { return JSON.parse(txt); } catch (e) { return { __err: 'claude JSON invalido' }; }
+  } catch (e) { return { __err: (e.message + '').slice(0, 120) }; }
+}
+
+function expfacKey(emp) { return 'expfac_' + (emp || SKYBLUE_EMPID); }
+
+/* Normaliza el numero de comprobante para comparar: E001-1 y E001-00000001 son el mismo. */
+function expfacNumNorm(n) {
+  var s = String(n || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  var m = s.match(/^([A-Z]{1,4}\d{0,4})0*(\d+)$/);
+  return m ? (m[1] + '-' + m[2]) : s;
+}
+
+/* Periodo AAAAMM a partir de una fecha en cualquier formato habitual. */
+function expfacPeriodo(fecha) {
+  var s = String(fecha || '').trim();
+  var m = s.match(/^(\d{4})-(\d{2})/);
+  if (m) return m[1] + m[2];
+  m = s.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+  if (m) return m[3] + m[2];
+  return '';
+}
+
+/* Lista de meses entre el inicio de actividades y hoy. */
+function expfacMeses(inicio) {
+  var out = [];
+  var d = null;
+  var m = String(inicio || '').match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+  if (m) d = new Date(+m[3], +m[2] - 1, 1);
+  else { var m2 = String(inicio || '').match(/^(\d{4})-(\d{2})/); if (m2) d = new Date(+m2[1], +m2[2] - 1, 1); }
+  if (!d || isNaN(d.getTime())) return out;
+  var hoy = new Date();
+  var tope = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+  var guarda = 0;
+  while (d <= tope && guarda++ < 600) {
+    out.push(String(d.getFullYear()) + ('0' + (d.getMonth() + 1)).slice(-2));
+    d = new Date(d.getFullYear(), d.getMonth() + 1, 1);
+  }
+  return out;
+}
+
+/* Extrae una factura de venta desde PDF o imagen, reutilizando el motor IA ya probado. */
+app.post('/api/expfac/extraer', async function (req, res) {
+  try {
+    if (!sbReady()) return proxyCloud(req, res);
+    var b = req.body || {};
+    if (!b.b64) return res.status(400).json({ ok: false, error: 'Falta el archivo.' });
+    var mime = b.mime || 'application/pdf';
+
+    var g = await expfacGemini(b.b64, mime);
+    var motor = 'gemini';
+    if (g && g.__err) { g = await expfacClaude(b.b64, mime); motor = 'claude'; }
+    if (!g || g.__err) return res.status(502).json({ ok: false, error: 'La IA no pudo leer el comprobante: ' + ((g && g.__err) || 'sin respuesta') });
+
+    res.json({ ok: true, motor: motor, data: g });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
+/* Guarda la factura + su archivo original. Evita duplicados por numero de comprobante. */
+app.post('/api/expfac/guardar', async function (req, res) {
+  try {
+    if (!sbReady()) return proxyCloud(req, res);
+    var b = req.body || {};
+    var f = b.factura;
+    if (!f || !f.serie_numero) return res.status(400).json({ ok: false, error: 'Falta la factura o su numero.' });
+
+    var emp = b.emp || SKYBLUE_EMPID;
+    var data = await sbGetData() || {};
+    var key = expfacKey(emp);
+    var lista = Array.isArray(data[key]) ? data[key] : [];
+
+    var norm = expfacNumNorm(f.serie_numero);
+    var yaEsta = lista.filter(function (x) { return expfacNumNorm(x.serie_numero) === norm; })[0];
+    if (yaEsta && !b.reemplazar) {
+      return res.json({ ok: false, duplicado: true, error: 'La factura ' + f.serie_numero + ' ya esta registrada.', existente: yaEsta });
+    }
+
+    /* El archivo original se guarda en el bucket privado, junto al detalle estructurado. */
+    if (b.archivo_b64) {
+      try {
+        var ext = (b.mime === 'text/xml' || b.mime === 'application/xml') ? 'xml' : 'pdf';
+        var ruta = 'expfac/' + emp + '/' + norm.replace(/[^A-Z0-9-]/g, '') + '.' + ext;
+        await sbUploadFile(ruta, Buffer.from(b.archivo_b64, 'base64'), b.mime || 'application/pdf');
+        f.archivo = ruta;
+      } catch (e) { f.archivo_error = e.message; }
+    }
+
+    f.id = (yaEsta && yaEsta.id) || ('ef' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7));
+    f.periodo = expfacPeriodo(f.fecha_emision);
+    f.origen = b.origen || 'manual';
+    f.creado = (yaEsta && yaEsta.creado) || new Date().toISOString();
+    f.actualizado = new Date().toISOString();
+
+    if (yaEsta) lista = lista.map(function (x) { return expfacNumNorm(x.serie_numero) === norm ? f : x; });
+    else lista.push(f);
+
+    lista.sort(function (a, b2) { return String(b2.fecha_emision || '').localeCompare(String(a.fecha_emision || '')); });
+    data[key] = lista;
+    await sbPutData(data); try { writeData(data); } catch (e) { }
+    res.json({ ok: true, factura: f, total: lista.length });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
+app.get('/api/expfac/lista', async function (req, res) {
+  try {
+    if (!sbReady()) return proxyCloud(req, res);
+    var data = await sbGetData() || {};
+    var lista = data[expfacKey(req.query.emp)] || [];
+    if (req.query.periodo) lista = lista.filter(function (f) { return f.periodo === req.query.periodo; });
+    res.json({ ok: true, total: lista.length, facturas: lista });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
+app.post('/api/expfac/borrar', async function (req, res) {
+  try {
+    if (!sbReady()) return proxyCloud(req, res);
+    var b = req.body || {};
+    var data = await sbGetData() || {};
+    var key = expfacKey(b.emp);
+    var lista = Array.isArray(data[key]) ? data[key] : [];
+    var antes = lista.length;
+    data[key] = lista.filter(function (f) { return f.id !== b.id; });
+    await sbPutData(data); try { writeData(data); } catch (e) { }
+    res.json({ ok: true, borrados: antes - data[key].length });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
+/* Marca un mes como revisado aunque no tenga facturas (asi se sabe que ya se verifico). */
+app.post('/api/expfac/mes', async function (req, res) {
+  try {
+    if (!sbReady()) return proxyCloud(req, res);
+    var b = req.body || {};
+    if (!/^\d{6}$/.test(String(b.periodo || ''))) return res.status(400).json({ ok: false, error: 'Periodo invalido (AAAAMM).' });
+    var data = await sbGetData() || {};
+    var key = 'expfacmeses_' + (b.emp || SKYBLUE_EMPID);
+    var meses = data[key] || {};
+    meses[b.periodo] = { estado: b.estado || 'revisado', sin_facturas: !!b.sin_facturas, revisado_en: new Date().toISOString() };
+    data[key] = meses;
+    await sbPutData(data); try { writeData(data); } catch (e) { }
+    res.json({ ok: true, meses: meses });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
+/* Estado de avance: que meses faltan revisar desde el inicio de actividades. */
+app.get('/api/expfac/cobertura', async function (req, res) {
+  try {
+    if (!sbReady()) return proxyCloud(req, res);
+    var emp = req.query.emp || SKYBLUE_EMPID;
+    var inicio = req.query.inicio || '';
+    var data = await sbGetData() || {};
+    var lista = data[expfacKey(emp)] || [];
+    var revisados = data['expfacmeses_' + emp] || {};
+
+    var porMes = {};
+    lista.forEach(function (f) {
+      var p = f.periodo || expfacPeriodo(f.fecha_emision);
+      if (!p) return;
+      porMes[p] = porMes[p] || { facturas: 0, monto: 0, moneda: f.moneda || 'PEN' };
+      porMes[p].facturas++;
+      porMes[p].monto += (+f.total || 0);
+    });
+
+    var meses = expfacMeses(inicio).map(function (p) {
+      var d = porMes[p], r = revisados[p];
+      return {
+        periodo: p,
+        anio: p.slice(0, 4), mes: p.slice(4, 6),
+        facturas: d ? d.facturas : 0,
+        monto: d ? Math.round(d.monto * 100) / 100 : 0,
+        moneda: d ? d.moneda : null,
+        estado: d ? 'con_facturas' : (r ? (r.sin_facturas ? 'sin_facturas' : 'revisado') : 'pendiente')
+      };
+    });
+
+    res.json({
+      ok: true, inicio: inicio, total_facturas: lista.length,
+      meses_totales: meses.length,
+      meses_pendientes: meses.filter(function (m) { return m.estado === 'pendiente'; }).length,
+      meses: meses
+    });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
+/* Descarga el archivo original de una factura (PDF/XML) desde el bucket privado. */
+app.get('/api/expfac/archivo', async function (req, res) {
+  try {
+    if (!sbReady()) return proxyCloud(req, res);
+    var p = String(req.query.p || '');
+    if (p.indexOf('expfac/') !== 0 || p.indexOf('..') >= 0) return res.status(400).send('Ruta invalida');
+    var r = await fetch(SB_URL + '/storage/v1/object/' + SB_BUCKET + '/' + p, {
+      headers: { 'Authorization': 'Bearer ' + SB_KEY, 'apikey': SB_KEY }
+    });
+    if (!r.ok) return res.status(404).send('No encontrado');
+    res.setHeader('Content-Type', p.slice(-3) === 'xml' ? 'application/xml' : 'application/pdf');
+    res.send(Buffer.from(await r.arrayBuffer()));
+  } catch (e) { res.status(500).send(e.message); }
+});
+
 app.get('/health',function(req,res){res.status(200).json({status:'ok',version:'2.3'});});
 app.get('/api/diag',function(req,res){
   res.json({

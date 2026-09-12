@@ -3602,7 +3602,8 @@ function renderExperiencia(){
   h+='</div></div>';
   h+='<div id="expTablaWrap"></div>';
   h+='<style>.expsel{padding:7px 9px;border:1px solid var(--bd);border-radius:8px;background:var(--pane);color:var(--tx);font-size:12px}.expbadge{display:inline-block;padding:2px 8px;border-radius:999px;font-size:10px;font-weight:700}</style>';
-  $('content').innerHTML=h;
+  $('content').innerHTML=(_expTab==='extraer'?(expTabsHTML()+expfacHTML()):(expTabsHTML()+h));
+  if(_expTab==='extraer')expfacInit();
   expRenderTabla();
 }
 function expOpts(arr,sel,ph){return arr.map(function(v){return '<option value="'+v+'"'+(v===sel?' selected':'')+'>'+(v||ph)+'</option>';}).join('');}
@@ -4578,6 +4579,285 @@ function cfExport(mode){
   }
 }
 
+
+/* ═══════ EXTRAER EXPERIENCIA ═══════ */
+/* ══════════ SUBMODULO: EXTRAER EXPERIENCIA (desde facturas de venta) ══════════
+   Recorre mes a mes desde el inicio de actividades de la empresa y va registrando
+   las facturas emitidas: archivo original + detalle estructurado. */
+
+var EXPFAC = { facturas: [], cobertura: null, inicio: '', periodoSel: '' };
+var _expTab = 'panel';
+
+function expfacInicioKey() { return 'sigma_expfac_inicio_' + (EMP ? EMP.id : 'x'); }
+
+/* Pestañas del módulo Experiencia. */
+function expTabsHTML() {
+  var tabs = [['panel', '📊 Experiencias'], ['extraer', '📥 Extraer Experiencia']];
+  var h = '<div style="display:flex;gap:8px;margin-bottom:16px;border-bottom:2px solid var(--bd);padding-bottom:0">';
+  tabs.forEach(function (t) {
+    var act = _expTab === t[0];
+    h += '<div onclick="expSetTab(\'' + t[0] + '\')" style="padding:9px 16px;cursor:pointer;font-size:13px;font-weight:700;border-bottom:3px solid ' +
+      (act ? '#0d3b6e' : 'transparent') + ';color:' + (act ? '#0d3b6e' : 'var(--tmuted)') + ';margin-bottom:-2px">' + t[1] + '</div>';
+  });
+  return h + '</div>';
+}
+function expSetTab(t) { _expTab = t; renderExperiencia(); }
+
+/* Vista principal del submódulo de extracción. */
+function expfacHTML() {
+  var h = '';
+  /* Paso 1: inicio de actividades */
+  h += '<div class="card" style="padding:14px;margin-bottom:14px;border-left:4px solid #0d3b6e">';
+  h += '<div style="font-size:14px;font-weight:800;color:var(--tx);margin-bottom:3px">1️⃣ Inicio de actividades</div>';
+  h += '<div style="font-size:12px;color:var(--tmuted);margin-bottom:10px">Desde esta fecha se revisa mes a mes. Se consulta en SUNAT con el RUC de la empresa.</div>';
+  h += '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">';
+  h += '<input id="expfacInicio" value="' + cfHE(EXPFAC.inicio || '') + '" placeholder="dd/mm/aaaa" style="padding:8px 10px;border:2px solid #94a3b8;border-radius:8px;font-size:13px;font-weight:600;width:130px;background:#fff;color:#0f172a">';
+  h += '<button onclick="expfacBuscarRuc()" style="background:#0d3b6e;color:#fff;border:none;padding:9px 14px;border-radius:8px;font-weight:700;cursor:pointer;font-size:12.5px">🔍 Consultar en SUNAT</button>';
+  h += '<button onclick="expfacGuardarInicio()" style="background:#16a34a;color:#fff;border:none;padding:9px 14px;border-radius:8px;font-weight:700;cursor:pointer;font-size:12.5px">Usar esta fecha</button>';
+  h += '<span id="expfacRucMsg" style="font-size:12px;color:var(--tmuted)"></span>';
+  h += '</div></div>';
+
+  if (!EXPFAC.inicio) {
+    h += '<div style="text-align:center;padding:30px;color:var(--tmuted);font-size:13px">Indica el inicio de actividades para ver el calendario de meses.</div>';
+    return h;
+  }
+
+  /* Resumen */
+  var c = EXPFAC.cobertura;
+  if (c) {
+    var conFact = c.meses.filter(function (m) { return m.estado === 'con_facturas'; }).length;
+    var montoTot = c.meses.reduce(function (s, m) { return s + (+m.monto || 0); }, 0);
+    h += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:14px">';
+    h += expfacKpi('📄 Facturas', c.total_facturas, '#0d3b6e');
+    h += expfacKpi('📅 Meses con ventas', conFact + ' / ' + c.meses_totales, '#16a34a');
+    h += expfacKpi('⏳ Meses por revisar', c.meses_pendientes, c.meses_pendientes > 0 ? '#f59e0b' : '#16a34a');
+    h += expfacKpi('💰 Monto registrado', montoTot.toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), '#7c3aed');
+    h += '</div>';
+  }
+
+  /* Paso 2: calendario mes a mes */
+  h += '<div class="card" style="padding:14px;margin-bottom:14px">';
+  h += '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:10px">';
+  h += '<div><div style="font-size:14px;font-weight:800;color:var(--tx)">2️⃣ Calendario de revisión</div>';
+  h += '<div style="font-size:12px;color:var(--tmuted)">Haz clic en un mes para cargar sus facturas. Verde = tiene ventas · Gris = sin ventas · Ámbar = falta revisar.</div></div>';
+  h += '<button onclick="expfacCargarCobertura()" style="background:var(--pane);border:1px solid var(--bd);color:var(--tx);padding:7px 12px;border-radius:8px;font-size:12px;cursor:pointer">🔄 Actualizar</button>';
+  h += '</div>';
+  h += '<div id="expfacCal">' + (c ? expfacCalHTML(c) : '<div style="font-size:12px;color:var(--tmuted)">Cargando…</div>') + '</div>';
+  h += '</div>';
+
+  /* Paso 3: facturas del mes elegido */
+  if (EXPFAC.periodoSel) h += expfacMesHTML();
+  return h;
+}
+
+function expfacKpi(lbl, val, color) {
+  return '<div class="card" style="padding:12px"><div style="font-size:11px;color:var(--tmuted);font-weight:600">' + lbl + '</div>' +
+    '<div style="font-size:20px;font-weight:800;color:' + color + ';margin-top:3px">' + cfHE(val) + '</div></div>';
+}
+
+function expfacCalHTML(c) {
+  var porAnio = {};
+  c.meses.forEach(function (m) { (porAnio[m.anio] = porAnio[m.anio] || []).push(m); });
+  var nombres = ['', 'Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Set', 'Oct', 'Nov', 'Dic'];
+  var h = '';
+  Object.keys(porAnio).sort().forEach(function (anio) {
+    h += '<div style="margin-bottom:12px"><div style="font-size:12px;font-weight:800;color:var(--tx);margin-bottom:6px">' + anio + '</div>';
+    h += '<div style="display:flex;gap:6px;flex-wrap:wrap">';
+    porAnio[anio].forEach(function (m) {
+      var col = m.estado === 'con_facturas' ? '#16a34a' : (m.estado === 'sin_facturas' ? '#94a3b8' : (m.estado === 'revisado' ? '#64748b' : '#f59e0b'));
+      var bg = m.estado === 'con_facturas' ? '#16a34a18' : (m.estado === 'pendiente' ? '#f59e0b18' : 'transparent');
+      var sel = EXPFAC.periodoSel === m.periodo;
+      h += '<div onclick="expfacVerMes(\'' + m.periodo + '\')" title="' + (m.facturas ? (m.facturas + ' factura(s)') : 'sin facturas registradas') + '" ' +
+        'style="cursor:pointer;min-width:62px;text-align:center;padding:7px 8px;border:2px solid ' + (sel ? '#0d3b6e' : col) + ';background:' + (sel ? '#0d3b6e' : bg) + ';border-radius:8px">' +
+        '<div style="font-size:11px;font-weight:800;color:' + (sel ? '#fff' : col) + '">' + nombres[+m.mes] + '</div>' +
+        '<div style="font-size:14px;font-weight:800;color:' + (sel ? '#fff' : col) + ';line-height:1.1">' + (m.facturas || '·') + '</div>' +
+        '</div>';
+    });
+    h += '</div></div>';
+  });
+  return h;
+}
+
+function expfacMesHTML() {
+  var p = EXPFAC.periodoSel;
+  var delMes = EXPFAC.facturas.filter(function (f) { return f.periodo === p; });
+  var nombres = ['', 'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'setiembre', 'octubre', 'noviembre', 'diciembre'];
+  var etiqueta = nombres[+p.slice(4, 6)] + ' de ' + p.slice(0, 4);
+
+  var h = '<div class="card" style="padding:14px">';
+  h += '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:10px">';
+  h += '<div style="font-size:14px;font-weight:800;color:var(--tx)">3️⃣ Facturas de ' + etiqueta + ' <span style="color:var(--tmuted);font-weight:600">(' + delMes.length + ')</span></div>';
+  h += '<div style="display:flex;gap:8px;flex-wrap:wrap">';
+  h += '<button onclick="expfacSubir()" style="background:#0ea5e9;color:#fff;border:none;padding:9px 14px;border-radius:8px;font-weight:800;cursor:pointer;font-size:12.5px">📎 Subir facturas (PDF/XML)</button>';
+  h += '<button onclick="expfacMarcarSinFacturas()" style="background:var(--pane);border:1px solid var(--bd);color:var(--tx);padding:9px 12px;border-radius:8px;font-size:12.5px;cursor:pointer">Sin ventas este mes</button>';
+  h += '</div></div>';
+  h += '<div id="expfacProgreso" style="display:none;font-size:12px;padding:9px 11px;border-radius:8px;background:#0ea5e918;color:#0369a1;margin-bottom:10px"></div>';
+
+  if (!delMes.length) {
+    h += '<div style="text-align:center;padding:22px;color:var(--tmuted);font-size:12.5px">Aún no hay facturas registradas en este mes.<br>Descárgalas de SUNAT y súbelas aquí — la IA lee el comprobante y arma la experiencia.</div>';
+  } else {
+    h += '<table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr style="background:var(--pane2,rgba(0,0,0,.03))">';
+    ['Comprobante', 'Fecha', 'Cliente', 'Objeto', 'Moneda', 'Total', ''].forEach(function (x) {
+      h += '<th style="text-align:left;padding:7px;font-size:10px;color:var(--tmuted);text-transform:uppercase">' + x + '</th>';
+    });
+    h += '</tr></thead><tbody>';
+    delMes.forEach(function (f) {
+      h += '<tr style="border-top:1px solid var(--bd)">' +
+        '<td style="padding:7px"><b>' + cfHE(f.serie_numero || '') + '</b>' + (f.archivo ? ' <span title="archivo original guardado">📎</span>' : '') + '</td>' +
+        '<td style="padding:7px">' + cfHE(f.fecha_emision || '') + '</td>' +
+        '<td style="padding:7px">' + cfHE(((f.cliente || {}).razon) || '') + '</td>' +
+        '<td style="padding:7px;max-width:280px">' + cfHE(f.objeto_contrato || '') + (f.rubro ? ' <span style="background:#0d3b6e18;color:#0d3b6e;padding:1px 7px;border-radius:999px;font-size:10px;font-weight:700">' + cfHE(f.rubro) + '</span>' : '') + '</td>' +
+        '<td style="padding:7px">' + cfHE(f.moneda || '') + '</td>' +
+        '<td style="padding:7px;text-align:right" class="mono"><b>' + (f.total != null ? (+f.total).toFixed(2) : '—') + '</b></td>' +
+        '<td style="padding:7px;white-space:nowrap">' +
+        (f.archivo ? '<a href="/api/expfac/archivo?p=' + encodeURIComponent(f.archivo) + '" target="_blank" style="text-decoration:none;background:var(--pane);border:1px solid var(--bd);color:var(--tx);padding:3px 9px;border-radius:7px;font-size:11px">Ver PDF</a> ' : '') +
+        '<button onclick="expfacVer(\'' + f.id + '\')" style="background:var(--pane);border:1px solid var(--bd);color:var(--tx);padding:3px 9px;border-radius:7px;font-size:11px;cursor:pointer">Detalle</button> ' +
+        '<button onclick="expfacBorrar(\'' + f.id + '\')" style="background:#fee2e2;border:none;color:#b91c1c;padding:3px 9px;border-radius:7px;font-size:11px;cursor:pointer">🗑</button>' +
+        '</td></tr>';
+    });
+    h += '</tbody></table>';
+  }
+  return h + '</div>';
+}
+
+/* ── Acciones ── */
+
+function expfacBuscarRuc() {
+  var m = $('expfacRucMsg'); if (m) m.textContent = 'Consultando…';
+  fetch('/api/ruc/' + (EMP && EMP.ruc ? EMP.ruc : ''))
+    .then(function (r) { return r.json(); }).then(function (d) {
+      var ini = d.fecha_inicio_actividades || d.inicioActividades || d.fechaInicio || '';
+      if (ini) {
+        var e = $('expfacInicio'); if (e) e.value = ini;
+        if (m) m.textContent = '✓ ' + (d.razon_social || d.nombre || '') + ' · inicio ' + ini;
+      } else {
+        if (m) m.textContent = 'SUNAT no devolvió la fecha; escríbela a mano (dd/mm/aaaa).';
+      }
+    }).catch(function () { if (m) m.textContent = 'No se pudo consultar; escribe la fecha a mano.'; });
+}
+
+function expfacGuardarInicio() {
+  var e = $('expfacInicio'); if (!e || !e.value.trim()) { alert('Escribe la fecha de inicio de actividades.'); return; }
+  EXPFAC.inicio = e.value.trim();
+  try { localStorage.setItem(expfacInicioKey(), EXPFAC.inicio); } catch (err) { }
+  expfacCargarCobertura();
+}
+
+function expfacCargarCobertura() {
+  if (!EXPFAC.inicio) return;
+  Promise.all([
+    fetch('/api/expfac/cobertura?emp=' + (EMP ? EMP.id : '') + '&inicio=' + encodeURIComponent(EXPFAC.inicio)).then(function (r) { return r.json(); }),
+    fetch('/api/expfac/lista?emp=' + (EMP ? EMP.id : '')).then(function (r) { return r.json(); })
+  ]).then(function (res) {
+    if (res[0] && res[0].ok) EXPFAC.cobertura = res[0];
+    if (res[1] && res[1].ok) EXPFAC.facturas = res[1].facturas || [];
+    renderExperiencia();
+  }).catch(function () { toast('No se pudo cargar el avance'); });
+}
+
+function expfacVerMes(p) { EXPFAC.periodoSel = p; renderExperiencia(); }
+
+function expfacMarcarSinFacturas() {
+  if (!EXPFAC.periodoSel) return;
+  fetch('/api/expfac/mes', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ emp: (EMP ? EMP.id : ''), periodo: EXPFAC.periodoSel, sin_facturas: true })
+  }).then(function (r) { return r.json(); }).then(function () { toast('Mes marcado como sin ventas'); expfacCargarCobertura(); });
+}
+
+/* Sube uno o varios comprobantes: la IA los lee y se guardan con su archivo original. */
+function expfacSubir() {
+  var inp = document.createElement('input');
+  inp.type = 'file'; inp.accept = '.pdf,.xml,image/*'; inp.multiple = true;
+  inp.onchange = function () {
+    var files = [].slice.call(this.files || []);
+    if (!files.length) return;
+    var prog = $('expfacProgreso');
+    var okN = 0, dupN = 0, errN = 0, i = 0;
+    function siguiente() {
+      if (i >= files.length) {
+        if (prog) prog.textContent = '✓ Listo: ' + okN + ' guardada(s)' + (dupN ? ', ' + dupN + ' repetida(s)' : '') + (errN ? ', ' + errN + ' con error' : '');
+        expfacCargarCobertura();
+        return;
+      }
+      var f = files[i++];
+      if (prog) { prog.style.display = 'block'; prog.textContent = '⏳ Leyendo ' + i + ' de ' + files.length + ': ' + f.name + '…'; }
+      var fr = new FileReader();
+      fr.onload = function () {
+        var b64 = String(fr.result).split(',')[1];
+        fetch('/api/expfac/extraer', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ b64: b64, mime: f.type || 'application/pdf' })
+        }).then(function (r) { return r.json(); }).then(function (d) {
+          if (!d || !d.ok) { errN++; siguiente(); return; }
+          return fetch('/api/expfac/guardar', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ emp: (EMP ? EMP.id : ''), factura: d.data, archivo_b64: b64, mime: f.type || 'application/pdf', origen: 'manual' })
+          }).then(function (r) { return r.json(); }).then(function (g) {
+            if (g && g.ok) okN++; else if (g && g.duplicado) dupN++; else errN++;
+            siguiente();
+          });
+        }).catch(function () { errN++; siguiente(); });
+      };
+      fr.readAsDataURL(f);
+    }
+    siguiente();
+  };
+  inp.click();
+}
+
+function expfacVer(id) {
+  var f = EXPFAC.facturas.filter(function (x) { return x.id === id; })[0]; if (!f) return;
+  function fila(k, v) {
+    return '<div style="display:grid;grid-template-columns:150px 1fr;gap:8px;padding:5px 0;border-bottom:1px solid var(--bd);font-size:12px">' +
+      '<div style="color:var(--tmuted);font-weight:600">' + k + '</div><div style="color:var(--tx)">' + cfHE(v == null || v === '' ? '—' : v) + '</div></div>';
+  }
+  var h = '<div style="position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:999;display:flex;align-items:center;justify-content:center;padding:16px" onclick="if(event.target===this)this.remove()">';
+  h += '<div class="card" style="max-width:640px;width:100%;max-height:86vh;overflow:auto;padding:16px">';
+  h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">' +
+    '<div style="font-size:15px;font-weight:800;color:var(--tx)">' + cfHE(f.serie_numero || '') + '</div>' +
+    '<span style="cursor:pointer;color:var(--tmuted);font-size:20px" onclick="this.closest(\'div[style*=fixed]\').remove()">✕</span></div>';
+  h += fila('Fecha de emisión', f.fecha_emision);
+  h += fila('Cliente', ((f.cliente || {}).razon || '') + (((f.cliente || {}).ruc) ? (' · RUC ' + f.cliente.ruc) : ''));
+  h += fila('Objeto del contrato', f.objeto_contrato);
+  h += fila('Rubro', f.rubro);
+  h += fila('Moneda', f.moneda);
+  h += fila('Subtotal', f.subtotal);
+  h += fila('IGV', f.igv);
+  h += fila('TOTAL', f.total);
+  if (f.forma_pago) h += fila('Forma de pago', f.forma_pago);
+  if (f.guia_remision) h += fila('Guía de remisión', f.guia_remision);
+  if (f.orden_compra) h += fila('Orden de compra', f.orden_compra);
+  if (f.retencion && f.retencion.tiene) h += fila('Retención', f.retencion.porcentaje + '% · ' + f.retencion.monto);
+  if (f.detraccion && f.detraccion.tiene) h += fila('Detracción', f.detraccion.porcentaje + '% · ' + f.detraccion.monto);
+  h += '<div style="font-size:12px;font-weight:800;color:var(--acc);margin:12px 0 4px">ÍTEMS (' + ((f.items || []).length) + ')</div>';
+  h += '<table style="width:100%;border-collapse:collapse;font-size:11px"><thead><tr style="background:var(--pane2,rgba(0,0,0,.03))">' +
+    '<th style="text-align:left;padding:5px">Descripción</th><th style="padding:5px">Cant.</th><th style="padding:5px">Und.</th><th style="text-align:right;padding:5px">P.Unit</th></tr></thead><tbody>';
+  (f.items || []).forEach(function (it) {
+    h += '<tr style="border-top:1px solid var(--bd)"><td style="padding:5px">' + cfHE(it.desc || '') + '</td>' +
+      '<td style="padding:5px;text-align:center">' + cfHE(it.cant != null ? it.cant : '—') + '</td>' +
+      '<td style="padding:5px;text-align:center">' + cfHE(it.unidad || '—') + '</td>' +
+      '<td style="padding:5px;text-align:right" class="mono">' + (it.punit != null ? (+it.punit).toFixed(2) : '—') + '</td></tr>';
+  });
+  h += '</tbody></table>';
+  if (f.archivo) h += '<a href="/api/expfac/archivo?p=' + encodeURIComponent(f.archivo) + '" target="_blank" style="display:inline-block;margin-top:12px;text-decoration:none;background:#0d3b6e;color:#fff;padding:9px 14px;border-radius:8px;font-weight:700;font-size:12.5px">📄 Ver archivo original</a>';
+  h += '</div></div>';
+  var d = document.createElement('div'); d.innerHTML = h; document.body.appendChild(d.firstChild);
+}
+
+function expfacBorrar(id) {
+  if (!confirm('¿Quitar esta factura de la experiencia? El archivo original se conserva.')) return;
+  fetch('/api/expfac/borrar', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ emp: (EMP ? EMP.id : ''), id: id })
+  }).then(function (r) { return r.json(); }).then(function () { toast('Factura quitada'); expfacCargarCobertura(); });
+}
+
+/* Carga inicial del submódulo. */
+function expfacInit() {
+  try { EXPFAC.inicio = localStorage.getItem(expfacInicioKey()) || ''; } catch (e) { }
+  if (EXPFAC.inicio && !EXPFAC.cobertura) expfacCargarCobertura();
+}
 
 /* ═══════ SESION Y USUARIOS ═══════ */
 /* ══════════ MENU DE SESION (dentro de la app) ══════════ */
