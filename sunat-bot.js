@@ -348,87 +348,136 @@ async function sunatAbrirConsulta(page, traza) {
 
 /* ─────────── Etapa 3: consultar un periodo y leer la tabla ─────────── */
 
-async function sunatConsultarPeriodo(page, desde, hasta, traza) {
-  await new Promise(function (r) { setTimeout(r, 3000); });
+/* La consulta vive en un marco propio (ol-ti-itconscpempyme/consultar.do) que tarda
+   en montarse. Se espera a que exista Y tenga campos, no solo a que aparezca la URL. */
+async function esperarMarcoConsulta(page, msMax) {
+  const limite = Date.now() + (msMax || 30000);
+  while (Date.now() < limite) {
+    const cand = page.frames().filter(function (f) {
+      return /itconscpempyme|consultar\.do|conscpe/i.test(String(f.url()));
+    });
+    for (const f of cand) {
+      try {
+        const n = await f.evaluate(function () { return document.querySelectorAll('input,select').length; });
+        if (n > 0) return f;
+      } catch (e) { }
+    }
+    await new Promise(function (r) { setTimeout(r, 1500); });
+  }
+  return null;
+}
 
-  /* La pantalla de consulta suele vivir en un marco interno. Se prueba en todos. */
-  const marcos = [page].concat(page.frames().filter(function (f) { return f !== page.mainFrame(); }));
-  let marco = null, sDesde = null, sHasta = null;
-
-  const selDesde = ['input[id*="fechaInicio" i]', 'input[name*="fecIni" i]', 'input[id*="fecIni" i]',
-                    '#txtFechaInicio', 'input[id*="desde" i]', 'input[type="text"]'];
-  const selHasta = ['input[id*="fechaFin" i]', 'input[name*="fecFin" i]', 'input[id*="fecFin" i]',
-                    '#txtFechaFin', 'input[id*="hasta" i]'];
-
-  for (const m of marcos) {
+/* Radiografia de todos los marcos: sirve para afinar selectores con datos reales. */
+async function radiografia(page) {
+  const out = [];
+  for (const f of page.frames()) {
     try {
-      const d = await escribirEn(m, selDesde, desde);
-      if (!d) continue;
-      const h = await escribirEn(m, selHasta, hasta);
-      if (h) { marco = m; sDesde = d; sHasta = h; break; }
+      const info = await f.evaluate(function () {
+        return {
+          campos: [].slice.call(document.querySelectorAll('input,select')).slice(0, 12).map(function (e) {
+            return e.tagName.toLowerCase() + (e.id ? ('#' + e.id) : '') + (e.name ? ('[' + e.name + ']') : '') +
+              (e.type ? (':' + e.type) : '');
+          }),
+          botones: [].slice.call(document.querySelectorAll('input[type=submit],input[type=button],button'))
+            .slice(0, 6).map(function (e) { return (e.value || e.innerText || '').trim().slice(0, 25); })
+        };
+      });
+      if (info.campos.length) out.push(String(f.url()).slice(-55) + ' => ' + info.campos.join(' ') + (info.botones.length ? (' | botones: ' + info.botones.join(',')) : ''));
     } catch (e) { }
   }
+  return out;
+}
 
+async function sunatConsultarPeriodo(page, desde, hasta, traza) {
+  const marco = await esperarMarcoConsulta(page, 30000);
   if (!marco) {
-    /* Informar que habia realmente, para afinar los selectores con datos ciertos. */
-    let detalle = '';
-    try {
-      const info = await page.evaluate(function () {
-        var ins = [].slice.call(document.querySelectorAll('input,select')).slice(0, 15).map(function (e) {
-          return (e.tagName || '') + '#' + (e.id || '') + '[' + (e.name || '') + ']';
-        });
-        return { titulo: (document.title || '').slice(0, 60), inputs: ins };
-      });
-      const urls = page.frames().map(function (f) { return String(f.url()).slice(0, 60); }).slice(0, 6);
-      detalle = 'titulo: ' + info.titulo + ' | campos: ' + info.inputs.join(' ') + ' | marcos: ' + urls.join(' , ');
-    } catch (e) { detalle = e.message.slice(0, 80); }
-    paso(traza, 'ingresar fechas', false, ('no se hallaron los campos. ' + detalle).slice(0, 420));
+    const rx = await radiografia(page);
+    paso(traza, 'ubicar pantalla de consulta', false, ('no aparecio el marco de consulta. ' + rx.join(' || ')).slice(0, 420));
+    return null;
+  }
+  paso(traza, 'ubicar pantalla de consulta', true, String(marco.url()).slice(-60));
+
+  /* Selectores especificos: NO se usa 'input[type=text]' a secas porque en la pagina
+     principal eso es el buscador del menu y se terminaba escribiendo ahi. */
+  const selDesde = ['input[id*="fechaInicio" i]', 'input[name*="fechaInicio" i]', 'input[id*="fecIni" i]',
+                    'input[name*="fecIni" i]', 'input[id*="desde" i]', 'input[name*="desde" i]', '#txtFechaInicio'];
+  const selHasta = ['input[id*="fechaFin" i]', 'input[name*="fechaFin" i]', 'input[id*="fecFin" i]',
+                    'input[name*="fecFin" i]', 'input[id*="hasta" i]', 'input[name*="hasta" i]', '#txtFechaFin'];
+
+  let sDesde = await escribirEn(marco, selDesde, desde);
+  let sHasta = await escribirEn(marco, selHasta, hasta);
+
+  /* Respaldo: si no calzo ningun nombre, se usan los dos primeros campos de fecha
+     que haya EN ESE MARCO (la pantalla solo tiene dos). */
+  if (!sDesde || !sHasta) {
+    const puestos = await marco.evaluate(function (d, h) {
+      var ins = [].slice.call(document.querySelectorAll('input[type=text],input:not([type])'))
+        .filter(function (e) { return e.offsetParent !== null && !e.readOnly; });
+      if (ins.length < 2) return null;
+      function set(el, v) {
+        el.focus(); el.value = v;
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+        el.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+      set(ins[0], d); set(ins[1], h);
+      return (ins[0].id || ins[0].name || 'campo1') + ' / ' + (ins[1].id || ins[1].name || 'campo2');
+    }, desde, hasta).catch(function () { return null; });
+    if (puestos) { sDesde = puestos; sHasta = puestos; }
+  }
+
+  if (!sDesde || !sHasta) {
+    const rx = await radiografia(page);
+    paso(traza, 'ingresar fechas', false, ('no se hallaron los campos. ' + rx.join(' || ')).slice(0, 420));
     return null;
   }
   paso(traza, 'ingresar fechas', true, desde + ' a ' + hasta + ' (' + sDesde + ')');
 
-  /* Tipo de consulta: interesan las facturas EMITIDAS. */
+  /* Tipo de consulta: FE Emitidas. */
   try {
-    await marco.evaluate(function () {
+    const tipo = await marco.evaluate(function () {
       var sels = [].slice.call(document.querySelectorAll('select'));
-      sels.forEach(function (s) {
-        var op = [].slice.call(s.options || []).filter(function (o) { return /emitid/i.test(o.text || ''); })[0];
-        if (op) { s.value = op.value; s.dispatchEvent(new Event('change', { bubbles: true })); }
+      for (var i = 0; i < sels.length; i++) {
+        var op = [].slice.call(sels[i].options || []).filter(function (o) { return /emitid/i.test(o.text || ''); })[0];
+        if (op) { sels[i].value = op.value; sels[i].dispatchEvent(new Event('change', { bubbles: true })); return op.text.trim(); }
+      }
+      return null;
+    });
+    if (tipo) paso(traza, 'tipo de consulta', true, tipo);
+  } catch (e) { }
+
+  const btn = await clicEn(marco, ['input[value="Aceptar" i]', 'input[type="submit"]', 'button[id*="aceptar" i]',
+                                   '#btnAceptar', 'button[type="submit"]']);
+  if (!btn) {
+    /* Algunas pantallas responden al Enter dentro del formulario. */
+    try { await marco.evaluate(function () { var f = document.forms[0]; if (f) f.submit(); }); } catch (e) { }
+  }
+  paso(traza, 'ejecutar consulta', true, btn || 'envio del formulario');
+  await new Promise(function (r) { setTimeout(r, 7000); });
+
+  /* Leer la tabla de resultados (puede haberse recargado el marco). */
+  const marco2 = (await esperarMarcoConsulta(page, 12000)) || marco;
+  let filas = [];
+  try {
+    filas = await marco2.evaluate(function () {
+      var tablas = [].slice.call(document.querySelectorAll('table'));
+      var mejor = null, max = 0;
+      tablas.forEach(function (t) {
+        var n = t.querySelectorAll('tr').length;
+        if (n > max && /factura|comprobante|receptor|emision/i.test(t.innerText || '')) { max = n; mejor = t; }
       });
+      if (!mejor) return [];
+      return [].slice.call(mejor.querySelectorAll('tr')).map(function (tr) {
+        return [].slice.call(tr.querySelectorAll('td,th')).map(function (td) { return (td.innerText || '').trim(); });
+      }).filter(function (x) { return x.length > 2; });
     });
   } catch (e) { }
 
-  const btn = await clicEn(marco, ['input[value="Aceptar" i]', 'button[id*="aceptar" i]', '#btnAceptar',
-                                   'input[type="submit"]', 'button[type="submit"]']);
-  paso(traza, 'ejecutar consulta', !!btn, btn || 'no se hallo el boton Aceptar');
-  await new Promise(function (r) { setTimeout(r, 6000); });
-
-  /* Leer la tabla de resultados en cualquiera de los marcos. */
-  let filas = [];
-  for (const m of [marco].concat(marcos)) {
-    try {
-      const f = await m.evaluate(function () {
-        var tablas = [].slice.call(document.querySelectorAll('table'));
-        var mejor = null, max = 0;
-        tablas.forEach(function (t) {
-          var n = t.querySelectorAll('tr').length;
-          if (n > max && /factura|comprobante|receptor|emision/i.test(t.innerText || '')) { max = n; mejor = t; }
-        });
-        if (!mejor) return [];
-        return [].slice.call(mejor.querySelectorAll('tr')).map(function (tr) {
-          return [].slice.call(tr.querySelectorAll('td,th')).map(function (td) { return (td.innerText || '').trim(); });
-        }).filter(function (x) { return x.length > 2; });
-      });
-      if (f && f.length) { filas = f; break; }
-    } catch (e) { }
-  }
-
   if (!filas.length) {
     let txt = '';
-    try { txt = await marco.evaluate(function () { return (document.body.innerText || '').slice(0, 200); }); } catch (e) { }
-    paso(traza, 'leer resultados', false, /no se encontr|sin resultado|no existe/i.test(txt)
+    try { txt = await marco2.evaluate(function () { return (document.body.innerText || '').slice(0, 250); }); } catch (e) { }
+    paso(traza, 'leer resultados', false, /no se encontr|sin resultado|no existe|no hay/i.test(txt)
       ? 'SUNAT informa que no hay comprobantes en ese periodo'
-      : ('sin tabla de resultados. Pantalla: ' + txt.slice(0, 160)));
+      : ('sin tabla de resultados. Pantalla: ' + txt.slice(0, 180)));
     return [];
   }
   paso(traza, 'leer resultados', true, filas.length + ' fila(s)');
