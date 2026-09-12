@@ -5035,7 +5035,7 @@ function expfacSubir() {
     var okN = 0, dupN = 0, errN = 0, i = 0;
     function siguiente() {
       if (i >= files.length) {
-        if (prog) prog.textContent = '✓ Listo: ' + okN + ' guardada(s)' + (dupN ? ', ' + dupN + ' repetida(s)' : '') + (errN ? ', ' + errN + ' con error' : '');
+        if (prog) prog.textContent = '✓ Listo: ' + okN + ' nueva(s)' + (dupN ? ', ' + dupN + ' actualizada(s) con su PDF' : '') + (errN ? ', ' + errN + ' con error' : '');
         expfacCargarCobertura();
         return;
       }
@@ -5051,9 +5051,9 @@ function expfacSubir() {
           if (!d || !d.ok) { errN++; siguiente(); return; }
           return fetch('/api/expfac/guardar', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ emp: (EMP ? EMP.id : ''), factura: d.data, archivo_b64: b64, mime: f.type || 'application/pdf', origen: 'manual' })
+            body: JSON.stringify({ emp: (EMP ? EMP.id : ''), factura: d.data, archivo_b64: b64, mime: f.type || 'application/pdf', origen: 'manual', reemplazar: true })
           }).then(function (r) { return r.json(); }).then(function (g) {
-            if (g && g.ok) okN++; else if (g && g.duplicado) dupN++; else errN++;
+            if (g && g.ok) { if (g.actualizada) dupN++; else okN++; } else errN++;
             siguiente();
           });
         }).catch(function () { errN++; siguiente(); });

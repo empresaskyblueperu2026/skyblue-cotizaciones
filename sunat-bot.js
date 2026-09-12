@@ -658,11 +658,61 @@ function esperarArchivo(dir, yaEstaban, msMax) {
   });
 }
 
-/* Trae el PDF de cada comprobante escuchando la RED. SUNAT puede usar form.submit,
-   window.open, una navegacion o un enlace directo: en todos los casos el archivo
-   viaja por la red, asi que se captura ahi y no se depende del mecanismo. */
+/* Trae el PDF de cada comprobante. SUNAT puede entregarlo de tres formas y no se
+   sabe cual usa, asi que se vigilan las tres: respuesta en la misma pestana, respuesta
+   en una pestana NUEVA (los enlaces suelen abrirse en otra), y descarga a disco. */
 async function descargarPDFs(page, traza, maxN) {
-  /* Marco con los enlaces de descarga. */
+  const fsx = require('fs'), os = require('os'), path = require('path');
+  const dir = fsx.mkdtempSync(path.join(os.tmpdir(), 'sunatpdf-'));
+  const navegador = page.browser();
+  const recogidos = [];
+  const notas = [];
+
+  function guardar(buf, via) {
+    if (!buf || buf.length < 500) return false;
+    if (buf.slice(0, 4).toString('latin1') !== '%PDF') return false;
+    recogidos.push({ b64: buf.toString('base64'), bytes: buf.length, via: via });
+    return true;
+  }
+
+  /* (1 y 2) Escuchar respuestas en cualquier pestana, presente o futura. */
+  function engancharPagina(p) {
+    try {
+      p.on('response', async function (resp) {
+        try {
+          const h = resp.headers() || {};
+          const ct = String(h['content-type'] || '').toLowerCase();
+          const cd = String(h['content-disposition'] || '');
+          const url = resp.url();
+          const pinta = ct.indexOf('pdf') >= 0 || ct.indexOf('octet-stream') >= 0 ||
+                        /\.pdf(\?|$)/i.test(url) || /attachment/i.test(cd);
+          if (!pinta) return;
+          const buf = await resp.buffer().catch(function () { return null; });
+          guardar(buf, 'red');
+        } catch (e) { }
+      });
+    } catch (e) { }
+  }
+  engancharPagina(page);
+  const alCrearse = async function (t) {
+    try { const p = await t.page(); if (p) { engancharPagina(p); notas.push('pestana nueva'); } } catch (e) { }
+  };
+  navegador.on('targetcreated', alCrearse);
+
+  /* (3) Permitir la descarga a disco (a nivel de navegador, que cubre pestanas nuevas). */
+  try {
+    const cli = await navegador.target().createCDPSession();
+    await cli.send('Browser.setDownloadBehavior', { behavior: 'allowAndName', downloadPath: dir, eventsEnabled: true });
+    notas.push('descarga a disco');
+  } catch (e) {
+    try {
+      const c2 = await page.target().createCDPSession();
+      await c2.send('Page.setDownloadBehavior', { behavior: 'allow', downloadPath: dir });
+      notas.push('descarga a disco (pestana)');
+    } catch (e2) { notas.push('sin descarga a disco'); }
+  }
+
+  /* Marco con los enlaces. */
   let marco = null, total = 0;
   for (const f of page.frames()) {
     try {
@@ -675,38 +725,18 @@ async function descargarPDFs(page, traza, maxN) {
     } catch (e) { }
   }
   if (!marco) { paso(traza, 'ubicar descargas', false, 'no se hallaron enlaces "Descargar PDF"'); return []; }
-  paso(traza, 'ubicar descargas', true, total + ' comprobante(s) con PDF');
+  paso(traza, 'ubicar descargas', true, total + ' comprobante(s) · vias: ' + notas.join(', '));
 
-  /* Recolector: cualquier respuesta que sea un PDF se guarda. */
-  const recogidos = [];
-  const vistos = new Set();
-  const alResponder = async function (resp) {
-    try {
-      const ct = String(resp.headers()['content-type'] || '').toLowerCase();
-      const url = resp.url();
-      const esPdf = ct.indexOf('pdf') >= 0 || /\.pdf(\?|$)/i.test(url) ||
-        ct.indexOf('octet-stream') >= 0 || /disposition/i.test(String(resp.headers()['content-disposition'] || ''));
-      if (!esPdf || vistos.has(url + resp.status())) return;
-      const buf = await resp.buffer().catch(function () { return null; });
-      if (!buf || buf.length < 500) return;
-      /* Confirmar que de verdad es un PDF. */
-      if (buf.slice(0, 4).toString('latin1') !== '%PDF') return;
-      vistos.add(url + resp.status());
-      recogidos.push({ b64: buf.toString('base64'), bytes: buf.length, url: url.slice(-50) });
-    } catch (e) { }
-  };
-  page.on('response', alResponder);
-
-  /* Evitar que una navegacion a un archivo interrumpa la pantalla. */
-  try {
-    const cli = await page.target().createCDPSession();
-    await cli.send('Page.setDownloadBehavior', { behavior: 'deny' });
-  } catch (e) { }
+  function archivosEnDisco() {
+    try { return fsx.readdirSync(dir).filter(function (a) { return !/\.crdownload$/i.test(a); }); }
+    catch (e) { return []; }
+  }
 
   const tope = Math.min(total, maxN || 30);
-  const filasPorIndice = [];
   for (let i = 0; i < tope; i++) {
-    const antes = recogidos.length;
+    const antesRed = recogidos.length;
+    const antesDisco = archivosEnDisco().length;
+
     const celdas = await marco.evaluate(function (idx) {
       var links = [].slice.call(document.querySelectorAll('a')).filter(function (a) {
         return /descargar\s*pdf/i.test(a.innerText || '');
@@ -715,22 +745,38 @@ async function descargarPDFs(page, traza, maxN) {
       if (!a) return null;
       var tr = a.closest ? a.closest('tr') : null;
       var cel = tr ? [].slice.call(tr.cells || []).map(function (c) { return (c.innerText || '').trim(); }) : [];
+      /* Quitar target para que, de abrirse en otra pestana, igual la veamos. */
+      try { a.removeAttribute('target'); } catch (e) { }
       try { a.click(); } catch (e) { }
       return cel;
     }, i).catch(function () { return null; });
-    filasPorIndice.push(celdas || []);
 
-    /* Esperar a que llegue el archivo de ESTE comprobante. */
-    const limite = Date.now() + 12000;
-    while (recogidos.length === antes && Date.now() < limite) {
+    /* Esperar el archivo por cualquiera de las tres vias. */
+    const limite = Date.now() + 15000;
+    while (Date.now() < limite) {
+      if (recogidos.length > antesRed) break;
+      if (archivosEnDisco().length > antesDisco) break;
       await new Promise(function (r) { setTimeout(r, 500); });
     }
-    if (recogidos.length > antes) recogidos[recogidos.length - 1].fila = celdas || [];
+    if (recogidos.length > antesRed) recogidos[recogidos.length - 1].fila = celdas || [];
+    await new Promise(function (r) { setTimeout(r, 400); });
   }
 
-  try { page.off('response', alResponder); } catch (e) { }
+  /* Recoger tambien lo que haya quedado en disco. */
+  try {
+    for (const a of archivosEnDisco()) {
+      const buf = fsx.readFileSync(path.join(dir, a));
+      guardar(buf, 'disco');
+    }
+  } catch (e) { }
 
-  paso(traza, 'descargar PDF', recogidos.length > 0, recogidos.length + ' de ' + tope + ' descargado(s)');
+  try { navegador.off('targetcreated', alCrearse); } catch (e) { }
+  try { fsx.rmSync(dir, { recursive: true, force: true }); } catch (e) { }
+
+  const porVia = recogidos.reduce(function (s, x) { s[x.via] = (s[x.via] || 0) + 1; return s; }, {});
+  paso(traza, 'descargar PDF', recogidos.length > 0,
+    recogidos.length + ' de ' + tope + ' (' + (Object.keys(porVia).map(function (k) { return k + ':' + porVia[k]; }).join(' ') || 'ninguno') + ')');
+
   return recogidos.map(function (x, i) {
     return { nombre: 'cpe_' + (i + 1) + '.pdf', b64: x.b64, bytes: x.bytes, fila: x.fila || [] };
   });
