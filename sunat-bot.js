@@ -625,6 +625,103 @@ function filasAFacturas(filas) {
   }).filter(function (x) { return x.serie_numero && !x.anulado; });
 }
 
+/* ─────────── Descarga de los PDF de cada factura ─────────── */
+
+/* Espera a que aparezca un archivo nuevo y terminado (no .crdownload). */
+function esperarArchivo(dir, yaEstaban, msMax) {
+  const fsx = require('fs');
+  return new Promise(function (res) {
+    const limite = Date.now() + (msMax || 30000);
+    (function mirar() {
+      let ahora = [];
+      try { ahora = fsx.readdirSync(dir); } catch (e) { }
+      const nuevo = ahora.filter(function (a) {
+        return yaEstaban.indexOf(a) < 0 && !/\.crdownload$/i.test(a) && !/\.tmp$/i.test(a);
+      })[0];
+      if (nuevo) {
+        /* Confirmar que dejo de crecer (descarga terminada). */
+        try {
+          const p = require('path').join(dir, nuevo);
+          const t1 = fsx.statSync(p).size;
+          setTimeout(function () {
+            let t2 = 0; try { t2 = fsx.statSync(p).size; } catch (e) { }
+            if (t2 > 0 && t2 === t1) return res(nuevo);
+            if (Date.now() < limite) return mirar();
+            res(t2 > 0 ? nuevo : null);
+          }, 900);
+          return;
+        } catch (e) { }
+      }
+      if (Date.now() > limite) return res(null);
+      setTimeout(mirar, 1000);
+    })();
+  });
+}
+
+/* Pulsa cada enlace "Descargar PDF" y devuelve los archivos en base64.
+   Se recorren los enlaces (uno por comprobante), no las filas de la tabla: es mas
+   fiable que interpretar una maquetacion con tablas anidadas. */
+async function descargarPDFs(page, traza, maxN) {
+  const fsx = require('fs'), os = require('os'), path = require('path');
+  const dir = fsx.mkdtempSync(path.join(os.tmpdir(), 'sunatpdf-'));
+
+  let client;
+  try {
+    client = await page.target().createCDPSession();
+    await client.send('Page.setDownloadBehavior', { behavior: 'allow', downloadPath: dir });
+  } catch (e) { paso(traza, 'preparar descargas', false, e.message.slice(0, 90)); return []; }
+  paso(traza, 'preparar descargas', true, '');
+
+  /* Ubicar el marco que tiene los enlaces de descarga. */
+  let marco = null, total = 0;
+  for (const f of page.frames()) {
+    try {
+      const n = await f.evaluate(function () {
+        return [].slice.call(document.querySelectorAll('a')).filter(function (a) {
+          return /descargar\s*pdf/i.test(a.innerText || '');
+        }).length;
+      });
+      if (n > 0) { marco = f; total = n; break; }
+    } catch (e) { }
+  }
+  if (!marco) { paso(traza, 'ubicar descargas', false, 'no se hallaron enlaces "Descargar PDF"'); return []; }
+  paso(traza, 'ubicar descargas', true, total + ' comprobante(s) con PDF');
+
+  const tope = Math.min(total, maxN || 30);
+  const salida = [];
+  for (let i = 0; i < tope; i++) {
+    let antes = [];
+    try { antes = fsx.readdirSync(dir); } catch (e) { }
+
+    /* Datos de la fila del enlace, para saber a que comprobante corresponde. */
+    const fila = await marco.evaluate(function (idx) {
+      var links = [].slice.call(document.querySelectorAll('a')).filter(function (a) {
+        return /descargar\s*pdf/i.test(a.innerText || '');
+      });
+      var a = links[idx];
+      if (!a) return null;
+      var tr = a.closest ? a.closest('tr') : null;
+      var celdas = tr ? [].slice.call(tr.cells || []).map(function (c) { return (c.innerText || '').trim(); }) : [];
+      a.click();
+      return celdas;
+    }, i).catch(function () { return null; });
+
+    const arch = await esperarArchivo(dir, antes, 30000);
+    if (arch) {
+      try {
+        const b64 = fsx.readFileSync(path.join(dir, arch)).toString('base64');
+        salida.push({ nombre: arch, b64: b64, fila: fila || [] });
+      } catch (e) { }
+    }
+    await new Promise(function (r) { setTimeout(r, 1200); });
+  }
+
+  paso(traza, 'descargar PDF', salida.length > 0, salida.length + ' de ' + tope + ' descargado(s)');
+  /* Limpieza: los comprobantes no deben quedar en el disco del servidor. */
+  try { salida.forEach(function () { }); fsx.rmSync(dir, { recursive: true, force: true }); } catch (e) { }
+  return salida;
+}
+
 /* ─────────── Endpoints ─────────── */
 
 /* Guarda la Clave SOL cifrada. Nunca se devuelve despues. */
@@ -723,9 +820,10 @@ router.post('/extraer', async function (req, res) {
     const img = await captura(page);
     await navegador.close(); navegador = null;
 
+    const pdfs = await descargarPDFs(page, traza, 30);
     const facturas = filasAFacturas(filas);
     if (facturas.length) paso(traza, 'interpretar facturas', true, facturas.length + ' comprobante(s) listos');
-    res.json({ ok: !!(facturas && facturas.length), etapa: 'consulta', filas: filas || [], facturas: facturas, traza: traza, captura: img, radiografia: salida.radiografia || null, volcado: salida.volcado || null });
+    res.json({ ok: !!((pdfs && pdfs.length) || (facturas && facturas.length)), etapa: 'consulta', filas: filas || [], facturas: facturas, pdfs: pdfs || [], traza: traza, captura: img, radiografia: salida.radiografia || null, volcado: salida.volcado || null });
   } catch (e) {
     if (navegador) try { await navegador.close(); } catch (x) { }
     paso(traza, 'error', false, e.message.slice(0, 200));
