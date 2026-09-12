@@ -4580,6 +4580,148 @@ function cfExport(mode){
 }
 
 
+/* ═══════ BOT SUNAT ═══════ */
+/* ══════════ PANEL DEL BOT SUNAT (dentro de Extraer Experiencia) ══════════
+   La Clave SOL se escribe aquí y viaja cifrada al servidor; nunca se muestra de vuelta. */
+
+var SUNATBOT = { estado: null, cred: null, ocupado: false };
+
+function sbotCargarEstado() {
+  Promise.all([
+    fetch('/api/sunatbot/estado').then(function (r) { return r.json(); }).catch(function () { return null; }),
+    fetch('/api/sunatbot/credenciales?emp=' + (EMP ? EMP.id : '')).then(function (r) { return r.json(); }).catch(function () { return null; })
+  ]).then(function (res) {
+    SUNATBOT.estado = res[0]; SUNATBOT.cred = res[1];
+    var c = $('sbotPanel'); if (c) c.innerHTML = sbotPanelHTML();
+  });
+}
+
+function sbotHTML() {
+  return '<div class="card" style="padding:14px;margin-bottom:14px;border-left:4px solid #7c3aed">' +
+    '<div style="font-size:14px;font-weight:800;color:var(--tx);margin-bottom:3px">🤖 Extracción automática desde SUNAT</div>' +
+    '<div style="font-size:12px;color:var(--tmuted);margin-bottom:10px">El sistema entra a tu Menú SOL, consulta las facturas emitidas del periodo y las trae aquí. Solo lectura: nunca emite ni declara nada.</div>' +
+    '<div id="sbotPanel"><div style="font-size:12px;color:var(--tmuted)">Comprobando…</div></div>' +
+    '</div>';
+}
+
+function sbotPanelHTML() {
+  var e = SUNATBOT.estado || {}, c = SUNATBOT.cred || {};
+  var navOk = /ARRANCA OK/.test(e.navegador || '');
+  var h = '';
+
+  /* Estado del navegador en el servidor */
+  h += '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px">';
+  h += '<span style="font-size:11px;padding:3px 10px;border-radius:999px;font-weight:700;background:' +
+    (navOk ? '#16a34a18;color:#166534' : '#fee2e2;color:#b91c1c') + '">' +
+    (navOk ? '✓ Navegador listo' : '✕ Navegador no disponible') + '</span>';
+  h += '<span style="font-size:11px;padding:3px 10px;border-radius:999px;font-weight:700;background:' +
+    (c.configurado ? '#16a34a18;color:#166534' : '#f59e0b18;color:#b45309') + '">' +
+    (c.configurado ? ('✓ Clave SOL guardada · RUC ' + cfHE(c.ruc || '')) : '⚠ Falta cargar la Clave SOL') + '</span>';
+  h += '</div>';
+
+  if (!c.configurado) {
+    h += '<div style="background:#f8fafc;border:2px solid #cbd5e1;border-radius:10px;padding:12px;margin-bottom:10px">';
+    h += '<div style="font-size:12px;font-weight:800;color:#0f172a;margin-bottom:8px">Cargar credenciales de SUNAT</div>';
+    h += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin-bottom:8px">';
+    h += '<div><label style="display:block;font-size:10px;font-weight:700;color:#334155;margin-bottom:4px">RUC</label>' +
+      '<input id="sbotRuc" value="' + cfHE(EMP && EMP.ruc ? EMP.ruc : '') + '" style="width:100%;padding:8px 10px;border:2px solid #94a3b8;border-radius:8px;font-size:12.5px;box-sizing:border-box"></div>';
+    h += '<div><label style="display:block;font-size:10px;font-weight:700;color:#334155;margin-bottom:4px">USUARIO SOL</label>' +
+      '<input id="sbotUsu" placeholder="tu usuario SOL" autocomplete="off" style="width:100%;padding:8px 10px;border:2px solid #94a3b8;border-radius:8px;font-size:12.5px;box-sizing:border-box"></div>';
+    h += '<div><label style="display:block;font-size:10px;font-weight:700;color:#334155;margin-bottom:4px">CLAVE SOL</label>' +
+      '<input id="sbotCla" type="password" placeholder="••••••" autocomplete="new-password" style="width:100%;padding:8px 10px;border:2px solid #94a3b8;border-radius:8px;font-size:12.5px;box-sizing:border-box"></div>';
+    h += '</div>';
+    h += '<button onclick="sbotGuardarCred()" style="background:#0d3b6e;color:#fff;border:none;padding:9px 14px;border-radius:8px;font-weight:800;cursor:pointer;font-size:12.5px">🔒 Guardar cifrada</button>';
+    h += '<div style="font-size:10.5px;color:#64748b;margin-top:8px;line-height:1.5">Se guarda cifrada (AES-256) en el servidor y nunca se vuelve a mostrar.<br>Solo se usa para consultar tus comprobantes.</div>';
+    h += '</div>';
+  } else {
+    h += '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px">';
+    h += '<button onclick="sbotProbar()" ' + (navOk ? '' : 'disabled ') + 'style="background:#0ea5e9;color:#fff;border:none;padding:9px 14px;border-radius:8px;font-weight:800;cursor:pointer;font-size:12.5px' + (navOk ? '' : ';opacity:.5') + '">🔌 Probar acceso</button>';
+    h += '<button onclick="sbotExtraerMes()" ' + (navOk ? '' : 'disabled ') + 'style="background:#7c3aed;color:#fff;border:none;padding:9px 14px;border-radius:8px;font-weight:800;cursor:pointer;font-size:12.5px' + (navOk ? '' : ';opacity:.5') + '">⬇ Extraer el mes seleccionado</button>';
+    h += '<button onclick="sbotBorrarCred()" style="background:var(--pane);border:1px solid var(--bd);color:var(--tx);padding:9px 12px;border-radius:8px;font-size:12.5px;cursor:pointer">Quitar credenciales</button>';
+    h += '</div>';
+    if (!EXPFAC.periodoSel) h += '<div style="font-size:11.5px;color:#b45309;background:#f59e0b18;padding:8px 10px;border-radius:8px">Elige primero un mes en el calendario para extraerlo.</div>';
+  }
+
+  h += '<div id="sbotResultado"></div>';
+  return h;
+}
+
+function sbotGuardarCred() {
+  var ruc = ($('sbotRuc') || {}).value || '', usu = ($('sbotUsu') || {}).value || '', cla = ($('sbotCla') || {}).value || '';
+  if (!ruc.trim() || !usu.trim() || !cla) { alert('Completa RUC, usuario y clave.'); return; }
+  fetch('/api/sunatbot/credenciales', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ emp: (EMP ? EMP.id : ''), ruc: ruc.trim(), usuario: usu.trim(), clave: cla })
+  }).then(function (r) { return r.json(); }).then(function (d) {
+    if (d && d.ok) { toast('Credenciales guardadas cifradas'); sbotCargarEstado(); }
+    else alert('Error: ' + ((d && d.error) || 'no se pudo guardar'));
+  }).catch(function () { alert('Sin conexión'); });
+}
+
+function sbotBorrarCred() {
+  if (!confirm('¿Quitar las credenciales de SUNAT guardadas?')) return;
+  fetch('/api/sunatbot/credenciales/borrar', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ emp: (EMP ? EMP.id : '') })
+  }).then(function () { toast('Credenciales eliminadas'); sbotCargarEstado(); });
+}
+
+function sbotMostrar(d, titulo) {
+  var w = $('sbotResultado'); if (!w) return;
+  var h = '<div style="margin-top:10px;border:2px solid ' + (d.ok ? '#16a34a' : '#ef4444') + ';border-radius:10px;padding:11px;background:' + (d.ok ? '#16a34a0d' : '#ef444408') + '">';
+  h += '<div style="font-size:12.5px;font-weight:800;color:' + (d.ok ? '#166534' : '#b91c1c') + ';margin-bottom:8px">' + (d.ok ? '✓ ' : '✕ ') + cfHE(titulo) + '</div>';
+  (d.traza || []).forEach(function (t) {
+    h += '<div style="font-size:11.5px;padding:3px 0;color:var(--tx)">' + (t.ok ? '✓' : '✕') + ' ' + cfHE(t.paso) +
+      (t.detalle ? ('<span style="color:var(--tmuted)"> — ' + cfHE(t.detalle) + '</span>') : '') + '</div>';
+  });
+  if (d.error) h += '<div style="font-size:11.5px;color:#b91c1c;margin-top:6px">' + cfHE(d.error) + '</div>';
+  if (d.filas && d.filas.length) {
+    h += '<div style="font-size:12px;font-weight:700;margin-top:8px;color:var(--tx)">Facturas encontradas: ' + d.filas.length + '</div>';
+    h += '<div style="max-height:200px;overflow:auto;margin-top:6px"><table style="width:100%;border-collapse:collapse;font-size:11px">';
+    d.filas.slice(0, 25).forEach(function (f, i) {
+      h += '<tr style="border-top:1px solid var(--bd)">' + f.slice(0, 6).map(function (c) { return '<td style="padding:4px 6px">' + cfHE(c) + '</td>'; }).join('') + '</tr>';
+    });
+    h += '</table></div>';
+  }
+  if (d.captura) {
+    h += '<details style="margin-top:8px"><summary style="font-size:11.5px;cursor:pointer;color:var(--tmuted)">Ver lo que vio el sistema</summary>' +
+      '<img src="data:image/jpeg;base64,' + d.captura + '" style="width:100%;border:1px solid var(--bd);border-radius:8px;margin-top:6px"></details>';
+  }
+  h += '</div>';
+  w.innerHTML = h;
+}
+
+function sbotProbar() {
+  if (SUNATBOT.ocupado) return;
+  SUNATBOT.ocupado = true;
+  var w = $('sbotResultado'); if (w) w.innerHTML = '<div style="margin-top:10px;font-size:12px;color:#0369a1;background:#0ea5e918;padding:9px 11px;border-radius:8px">⏳ Entrando a SUNAT… (puede tardar hasta un minuto)</div>';
+  fetch('/api/sunatbot/probar', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ emp: (EMP ? EMP.id : '') })
+  }).then(function (r) { return r.json(); }).then(function (d) {
+    SUNATBOT.ocupado = false;
+    sbotMostrar(d, d.ok ? 'Acceso correcto a SUNAT' : 'No se pudo acceder');
+  }).catch(function (e) { SUNATBOT.ocupado = false; sbotMostrar({ ok: false, error: 'Sin respuesta del servidor' }, 'Error'); });
+}
+
+function sbotExtraerMes() {
+  if (SUNATBOT.ocupado) return;
+  if (!EXPFAC.periodoSel) { alert('Elige un mes en el calendario.'); return; }
+  var p = EXPFAC.periodoSel, anio = p.slice(0, 4), mes = p.slice(4, 6);
+  var ultimo = new Date(+anio, +mes, 0).getDate();
+  var desde = '01/' + mes + '/' + anio, hasta = ultimo + '/' + mes + '/' + anio;
+
+  SUNATBOT.ocupado = true;
+  var w = $('sbotResultado'); if (w) w.innerHTML = '<div style="margin-top:10px;font-size:12px;color:#0369a1;background:#0ea5e918;padding:9px 11px;border-radius:8px">⏳ Consultando ' + desde + ' a ' + hasta + '… (puede tardar un par de minutos)</div>';
+  fetch('/api/sunatbot/extraer', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ emp: (EMP ? EMP.id : ''), desde: desde, hasta: hasta })
+  }).then(function (r) { return r.json(); }).then(function (d) {
+    SUNATBOT.ocupado = false;
+    sbotMostrar(d, d.ok ? ('Se leyeron las facturas de ' + desde.slice(3)) : ('Falló en la etapa: ' + (d.etapa || 'desconocida')));
+  }).catch(function () { SUNATBOT.ocupado = false; sbotMostrar({ ok: false, error: 'Sin respuesta del servidor' }, 'Error'); });
+}
+
 /* ═══════ EXTRAER EXPERIENCIA ═══════ */
 /* ══════════ SUBMODULO: EXTRAER EXPERIENCIA (desde facturas de venta) ══════════
    Recorre mes a mes desde el inicio de actividades de la empresa y va registrando
@@ -4644,6 +4786,10 @@ function expfacHTML() {
   h += '</div>';
   h += '<div id="expfacCal">' + (c ? expfacCalHTML(c) : '<div style="font-size:12px;color:var(--tmuted)">Cargando…</div>') + '</div>';
   h += '</div>';
+
+  /* Bot de extraccion automatica */
+  h += sbotHTML();
+  setTimeout(sbotCargarEstado, 100);
 
   /* Paso 3: facturas del mes elegido */
   if (EXPFAC.periodoSel) h += expfacMesHTML();
