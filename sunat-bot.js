@@ -658,21 +658,11 @@ function esperarArchivo(dir, yaEstaban, msMax) {
   });
 }
 
-/* Pulsa cada enlace "Descargar PDF" y devuelve los archivos en base64.
-   Se recorren los enlaces (uno por comprobante), no las filas de la tabla: es mas
-   fiable que interpretar una maquetacion con tablas anidadas. */
+/* Trae el PDF de cada comprobante. En vez de esperar una descarga del navegador,
+   se intercepta lo que hace el enlace (enviar formArchivo o abrir una ventana) y se
+   pide el archivo con fetch desde la propia pagina, que conserva la sesion. */
 async function descargarPDFs(page, traza, maxN) {
-  const fsx = require('fs'), os = require('os'), path = require('path');
-  const dir = fsx.mkdtempSync(path.join(os.tmpdir(), 'sunatpdf-'));
-
-  let client;
-  try {
-    client = await page.target().createCDPSession();
-    await client.send('Page.setDownloadBehavior', { behavior: 'allow', downloadPath: dir });
-  } catch (e) { paso(traza, 'preparar descargas', false, e.message.slice(0, 90)); return []; }
-  paso(traza, 'preparar descargas', true, '');
-
-  /* Ubicar el marco que tiene los enlaces de descarga. */
+  /* Ubicar el marco con los enlaces de descarga. */
   let marco = null, total = 0;
   for (const f of page.frames()) {
     try {
@@ -687,14 +677,40 @@ async function descargarPDFs(page, traza, maxN) {
   if (!marco) { paso(traza, 'ubicar descargas', false, 'no se hallaron enlaces "Descargar PDF"'); return []; }
   paso(traza, 'ubicar descargas', true, total + ' comprobante(s) con PDF');
 
+  /* Interceptar el envio del formulario y la apertura de ventanas. */
+  try {
+    await marco.evaluate(function () {
+      if (window.__interceptado) return;
+      window.__interceptado = true;
+      window.__captura = null;
+      var origSubmit = HTMLFormElement.prototype.submit;
+      HTMLFormElement.prototype.submit = function () {
+        try {
+          var datos = {};
+          [].slice.call(this.elements || []).forEach(function (e) { if (e.name) datos[e.name] = e.value; });
+          /* OJO: el formulario de SUNAT tiene un campo llamado "action", y un campo con
+             ese nombre ECLIPSA la propiedad del formulario (this.action devolveria el
+             campo, no la direccion). Hay que leer el atributo. */
+          var act = this.getAttribute('action') || location.href;
+          var met = (this.getAttribute('method') || 'GET').toUpperCase();
+          window.__captura = { url: new URL(act, location.href).href, metodo: met, datos: datos };
+        } catch (e) { }
+        /* No se llama al original: evita que el marco navegue y se pierda la pantalla. */
+      };
+      var origOpen = window.open;
+      window.open = function (u) { window.__captura = { url: u, metodo: 'GET', datos: null }; return null; };
+    });
+  } catch (e) { paso(traza, 'preparar descargas', false, e.message.slice(0, 90)); return []; }
+  paso(traza, 'preparar descargas', true, '');
+
   const tope = Math.min(total, maxN || 30);
   const salida = [];
-  for (let i = 0; i < tope; i++) {
-    let antes = [];
-    try { antes = fsx.readdirSync(dir); } catch (e) { }
+  let sinCaptura = 0;
 
-    /* Datos de la fila del enlace, para saber a que comprobante corresponde. */
-    const fila = await marco.evaluate(function (idx) {
+  for (let i = 0; i < tope; i++) {
+    /* Pulsar el enlace y recoger a donde queria ir. */
+    const cap = await marco.evaluate(function (idx) {
+      window.__captura = null;
       var links = [].slice.call(document.querySelectorAll('a')).filter(function (a) {
         return /descargar\s*pdf/i.test(a.innerText || '');
       });
@@ -702,23 +718,51 @@ async function descargarPDFs(page, traza, maxN) {
       if (!a) return null;
       var tr = a.closest ? a.closest('tr') : null;
       var celdas = tr ? [].slice.call(tr.cells || []).map(function (c) { return (c.innerText || '').trim(); }) : [];
-      a.click();
-      return celdas;
+      try { a.click(); } catch (e) { }
+      /* Si el enlace lleva la direccion en el href, sirve igual. */
+      var href = a.getAttribute('href') || '';
+      if (!window.__captura && href && href.indexOf('javascript:') !== 0 && href !== '#') {
+        window.__captura = { url: a.href, metodo: 'GET', datos: null };
+      }
+      return { captura: window.__captura, celdas: celdas };
     }, i).catch(function () { return null; });
 
-    const arch = await esperarArchivo(dir, antes, 30000);
-    if (arch) {
+    if (!cap || !cap.captura) { sinCaptura++; continue; }
+
+    /* Pedir el archivo desde la pagina (mantiene cookies de sesion). */
+    const b64 = await marco.evaluate(async function (c) {
       try {
-        const b64 = fsx.readFileSync(path.join(dir, arch)).toString('base64');
-        salida.push({ nombre: arch, b64: b64, fila: fila || [] });
-      } catch (e) { }
-    }
-    await new Promise(function (r) { setTimeout(r, 1200); });
+        var opciones = { credentials: 'include' };
+        var url = c.url;
+        if (c.datos) {
+          var cuerpo = Object.keys(c.datos).map(function (k) {
+            return encodeURIComponent(k) + '=' + encodeURIComponent(c.datos[k]);
+          }).join('&');
+          if (c.metodo === 'POST') {
+            opciones.method = 'POST';
+            opciones.headers = { 'Content-Type': 'application/x-www-form-urlencoded' };
+            opciones.body = cuerpo;
+          } else {
+            url += (url.indexOf('?') >= 0 ? '&' : '?') + cuerpo;
+          }
+        }
+        var r = await fetch(url, opciones);
+        if (!r.ok) return { error: 'HTTP ' + r.status };
+        var buf = await r.arrayBuffer();
+        var bytes = new Uint8Array(buf);
+        if (bytes.length < 400) return { error: 'archivo muy pequeno (' + bytes.length + ' bytes)' };
+        var bin = '';
+        for (var j = 0; j < bytes.length; j++) bin += String.fromCharCode(bytes[j]);
+        return { b64: btoa(bin), bytes: bytes.length, tipo: r.headers.get('content-type') || '' };
+      } catch (e) { return { error: e.message.slice(0, 80) }; }
+    }, cap.captura).catch(function () { return { error: 'fallo la peticion' }; });
+
+    if (b64 && b64.b64) salida.push({ nombre: 'cpe_' + (i + 1) + '.pdf', b64: b64.b64, bytes: b64.bytes, fila: cap.celdas || [] });
+    await new Promise(function (r) { setTimeout(r, 700); });
   }
 
-  paso(traza, 'descargar PDF', salida.length > 0, salida.length + ' de ' + tope + ' descargado(s)');
-  /* Limpieza: los comprobantes no deben quedar en el disco del servidor. */
-  try { salida.forEach(function () { }); fsx.rmSync(dir, { recursive: true, force: true }); } catch (e) { }
+  paso(traza, 'descargar PDF', salida.length > 0,
+    salida.length + ' de ' + tope + ' descargado(s)' + (sinCaptura ? (' · ' + sinCaptura + ' sin respuesta del enlace') : ''));
   return salida;
 }
 
