@@ -512,15 +512,26 @@ async function sunatConsultarPeriodo(page, desde, hasta, traza, salida) {
   for (const f of page.frames()) {
     try {
       const t = await f.evaluate(function () {
-        var tablas = [].slice.call(document.querySelectorAll('table'));
-        var mejor = null, max = 0;
-        tablas.forEach(function (t) {
-          var n = t.querySelectorAll('tr').length;
-          if (n > max && /factura|comprobante|receptor|emision/i.test(t.innerText || '')) { max = n; mejor = t; }
+        /* SUNAT maqueta con tablas anidadas: la externa contiene toda la pantalla en
+           una sola celda. Solo sirven las tablas HOJA (sin otra tabla dentro) cuyo
+           encabezado tenga las columnas esperadas. */
+        var hojas = [].slice.call(document.querySelectorAll('table')).filter(function (t) {
+          return t.querySelectorAll('table').length === 0;
+        });
+        var mejor = null, puntaje = 0;
+        hojas.forEach(function (t) {
+          var filas = [].slice.call(t.rows || []);
+          if (filas.length < 2) return;
+          var enc = [].slice.call(filas[0].cells || []).map(function (c) { return (c.innerText || '').trim().toLowerCase(); });
+          var tieneFecha = enc.some(function (c) { return /fecha de emis/.test(c); });
+          var tieneNum = enc.some(function (c) { return /nro|numero|factura electr/.test(c); });
+          if (!tieneFecha || !tieneNum) return;
+          var p = filas.length * 10 + enc.length;
+          if (p > puntaje) { puntaje = p; mejor = t; }
         });
         if (!mejor) return [];
-        return [].slice.call(mejor.querySelectorAll('tr')).map(function (tr) {
-          return [].slice.call(tr.querySelectorAll('td,th')).map(function (td) { return (td.innerText || '').trim(); });
+        return [].slice.call(mejor.rows || []).map(function (tr) {
+          return [].slice.call(tr.cells || []).map(function (td) { return (td.innerText || '').trim(); });
         }).filter(function (x) { return x.length > 2; });
       });
       if (t && t.length) { filas = t; break; }
