@@ -1592,6 +1592,7 @@ app.post('/api/contfact/webhook',async function(req,res){
 
 /* Servidor MCP (modulo aparte, solo lectura). No altera ninguna ruta existente. */
 require('./mcp-server').montar(app);
+require('./sunat-bot').montar(app);   /* bot de consulta SUNAT (solo lectura) */
 
 /* ══════════════ EXPERIENCIA POR FACTURAS DE VENTA (submodulo "Extraer Experiencia") ══════════════
    Construye la experiencia comercial de la empresa a partir de las facturas que EMITIO.

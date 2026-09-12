@@ -1,0 +1,9 @@
+# Railway necesita Chromium para el bot que consulta el portal SUNAT.
+# Se instala por Nix y se evita que puppeteer descargue su propia copia.
+
+[phases.setup]
+nixPkgs = ["nodejs_18", "chromium"]
+
+[variables]
+PUPPETEER_SKIP_CHROMIUM_DOWNLOAD = "true"
+PUPPETEER_SKIP_DOWNLOAD = "true"
