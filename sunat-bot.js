@@ -239,7 +239,7 @@ async function sunatLogin(page, cred, traza) {
   }
   paso(traza, 'llenar formulario', true, 'RUC, usuario y clave ingresados');
 
-  const nav = page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 45000 }).catch(function () { return null; });
+  const nav = page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 45000 }).catch(function () { return null; });
   const btn = await clicEn(page, ['#btnAceptar', 'button[type="submit"]', 'input[type="submit"]', '#btnLogin']);
   if (!btn) { await page.keyboard.press('Enter'); }
   await nav;
@@ -264,66 +264,174 @@ async function sunatLogin(page, cred, traza) {
 /* ─────────── Etapa 2: abrir la consulta de comprobantes ─────────── */
 
 async function sunatAbrirConsulta(page, traza) {
-  /* Acceso directo del portal, mas estable que recorrer el menu por clics. */
-  const directa = 'https://e-menu.sunat.gob.pe/cl-ti-itmenu/MenuInternet.htm?pestana=*&agrupacion=*';
-  try {
-    await page.goto(directa, { waitUntil: 'networkidle2', timeout: 45000 });
-    paso(traza, 'abrir menu', true, '');
-  } catch (e) { paso(traza, 'abrir menu', false, e.message.slice(0, 90)); return false; }
+  /* OJO: el portal de SUNAT mantiene conexiones abiertas (push/ajax), por lo que
+     'networkidle' NUNCA se cumple y agota el tiempo. Se espera por el DOM. */
+  const url = page.url();
+  if (!/e-menu\.sunat\.gob\.pe/i.test(url)) {
+    try {
+      await page.goto('https://e-menu.sunat.gob.pe/cl-ti-itmenu/MenuInternet.htm',
+        { waitUntil: 'domcontentloaded', timeout: 40000 });
+    } catch (e) { paso(traza, 'abrir menu', false, e.message.slice(0, 90)); return false; }
+  }
+  paso(traza, 'abrir menu', true, page.url().slice(0, 70));
+  await new Promise(function (r) { setTimeout(r, 3500); });
 
-  /* La opcion vive dentro del arbol: Comprobantes de pago > SEE-SOL > Factura Electronica > Consultar Factura y Nota */
-  const rutas = ['Comprobantes de Pago', 'SEE - SOL', 'Factura Electr', 'Consultar Factura y Nota'];
+  /* Estrategia 1: el buscador del menu (lo mas estable del portal). */
+  try {
+    const buscador = await page.$('#txtBusca, input[id*="busca" i], input[placeholder*="opci" i]');
+    if (buscador) {
+      await buscador.click({ clickCount: 3 });
+      await buscador.type('Consultar Factura y Nota', { delay: 40 });
+      await new Promise(function (r) { setTimeout(r, 2500); });
+      const clicado = await page.evaluate(function () {
+        var els = [].slice.call(document.querySelectorAll('a,li,span,div'));
+        var el = els.filter(function (e) {
+          return /consultar factura y nota/i.test(e.innerText || '') && e.offsetParent !== null
+            && (e.innerText || '').length < 80;
+        })[0];
+        if (el) { el.click(); return (el.innerText || '').trim().slice(0, 60); }
+        return null;
+      });
+      if (clicado) {
+        paso(traza, 'buscador del menu', true, 'abrio: ' + clicado);
+        await new Promise(function (r) { setTimeout(r, 5000); });
+        return true;
+      }
+    }
+  } catch (e) { }
+
+  /* Estrategia 2: el acceso directo de la portada. */
+  try {
+    const directo = await page.evaluate(function () {
+      var els = [].slice.call(document.querySelectorAll('a,div,span,img'));
+      var el = els.filter(function (e) {
+        var t = (e.innerText || '') + ' ' + (e.getAttribute('alt') || '') + ' ' + (e.getAttribute('title') || '');
+        return /consulta de facturas y notas/i.test(t) && e.offsetParent !== null;
+      })[0];
+      if (el) { el.click(); return true; }
+      return false;
+    });
+    if (directo) {
+      paso(traza, 'acceso directo', true, 'Consulta de Facturas y Notas Electronicas');
+      await new Promise(function (r) { setTimeout(r, 5000); });
+      return true;
+    }
+  } catch (e) { }
+
+  /* Estrategia 3: recorrer el arbol del menu paso a paso. */
+  const rutas = ['Empresas', 'Comprobantes de Pago', 'SEE - SOL', 'Factura Electr', 'Consultar Factura y Nota'];
+  let avanzo = 0;
   for (const t of rutas) {
     const hecho = await page.evaluate(function (txt) {
-      var els = [].slice.call(document.querySelectorAll('a,span,div,li'));
+      var els = [].slice.call(document.querySelectorAll('a,span,div,li,td'));
       var el = els.filter(function (e) {
-        return (e.innerText || '').trim().toLowerCase().indexOf(txt.toLowerCase()) === 0 && e.offsetParent !== null;
+        var propio = (e.innerText || '').trim();
+        return propio.toLowerCase().indexOf(txt.toLowerCase()) === 0 && propio.length < 70 && e.offsetParent !== null;
       })[0];
       if (el) { el.click(); return true; }
       return false;
     }, t).catch(function () { return false; });
-    paso(traza, 'menu: ' + t, hecho, hecho ? '' : 'no se encontro la opcion');
-    if (!hecho) return false;
-    await new Promise(function (r) { setTimeout(r, 1800); });
+    if (hecho) { avanzo++; await new Promise(function (r) { setTimeout(r, 2200); }); }
   }
-  return true;
+  if (avanzo >= 3) { paso(traza, 'recorrer menu', true, avanzo + ' de ' + rutas.length + ' pasos'); return true; }
+
+  /* Si nada funciono, se informa QUE opciones habia, para corregir con datos reales. */
+  const visibles = await page.evaluate(function () {
+    return [].slice.call(document.querySelectorAll('a,li,span'))
+      .map(function (e) { return (e.innerText || '').trim(); })
+      .filter(function (t) { return t.length > 3 && t.length < 60; })
+      .slice(0, 40);
+  }).catch(function () { return []; });
+  paso(traza, 'abrir consulta', false, 'no se hallo la opcion. Visibles: ' + visibles.slice(0, 12).join(' | ').slice(0, 300));
+  return false;
 }
 
 /* ─────────── Etapa 3: consultar un periodo y leer la tabla ─────────── */
 
 async function sunatConsultarPeriodo(page, desde, hasta, traza) {
-  /* La pantalla de consulta vive en un iframe. */
-  let marco = page;
+  await new Promise(function (r) { setTimeout(r, 3000); });
+
+  /* La pantalla de consulta suele vivir en un marco interno. Se prueba en todos. */
+  const marcos = [page].concat(page.frames().filter(function (f) { return f !== page.mainFrame(); }));
+  let marco = null, sDesde = null, sHasta = null;
+
+  const selDesde = ['input[id*="fechaInicio" i]', 'input[name*="fecIni" i]', 'input[id*="fecIni" i]',
+                    '#txtFechaInicio', 'input[id*="desde" i]', 'input[type="text"]'];
+  const selHasta = ['input[id*="fechaFin" i]', 'input[name*="fecFin" i]', 'input[id*="fecFin" i]',
+                    '#txtFechaFin', 'input[id*="hasta" i]'];
+
+  for (const m of marcos) {
+    try {
+      const d = await escribirEn(m, selDesde, desde);
+      if (!d) continue;
+      const h = await escribirEn(m, selHasta, hasta);
+      if (h) { marco = m; sDesde = d; sHasta = h; break; }
+    } catch (e) { }
+  }
+
+  if (!marco) {
+    /* Informar que habia realmente, para afinar los selectores con datos ciertos. */
+    let detalle = '';
+    try {
+      const info = await page.evaluate(function () {
+        var ins = [].slice.call(document.querySelectorAll('input,select')).slice(0, 15).map(function (e) {
+          return (e.tagName || '') + '#' + (e.id || '') + '[' + (e.name || '') + ']';
+        });
+        return { titulo: (document.title || '').slice(0, 60), inputs: ins };
+      });
+      const urls = page.frames().map(function (f) { return String(f.url()).slice(0, 60); }).slice(0, 6);
+      detalle = 'titulo: ' + info.titulo + ' | campos: ' + info.inputs.join(' ') + ' | marcos: ' + urls.join(' , ');
+    } catch (e) { detalle = e.message.slice(0, 80); }
+    paso(traza, 'ingresar fechas', false, ('no se hallaron los campos. ' + detalle).slice(0, 420));
+    return null;
+  }
+  paso(traza, 'ingresar fechas', true, desde + ' a ' + hasta + ' (' + sDesde + ')');
+
+  /* Tipo de consulta: interesan las facturas EMITIDAS. */
   try {
-    const frames = page.frames();
-    const f = frames.filter(function (fr) { return /itconscpe|consulta/i.test(fr.url()); })[0];
-    if (f) marco = f;
-    paso(traza, 'ubicar pantalla de consulta', true, marco === page ? 'en la pagina' : 'en un marco interno');
-  } catch (e) { paso(traza, 'ubicar pantalla de consulta', false, e.message.slice(0, 80)); }
-
-  const okDesde = await escribirEn(marco, ['input[id*="fechaInicio"]', 'input[name*="fecIni"]', '#txtFechaInicio'], desde);
-  const okHasta = await escribirEn(marco, ['input[id*="fechaFin"]', 'input[name*="fecFin"]', '#txtFechaFin'], hasta);
-  if (!okDesde || !okHasta) { paso(traza, 'ingresar fechas', false, 'no se hallaron los campos de fecha'); return null; }
-  paso(traza, 'ingresar fechas', true, desde + ' a ' + hasta);
-
-  await clicEn(marco, ['input[value="Aceptar"]', 'button[id*="aceptar"]', '#btnAceptar']);
-  await new Promise(function (r) { setTimeout(r, 4000); });
-
-  /* Lee la tabla de resultados. */
-  const filas = await marco.evaluate(function () {
-    var tablas = [].slice.call(document.querySelectorAll('table'));
-    var mejor = null, maxFilas = 0;
-    tablas.forEach(function (t) {
-      var n = t.querySelectorAll('tr').length;
-      if (n > maxFilas && /factura|comprobante|receptor/i.test(t.innerText || '')) { maxFilas = n; mejor = t; }
+    await marco.evaluate(function () {
+      var sels = [].slice.call(document.querySelectorAll('select'));
+      sels.forEach(function (s) {
+        var op = [].slice.call(s.options || []).filter(function (o) { return /emitid/i.test(o.text || ''); })[0];
+        if (op) { s.value = op.value; s.dispatchEvent(new Event('change', { bubbles: true })); }
+      });
     });
-    if (!mejor) return [];
-    return [].slice.call(mejor.querySelectorAll('tr')).map(function (tr) {
-      return [].slice.call(tr.querySelectorAll('td,th')).map(function (td) { return (td.innerText || '').trim(); });
-    }).filter(function (f) { return f.length > 2; });
-  }).catch(function () { return []; });
+  } catch (e) { }
 
-  paso(traza, 'leer resultados', filas.length > 0, filas.length + ' fila(s) encontradas');
+  const btn = await clicEn(marco, ['input[value="Aceptar" i]', 'button[id*="aceptar" i]', '#btnAceptar',
+                                   'input[type="submit"]', 'button[type="submit"]']);
+  paso(traza, 'ejecutar consulta', !!btn, btn || 'no se hallo el boton Aceptar');
+  await new Promise(function (r) { setTimeout(r, 6000); });
+
+  /* Leer la tabla de resultados en cualquiera de los marcos. */
+  let filas = [];
+  for (const m of [marco].concat(marcos)) {
+    try {
+      const f = await m.evaluate(function () {
+        var tablas = [].slice.call(document.querySelectorAll('table'));
+        var mejor = null, max = 0;
+        tablas.forEach(function (t) {
+          var n = t.querySelectorAll('tr').length;
+          if (n > max && /factura|comprobante|receptor|emision/i.test(t.innerText || '')) { max = n; mejor = t; }
+        });
+        if (!mejor) return [];
+        return [].slice.call(mejor.querySelectorAll('tr')).map(function (tr) {
+          return [].slice.call(tr.querySelectorAll('td,th')).map(function (td) { return (td.innerText || '').trim(); });
+        }).filter(function (x) { return x.length > 2; });
+      });
+      if (f && f.length) { filas = f; break; }
+    } catch (e) { }
+  }
+
+  if (!filas.length) {
+    let txt = '';
+    try { txt = await marco.evaluate(function () { return (document.body.innerText || '').slice(0, 200); }); } catch (e) { }
+    paso(traza, 'leer resultados', false, /no se encontr|sin resultado|no existe/i.test(txt)
+      ? 'SUNAT informa que no hay comprobantes en ese periodo'
+      : ('sin tabla de resultados. Pantalla: ' + txt.slice(0, 160)));
+    return [];
+  }
+  paso(traza, 'leer resultados', true, filas.length + ' fila(s)');
   return filas;
 }
 
