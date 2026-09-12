@@ -456,17 +456,46 @@ async function sunatConsultarPeriodo(page, desde, hasta, traza, salida) {
     if (tipo) paso(traza, 'tipo de consulta', true, tipo);
   } catch (e) { }
 
-  /* Pulsar Aceptar dentro del mismo marco. */
+  /* Se envia el formulario QUE CONTIENE las fechas. Nunca forms[0]: el primer
+     formulario de la pagina es el de descarga de archivos y enviarlo rompe la sesion. */
   const pulsado = await marco.evaluate(function () {
-    var els = [].slice.call(document.querySelectorAll('input[type=submit],input[type=button],button,a'))
+    function texto(e) { return ((e.value || '') + ' ' + (e.innerText || '') + ' ' + (e.alt || '') + ' ' + (e.title || '')).trim(); }
+    var campo = document.querySelector('[name*="fec_desde" i],[id*="fec_desde" i]');
+    if (!campo) {
+      campo = [].slice.call(document.querySelectorAll('input')).filter(function (e) {
+        var t = (e.type || 'text').toLowerCase();
+        return (t === 'text' || t === '') && e.offsetParent !== null;
+      })[0];
+    }
+    var form = campo ? campo.form : null;
+    var ambito = form || document;
+
+    /* 1) Boton dentro del formulario de busqueda. */
+    var els = [].slice.call(ambito.querySelectorAll('input[type=submit],input[type=button],input[type=image],button,a,img'))
       .filter(function (e) { return e.offsetParent !== null; });
-    var b = els.filter(function (e) { return /aceptar|buscar|consultar/i.test((e.value || e.innerText || '')); })[0];
-    if (b) { b.click(); return (b.value || b.innerText || '').trim(); }
-    var f = document.forms[0]; if (f) { f.submit(); return '(envio del formulario)'; }
+    var b = els.filter(function (e) { return /aceptar|buscar|consultar/i.test(texto(e)); })[0];
+    if (b) { b.click(); return 'boton "' + texto(b).slice(0, 20) + '"'; }
+
+    /* 2) Enviar ese formulario concreto. */
+    if (form) { form.submit(); return 'formulario ' + (form.name || form.id || 'de busqueda'); }
     return null;
   }).catch(function () { return null; });
-  paso(traza, 'ejecutar consulta', !!pulsado, pulsado || 'no se hallo el boton Aceptar');
-  await new Promise(function (r) { setTimeout(r, 8000); });
+
+  if (!pulsado) {
+    /* Informar que elementos habia, para afinar con datos ciertos. */
+    const opciones = await marco.evaluate(function () {
+      return [].slice.call(document.querySelectorAll('input[type=submit],input[type=button],input[type=image],button,a,img'))
+        .filter(function (e) { return e.offsetParent !== null; })
+        .map(function (e) {
+          return (e.tagName.toLowerCase() + ':' + ((e.value || e.innerText || e.alt || e.title || '').trim().slice(0, 20)));
+        }).slice(0, 15);
+    }).catch(function () { return []; });
+    salida.radiografia = await radiografia(page);
+    paso(traza, 'ejecutar consulta', false, 'no se hallo el boton. Habia: ' + opciones.join(' , ').slice(0, 260));
+    return null;
+  }
+  paso(traza, 'ejecutar consulta', true, pulsado);
+  await new Promise(function (r) { setTimeout(r, 9000); });
 
   /* Buscar la tabla de resultados en cualquier marco. */
   let filas = [];
