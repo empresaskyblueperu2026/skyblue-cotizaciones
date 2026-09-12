@@ -512,27 +512,36 @@ async function sunatConsultarPeriodo(page, desde, hasta, traza, salida) {
   for (const f of page.frames()) {
     try {
       const t = await f.evaluate(function () {
-        /* SUNAT maqueta con tablas anidadas: la externa contiene toda la pantalla en
-           una sola celda. Solo sirven las tablas HOJA (sin otra tabla dentro) cuyo
-           encabezado tenga las columnas esperadas. */
-        var hojas = [].slice.call(document.querySelectorAll('table')).filter(function (t) {
-          return t.querySelectorAll('table').length === 0;
+        /* No se depende de encabezados ni de la anidacion: una fila de datos es la que
+           tiene una celda con fecha dd/mm/aaaa y otra con el numero de comprobante
+           (E001 - 4, F001-123, B001 - 7...). Asi da igual como este maquetada. */
+        var reFecha = /^\s*\d{2}\/\d{2}\/\d{4}\s*$/;
+        var reNum = /^\s*[A-Z]{1,4}\d{0,4}\s*-\s*\d+\s*$/i;
+        var filas = [].slice.call(document.querySelectorAll('tr')).filter(function (tr) {
+          var celdas = [].slice.call(tr.cells || []);
+          if (celdas.length < 3) return false;
+          /* Se descartan las filas de envoltura: sus celdas contienen otras tablas. */
+          if (tr.querySelector('table')) return false;
+          var txt = celdas.map(function (c) { return (c.innerText || '').trim(); });
+          return txt.some(function (x) { return reFecha.test(x); }) &&
+                 txt.some(function (x) { return reNum.test(x); });
         });
-        var mejor = null, puntaje = 0;
-        hojas.forEach(function (t) {
-          var filas = [].slice.call(t.rows || []);
-          if (filas.length < 2) return;
-          var enc = [].slice.call(filas[0].cells || []).map(function (c) { return (c.innerText || '').trim().toLowerCase(); });
-          var tieneFecha = enc.some(function (c) { return /fecha de emis/.test(c); });
-          var tieneNum = enc.some(function (c) { return /nro|numero|factura electr/.test(c); });
-          if (!tieneFecha || !tieneNum) return;
-          var p = filas.length * 10 + enc.length;
-          if (p > puntaje) { puntaje = p; mejor = t; }
+        if (!filas.length) return [];
+
+        /* Encabezado: la primera fila de la misma tabla que no sea de datos. */
+        var tabla = filas[0].closest ? filas[0].closest('table') : null;
+        var enc = null;
+        if (tabla) {
+          var todas = [].slice.call(tabla.rows || []);
+          for (var i = 0; i < todas.length; i++) {
+            var t2 = [].slice.call(todas[i].cells || []).map(function (c) { return (c.innerText || '').trim(); });
+            if (t2.some(function (x) { return /fecha de emis|nro|receptor|importe/i.test(x); })) { enc = t2; break; }
+          }
+        }
+        var datos = filas.map(function (tr) {
+          return [].slice.call(tr.cells || []).map(function (c) { return (c.innerText || '').trim(); });
         });
-        if (!mejor) return [];
-        return [].slice.call(mejor.rows || []).map(function (tr) {
-          return [].slice.call(tr.cells || []).map(function (td) { return (td.innerText || '').trim(); });
-        }).filter(function (x) { return x.length > 2; });
+        return enc ? [enc].concat(datos) : datos;
       });
       if (t && t.length) { filas = t; break; }
     } catch (e) { }
@@ -557,11 +566,26 @@ function filasAFacturas(filas) {
   if (!filas || !filas.length) return [];
   const enc = filas[0].map(function (c) { return String(c).toLowerCase(); });
   function col(re) { for (var i = 0; i < enc.length; i++) { if (re.test(enc[i])) return i; } return -1; }
-  const iFecha = col(/fecha de emis/), iNum = col(/nro|numero|factura electr/),
-        iRec = col(/receptor|cliente/), iTot = col(/importe|total/), iAnul = col(/anulado/);
-  if (iFecha < 0 || iNum < 0) return [];
+  var iFecha = col(/fecha de emis/), iNum = col(/nro|numero|factura electr/),
+      iRec = col(/receptor|cliente/), iTot = col(/importe|total/), iAnul = col(/anulado/);
 
-  return filas.slice(1).map(function (f) {
+  /* Sin encabezado reconocible: se ubican las columnas por el contenido de la
+     primera fila de datos (fecha, numero, "RUC - RAZON", importe). */
+  var conEncabezado = (iFecha >= 0 && iNum >= 0);
+  if (!conEncabezado) {
+    var muestra = filas[0];
+    for (var i = 0; i < muestra.length; i++) {
+      var v = String(muestra[i] || '').trim();
+      if (iFecha < 0 && /^\d{2}\/\d{2}\/\d{4}$/.test(v)) { iFecha = i; continue; }
+      if (iNum < 0 && /^[A-Z]{1,4}\d{0,4}\s*-\s*\d+$/i.test(v)) { iNum = i; continue; }
+      if (iRec < 0 && /^\d{8,11}\s*-\s*\S/.test(v)) { iRec = i; continue; }
+      if (iTot < 0 && /^(S\/|\$|US\$)?\s*[\d,]+\.\d{2}$/.test(v)) { iTot = i; continue; }
+    }
+    if (iFecha < 0 || iNum < 0) return [];
+  }
+
+  var cuerpo = conEncabezado ? filas.slice(1) : filas;
+  return cuerpo.map(function (f) {
     const rec = String(f[iRec] || '').split(' - ');
     const montoTxt = String(f[iTot] || '').replace(/[^\d.,-]/g, '').replace(/,/g, '');
     const fecha = String(f[iFecha] || '').trim();
