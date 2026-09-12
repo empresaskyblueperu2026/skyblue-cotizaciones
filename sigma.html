@@ -4683,6 +4683,18 @@ function sbotMostrar(d, titulo) {
     });
     h += '</table></div>';
   }
+  if (d.facturas && d.facturas.length) {
+    h += '<div style="font-size:12px;font-weight:700;margin-top:8px;color:var(--tx)">Facturas: ' + d.facturas.length + (d.resumen ? (' — ' + cfHE(d.resumen)) : '') + '</div>';
+    h += '<table style="width:100%;border-collapse:collapse;font-size:11px;margin-top:5px">';
+    d.facturas.forEach(function (f) {
+      h += '<tr style="border-top:1px solid var(--bd)">' +
+        '<td style="padding:4px 6px"><b>' + cfHE(f.serie_numero) + '</b></td>' +
+        '<td style="padding:4px 6px">' + cfHE(f.fecha_emision) + '</td>' +
+        '<td style="padding:4px 6px">' + cfHE((f.cliente || {}).razon || '') + '</td>' +
+        '<td style="padding:4px 6px;text-align:right">' + cfHE(f.moneda) + ' ' + (+f.total).toFixed(2) + '</td></tr>';
+    });
+    h += '</table>';
+  }
   if (d.radiografia && d.radiografia.length) {
     h += '<details style="margin-top:8px" open><summary style="font-size:11.5px;cursor:pointer;color:#b45309;font-weight:700">Detalle tecnico: que habia en cada pantalla</summary>';
     d.radiografia.forEach(function (r) {
@@ -4731,7 +4743,31 @@ function sbotExtraerMes() {
     body: JSON.stringify({ emp: (EMP ? EMP.id : ''), desde: desde, hasta: hasta })
   }).then(function (r) { return r.json(); }).then(function (d) {
     SUNATBOT.ocupado = false;
-    sbotMostrar(d, d.ok ? ('Se leyeron las facturas de ' + desde.slice(3)) : ('Falló en la etapa: ' + (d.etapa || 'desconocida')));
+    if (!d.ok || !d.facturas || !d.facturas.length) {
+      sbotMostrar(d, d.ok ? 'Sin facturas en el periodo' : ('Falló en la etapa: ' + (d.etapa || 'desconocida')));
+      return;
+    }
+    /* Guardar cada factura en la experiencia; el servidor descarta las repetidas. */
+    var wg = $('sbotResultado');
+    if (wg) wg.innerHTML = '<div style="margin-top:10px;font-size:12px;color:#0369a1;background:#0ea5e918;padding:9px 11px;border-radius:8px">Guardando ' + d.facturas.length + ' factura(s)…</div>';
+    var nuevas = 0, repetidas = 0, ix = 0;
+    function guardarSiguiente() {
+      if (ix >= d.facturas.length) {
+        d.resumen = nuevas + ' nueva(s)' + (repetidas ? (' · ' + repetidas + ' ya estaban') : '');
+        sbotMostrar(d, 'Se leyeron ' + d.facturas.length + ' factura(s) — ' + d.resumen);
+        expfacCargarCobertura();
+        return;
+      }
+      var fx = d.facturas[ix++];
+      fetch('/api/expfac/guardar', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ emp: (EMP ? EMP.id : ''), factura: fx, origen: 'sunat' })
+      }).then(function (r) { return r.json(); }).then(function (g) {
+        if (g && g.ok) nuevas++; else if (g && g.duplicado) repetidas++;
+        guardarSiguiente();
+      }).catch(function () { guardarSiguiente(); });
+    }
+    guardarSiguiente();
   }).catch(function () { SUNATBOT.ocupado = false; sbotMostrar({ ok: false, error: 'Sin respuesta del servidor' }, 'Error'); });
 }
 

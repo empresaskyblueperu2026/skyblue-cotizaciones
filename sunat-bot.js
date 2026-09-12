@@ -456,42 +456,52 @@ async function sunatConsultarPeriodo(page, desde, hasta, traza, salida) {
     if (tipo) paso(traza, 'tipo de consulta', true, tipo);
   } catch (e) { }
 
-  /* Se envia el formulario QUE CONTIENE las fechas. Nunca forms[0]: el primer
-     formulario de la pagina es el de descarga de archivos y enviarlo rompe la sesion. */
+  /* Los campos de SUNAT NO estan dentro de un <form>, por lo que no sirve enviar
+     formularios: hay que pulsar el boton. Se busca en TODO el marco y se identifica
+     por texto, alt, title, id, name, imagen y onclick; se descartan Salir, Cerrar,
+     Descarga masiva y los iconos de calendario. Ante varios candidatos se toma el
+     mas pequeno, que es el boton y no su contenedor. */
   const pulsado = await marco.evaluate(function () {
-    function texto(e) { return ((e.value || '') + ' ' + (e.innerText || '') + ' ' + (e.alt || '') + ' ' + (e.title || '')).trim(); }
-    var campo = document.querySelector('[name*="fec_desde" i],[id*="fec_desde" i]');
-    if (!campo) {
-      campo = [].slice.call(document.querySelectorAll('input')).filter(function (e) {
-        var t = (e.type || 'text').toLowerCase();
-        return (t === 'text' || t === '') && e.offsetParent !== null;
-      })[0];
+    function txtPropio(e) {
+      var t = '';
+      for (var i = 0; i < e.childNodes.length; i++) { var n = e.childNodes[i]; if (n.nodeType === 3) t += n.nodeValue; }
+      return t.trim();
     }
-    var form = campo ? campo.form : null;
-    var ambito = form || document;
-
-    /* 1) Boton dentro del formulario de busqueda. */
-    var els = [].slice.call(ambito.querySelectorAll('input[type=submit],input[type=button],input[type=image],button,a,img'))
-      .filter(function (e) { return e.offsetParent !== null; });
-    var b = els.filter(function (e) { return /aceptar|buscar|consultar/i.test(texto(e)); })[0];
-    if (b) { b.click(); return 'boton "' + texto(b).slice(0, 20) + '"'; }
-
-    /* 2) Enviar ese formulario concreto. */
-    if (form) { form.submit(); return 'formulario ' + (form.name || form.id || 'de busqueda'); }
+    function senas(e) {
+      return ((e.value || '') + ' ' + txtPropio(e) + ' ' + (e.alt || '') + ' ' + (e.title || '') + ' ' +
+        (e.id || '') + ' ' + (e.name || '') + ' ' + ((e.getAttribute && e.getAttribute('src')) || '') + ' ' +
+        ((e.getAttribute && e.getAttribute('onclick')) || '')).toLowerCase();
+    }
+    var POS = /acepta|buscar|consultar|continuar/;
+    var NEG = /salir|cerrar|cancelar|limpiar|imprimir|volver|descarga|masiva|calendario|fecha/;
+    var els = [].slice.call(document.querySelectorAll('a,button,input,img,td,span,div')).filter(function (e) {
+      if (e.offsetParent === null) return false;
+      if (e.tagName === 'INPUT') {
+        var t = (e.type || '').toLowerCase();
+        if (['button', 'submit', 'image'].indexOf(t) < 0) return false;
+      }
+      if (e.offsetWidth > 320 || e.offsetHeight > 90) return false;
+      var s = senas(e);
+      return POS.test(s) && !NEG.test(s);
+    });
+    els.sort(function (a, b) { return (a.offsetWidth * a.offsetHeight) - (b.offsetWidth * b.offsetHeight); });
+    var b = els[0];
+    if (b) { b.click(); return b.tagName.toLowerCase() + (b.id ? ('#' + b.id) : '') + ' ' + senas(b).slice(0, 40); }
     return null;
   }).catch(function () { return null; });
 
   if (!pulsado) {
-    /* Informar que elementos habia, para afinar con datos ciertos. */
     const opciones = await marco.evaluate(function () {
-      return [].slice.call(document.querySelectorAll('input[type=submit],input[type=button],input[type=image],button,a,img'))
+      return [].slice.call(document.querySelectorAll('a,button,input,img,td'))
         .filter(function (e) { return e.offsetParent !== null; })
         .map(function (e) {
-          return (e.tagName.toLowerCase() + ':' + ((e.value || e.innerText || e.alt || e.title || '').trim().slice(0, 20)));
-        }).slice(0, 15);
+          return e.tagName.toLowerCase() + ':' +
+            ((e.value || e.innerText || e.alt || e.title || e.id || e.name ||
+              ((e.getAttribute && e.getAttribute('src')) || '')) + '').trim().slice(0, 22);
+        }).slice(0, 20);
     }).catch(function () { return []; });
     salida.radiografia = await radiografia(page);
-    paso(traza, 'ejecutar consulta', false, 'no se hallo el boton. Habia: ' + opciones.join(' , ').slice(0, 260));
+    paso(traza, 'ejecutar consulta', false, 'no se hallo el boton. Habia: ' + opciones.join(' , ').slice(0, 280));
     return null;
   }
   paso(traza, 'ejecutar consulta', true, pulsado);
@@ -528,6 +538,34 @@ async function sunatConsultarPeriodo(page, desde, hasta, traza, salida) {
   }
   paso(traza, 'leer resultados', true, filas.length + ' fila(s)');
   return filas;
+}
+
+/* La tabla de SUNAT trae encabezados; se ubican las columnas por su nombre para no
+   depender del orden, y se separa "RUC - RAZON SOCIAL" del receptor. */
+function filasAFacturas(filas) {
+  if (!filas || !filas.length) return [];
+  const enc = filas[0].map(function (c) { return String(c).toLowerCase(); });
+  function col(re) { for (var i = 0; i < enc.length; i++) { if (re.test(enc[i])) return i; } return -1; }
+  const iFecha = col(/fecha de emis/), iNum = col(/nro|numero|factura electr/),
+        iRec = col(/receptor|cliente/), iTot = col(/importe|total/), iAnul = col(/anulado/);
+  if (iFecha < 0 || iNum < 0) return [];
+
+  return filas.slice(1).map(function (f) {
+    const rec = String(f[iRec] || '').split(' - ');
+    const montoTxt = String(f[iTot] || '').replace(/[^\d.,-]/g, '').replace(/,/g, '');
+    const fecha = String(f[iFecha] || '').trim();
+    const m = fecha.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+    return {
+      tipo_doc: 'FACTURA',
+      serie_numero: String(f[iNum] || '').replace(/\s+/g, ''),
+      fecha_emision: m ? (m[3] + '-' + m[2] + '-' + m[1]) : fecha,
+      cliente: { razon: rec.slice(1).join(' - ').trim(), ruc: (rec[0] || '').trim() },
+      moneda: /\$|US/.test(String(f[iTot] || '')) ? 'USD' : 'PEN',
+      total: parseFloat(montoTxt) || 0,
+      anulado: iAnul >= 0 ? !!String(f[iAnul] || '').trim() : false,
+      origen: 'sunat'
+    };
+  }).filter(function (x) { return x.serie_numero && !x.anulado; });
 }
 
 /* ─────────── Endpoints ─────────── */
@@ -628,7 +666,9 @@ router.post('/extraer', async function (req, res) {
     const img = await captura(page);
     await navegador.close(); navegador = null;
 
-    res.json({ ok: !!(filas && filas.length), etapa: 'consulta', filas: filas || [], traza: traza, captura: img, radiografia: salida.radiografia || null });
+    const facturas = filasAFacturas(filas);
+    if (facturas.length) paso(traza, 'interpretar facturas', true, facturas.length + ' comprobante(s) listos');
+    res.json({ ok: !!(facturas && facturas.length), etapa: 'consulta', filas: filas || [], facturas: facturas, traza: traza, captura: img, radiografia: salida.radiografia || null });
   } catch (e) {
     if (navegador) try { await navegador.close(); } catch (x) { }
     paso(traza, 'error', false, e.message.slice(0, 200));
