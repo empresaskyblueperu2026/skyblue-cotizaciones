@@ -4683,6 +4683,19 @@ function sbotMostrar(d, titulo) {
     });
     h += '</table></div>';
   }
+  if (d.radiografia && d.radiografia.length) {
+    h += '<details style="margin-top:8px" open><summary style="font-size:11.5px;cursor:pointer;color:#b45309;font-weight:700">Detalle tecnico: que habia en cada pantalla</summary>';
+    d.radiografia.forEach(function (r) {
+      h += '<div style="font-size:10.5px;border-top:1px solid var(--bd);padding:5px 0;color:var(--tx)">' +
+        '<div style="color:var(--tmuted)">' + cfHE(r.url) + '</div>' +
+        '<div><b>campos:</b> ' + cfHE(r.campos_visibles) + '</div>' +
+        (r.selects ? ('<div><b>listas:</b> ' + cfHE(r.selects) + '</div>') : '') +
+        (r.botones ? ('<div><b>botones:</b> ' + cfHE(r.botones) + '</div>') : '') +
+        (r.texto ? ('<div style="color:var(--tmuted)"><b>texto:</b> ' + cfHE(r.texto) + '</div>') : '') +
+        '</div>';
+    });
+    h += '</details>';
+  }
   if (d.captura) {
     h += '<details style="margin-top:8px"><summary style="font-size:11.5px;cursor:pointer;color:var(--tmuted)">Ver lo que vio el sistema</summary>' +
       '<img src="data:image/jpeg;base64,' + d.captura + '" style="width:100%;border:1px solid var(--bd);border-radius:8px;margin-top:6px"></details>';

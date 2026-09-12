@@ -348,89 +348,100 @@ async function sunatAbrirConsulta(page, traza) {
 
 /* ─────────── Etapa 3: consultar un periodo y leer la tabla ─────────── */
 
-/* La consulta vive en un marco propio (ol-ti-itconscpempyme/consultar.do) que tarda
-   en montarse. Se espera a que exista Y tenga campos, no solo a que aparezca la URL. */
-async function esperarMarcoConsulta(page, msMax) {
-  const limite = Date.now() + (msMax || 30000);
-  while (Date.now() < limite) {
-    const cand = page.frames().filter(function (f) {
-      return /itconscpempyme|consultar\.do|conscpe/i.test(String(f.url()));
+/* Un marco sirve si tiene al menos dos campos de texto VISIBLES (inicio y fin).
+   Los campos ocultos de descarga (formArchivo.*) no cuentan. */
+async function inspeccionarMarco(f) {
+  try {
+    return await f.evaluate(function () {
+      var vis = [].slice.call(document.querySelectorAll('input'))
+        .filter(function (e) {
+          var t = (e.type || 'text').toLowerCase();
+          return (t === 'text' || t === '') && e.offsetParent !== null && !e.disabled;
+        })
+        .map(function (e) {
+          return { id: e.id || '', name: e.name || '', valor: (e.value || '').slice(0, 12), clase: (e.className || '').slice(0, 20) };
+        });
+      var botones = [].slice.call(document.querySelectorAll('input[type=submit],input[type=button],button,a'))
+        .filter(function (e) { return e.offsetParent !== null; })
+        .map(function (e) { return (e.value || e.innerText || '').trim(); })
+        .filter(function (t) { return t && t.length < 30; }).slice(0, 10);
+      var selects = [].slice.call(document.querySelectorAll('select'))
+        .filter(function (e) { return e.offsetParent !== null; })
+        .map(function (e) { return (e.id || e.name || '?') + ':' + [].slice.call(e.options).map(function (o) { return o.text.trim(); }).slice(0, 4).join('/'); });
+      return { visibles: vis, botones: botones, selects: selects, texto: (document.body.innerText || '').slice(0, 120) };
     });
-    for (const f of cand) {
-      try {
-        const n = await f.evaluate(function () { return document.querySelectorAll('input,select').length; });
-        if (n > 0) return f;
-      } catch (e) { }
+  } catch (e) { return null; }
+}
+
+/* Espera hasta que ALGUN marco tenga dos campos de texto visibles. */
+async function esperarMarcoConsulta(page, msMax) {
+  const limite = Date.now() + (msMax || 35000);
+  while (Date.now() < limite) {
+    for (const f of page.frames()) {
+      const info = await inspeccionarMarco(f);
+      if (info && info.visibles.length >= 2) return { marco: f, info: info };
     }
     await new Promise(function (r) { setTimeout(r, 1500); });
   }
   return null;
 }
 
-/* Radiografia de todos los marcos: sirve para afinar selectores con datos reales. */
+/* Radiografia legible de TODOS los marcos, solo con lo visible. */
 async function radiografia(page) {
   const out = [];
   for (const f of page.frames()) {
-    try {
-      const info = await f.evaluate(function () {
-        return {
-          campos: [].slice.call(document.querySelectorAll('input,select')).slice(0, 12).map(function (e) {
-            return e.tagName.toLowerCase() + (e.id ? ('#' + e.id) : '') + (e.name ? ('[' + e.name + ']') : '') +
-              (e.type ? (':' + e.type) : '');
-          }),
-          botones: [].slice.call(document.querySelectorAll('input[type=submit],input[type=button],button'))
-            .slice(0, 6).map(function (e) { return (e.value || e.innerText || '').trim().slice(0, 25); })
-        };
-      });
-      if (info.campos.length) out.push(String(f.url()).slice(-55) + ' => ' + info.campos.join(' ') + (info.botones.length ? (' | botones: ' + info.botones.join(',')) : ''));
-    } catch (e) { }
+    const i = await inspeccionarMarco(f);
+    if (!i) continue;
+    const campos = i.visibles.map(function (v) { return (v.id || v.name || '?'); }).join(' , ');
+    out.push({
+      url: String(f.url()).slice(-70),
+      campos_visibles: campos || '(ninguno)',
+      botones: i.botones.join(' , ').slice(0, 120),
+      selects: i.selects.join(' | ').slice(0, 120),
+      texto: i.texto.replace(/\s+/g, ' ').slice(0, 100)
+    });
   }
   return out;
 }
 
-async function sunatConsultarPeriodo(page, desde, hasta, traza) {
-  const marco = await esperarMarcoConsulta(page, 30000);
-  if (!marco) {
-    const rx = await radiografia(page);
-    paso(traza, 'ubicar pantalla de consulta', false, ('no aparecio el marco de consulta. ' + rx.join(' || ')).slice(0, 420));
+async function sunatConsultarPeriodo(page, desde, hasta, traza, salida) {
+  const hallado = await esperarMarcoConsulta(page, 35000);
+  if (!hallado) {
+    salida.radiografia = await radiografia(page);
+    paso(traza, 'ubicar campos de fecha', false, 'ningun marco mostro dos campos de texto. Ver el detalle tecnico.');
     return null;
   }
-  paso(traza, 'ubicar pantalla de consulta', true, String(marco.url()).slice(-60));
+  const marco = hallado.marco, info = hallado.info;
+  paso(traza, 'ubicar campos de fecha', true,
+    info.visibles.map(function (v) { return v.id || v.name || '?'; }).join(' , ').slice(0, 120));
 
-  /* Selectores especificos: NO se usa 'input[type=text]' a secas porque en la pagina
-     principal eso es el buscador del menu y se terminaba escribiendo ahi. */
-  const selDesde = ['input[id*="fechaInicio" i]', 'input[name*="fechaInicio" i]', 'input[id*="fecIni" i]',
-                    'input[name*="fecIni" i]', 'input[id*="desde" i]', 'input[name*="desde" i]', '#txtFechaInicio'];
-  const selHasta = ['input[id*="fechaFin" i]', 'input[name*="fechaFin" i]', 'input[id*="fecFin" i]',
-                    'input[name*="fecFin" i]', 'input[id*="hasta" i]', 'input[name*="hasta" i]', '#txtFechaFin'];
+  /* Se escriben en los dos primeros campos visibles de ESE marco, con los eventos
+     que la aplicacion de SUNAT espera para dar por valido el dato. */
+  const puesto = await marco.evaluate(function (d, h) {
+    var ins = [].slice.call(document.querySelectorAll('input'))
+      .filter(function (e) {
+        var t = (e.type || 'text').toLowerCase();
+        return (t === 'text' || t === '') && e.offsetParent !== null && !e.disabled;
+      });
+    if (ins.length < 2) return null;
+    function set(el, v) {
+      el.focus(); el.value = '';
+      el.value = v;
+      ['input', 'change', 'keyup', 'blur'].forEach(function (ev) {
+        el.dispatchEvent(new Event(ev, { bubbles: true }));
+      });
+    }
+    set(ins[0], d); set(ins[1], h);
+    return { a: ins[0].id || ins[0].name || 'campo1', b: ins[1].id || ins[1].name || 'campo2',
+             leidoA: ins[0].value, leidoB: ins[1].value };
+  }, desde, hasta).catch(function () { return null; });
 
-  let sDesde = await escribirEn(marco, selDesde, desde);
-  let sHasta = await escribirEn(marco, selHasta, hasta);
-
-  /* Respaldo: si no calzo ningun nombre, se usan los dos primeros campos de fecha
-     que haya EN ESE MARCO (la pantalla solo tiene dos). */
-  if (!sDesde || !sHasta) {
-    const puestos = await marco.evaluate(function (d, h) {
-      var ins = [].slice.call(document.querySelectorAll('input[type=text],input:not([type])'))
-        .filter(function (e) { return e.offsetParent !== null && !e.readOnly; });
-      if (ins.length < 2) return null;
-      function set(el, v) {
-        el.focus(); el.value = v;
-        el.dispatchEvent(new Event('input', { bubbles: true }));
-        el.dispatchEvent(new Event('change', { bubbles: true }));
-      }
-      set(ins[0], d); set(ins[1], h);
-      return (ins[0].id || ins[0].name || 'campo1') + ' / ' + (ins[1].id || ins[1].name || 'campo2');
-    }, desde, hasta).catch(function () { return null; });
-    if (puestos) { sDesde = puestos; sHasta = puestos; }
-  }
-
-  if (!sDesde || !sHasta) {
-    const rx = await radiografia(page);
-    paso(traza, 'ingresar fechas', false, ('no se hallaron los campos. ' + rx.join(' || ')).slice(0, 420));
+  if (!puesto) {
+    salida.radiografia = await radiografia(page);
+    paso(traza, 'ingresar fechas', false, 'no se pudo escribir en los campos.');
     return null;
   }
-  paso(traza, 'ingresar fechas', true, desde + ' a ' + hasta + ' (' + sDesde + ')');
+  paso(traza, 'ingresar fechas', true, puesto.a + '=' + puesto.leidoA + ' , ' + puesto.b + '=' + puesto.leidoB);
 
   /* Tipo de consulta: FE Emitidas. */
   try {
@@ -445,39 +456,45 @@ async function sunatConsultarPeriodo(page, desde, hasta, traza) {
     if (tipo) paso(traza, 'tipo de consulta', true, tipo);
   } catch (e) { }
 
-  const btn = await clicEn(marco, ['input[value="Aceptar" i]', 'input[type="submit"]', 'button[id*="aceptar" i]',
-                                   '#btnAceptar', 'button[type="submit"]']);
-  if (!btn) {
-    /* Algunas pantallas responden al Enter dentro del formulario. */
-    try { await marco.evaluate(function () { var f = document.forms[0]; if (f) f.submit(); }); } catch (e) { }
-  }
-  paso(traza, 'ejecutar consulta', true, btn || 'envio del formulario');
-  await new Promise(function (r) { setTimeout(r, 7000); });
+  /* Pulsar Aceptar dentro del mismo marco. */
+  const pulsado = await marco.evaluate(function () {
+    var els = [].slice.call(document.querySelectorAll('input[type=submit],input[type=button],button,a'))
+      .filter(function (e) { return e.offsetParent !== null; });
+    var b = els.filter(function (e) { return /aceptar|buscar|consultar/i.test((e.value || e.innerText || '')); })[0];
+    if (b) { b.click(); return (b.value || b.innerText || '').trim(); }
+    var f = document.forms[0]; if (f) { f.submit(); return '(envio del formulario)'; }
+    return null;
+  }).catch(function () { return null; });
+  paso(traza, 'ejecutar consulta', !!pulsado, pulsado || 'no se hallo el boton Aceptar');
+  await new Promise(function (r) { setTimeout(r, 8000); });
 
-  /* Leer la tabla de resultados (puede haberse recargado el marco). */
-  const marco2 = (await esperarMarcoConsulta(page, 12000)) || marco;
+  /* Buscar la tabla de resultados en cualquier marco. */
   let filas = [];
-  try {
-    filas = await marco2.evaluate(function () {
-      var tablas = [].slice.call(document.querySelectorAll('table'));
-      var mejor = null, max = 0;
-      tablas.forEach(function (t) {
-        var n = t.querySelectorAll('tr').length;
-        if (n > max && /factura|comprobante|receptor|emision/i.test(t.innerText || '')) { max = n; mejor = t; }
+  for (const f of page.frames()) {
+    try {
+      const t = await f.evaluate(function () {
+        var tablas = [].slice.call(document.querySelectorAll('table'));
+        var mejor = null, max = 0;
+        tablas.forEach(function (t) {
+          var n = t.querySelectorAll('tr').length;
+          if (n > max && /factura|comprobante|receptor|emision/i.test(t.innerText || '')) { max = n; mejor = t; }
+        });
+        if (!mejor) return [];
+        return [].slice.call(mejor.querySelectorAll('tr')).map(function (tr) {
+          return [].slice.call(tr.querySelectorAll('td,th')).map(function (td) { return (td.innerText || '').trim(); });
+        }).filter(function (x) { return x.length > 2; });
       });
-      if (!mejor) return [];
-      return [].slice.call(mejor.querySelectorAll('tr')).map(function (tr) {
-        return [].slice.call(tr.querySelectorAll('td,th')).map(function (td) { return (td.innerText || '').trim(); });
-      }).filter(function (x) { return x.length > 2; });
-    });
-  } catch (e) { }
+      if (t && t.length) { filas = t; break; }
+    } catch (e) { }
+  }
 
   if (!filas.length) {
+    salida.radiografia = await radiografia(page);
     let txt = '';
-    try { txt = await marco2.evaluate(function () { return (document.body.innerText || '').slice(0, 250); }); } catch (e) { }
+    try { txt = await marco.evaluate(function () { return (document.body.innerText || '').slice(0, 250); }); } catch (e) { }
     paso(traza, 'leer resultados', false, /no se encontr|sin resultado|no existe|no hay/i.test(txt)
       ? 'SUNAT informa que no hay comprobantes en ese periodo'
-      : ('sin tabla de resultados. Pantalla: ' + txt.slice(0, 180)));
+      : 'sin tabla de resultados. Ver el detalle tecnico.');
     return [];
   }
   paso(traza, 'leer resultados', true, filas.length + ' fila(s)');
@@ -577,11 +594,12 @@ router.post('/extraer', async function (req, res) {
       const img = await captura(page); await navegador.close(); navegador = null;
       return res.json({ ok: false, etapa: 'menu', traza: traza, captura: img });
     }
-    const filas = await sunatConsultarPeriodo(page, b.desde, b.hasta, traza);
+    const salida = {};
+    const filas = await sunatConsultarPeriodo(page, b.desde, b.hasta, traza, salida);
     const img = await captura(page);
     await navegador.close(); navegador = null;
 
-    res.json({ ok: !!(filas && filas.length), etapa: 'consulta', filas: filas || [], traza: traza, captura: img });
+    res.json({ ok: !!(filas && filas.length), etapa: 'consulta', filas: filas || [], traza: traza, captura: img, radiografia: salida.radiografia || null });
   } catch (e) {
     if (navegador) try { await navegador.close(); } catch (x) { }
     paso(traza, 'error', false, e.message.slice(0, 200));
