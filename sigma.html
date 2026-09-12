@@ -4751,8 +4751,9 @@ function expfacCargarCobertura() {
   ]).then(function (res) {
     if (res[0] && res[0].ok) EXPFAC.cobertura = res[0];
     if (res[1] && res[1].ok) EXPFAC.facturas = res[1].facturas || [];
+    EXPFAC._cargando = false;
     renderExperiencia();
-  }).catch(function () { toast('No se pudo cargar el avance'); });
+  }).catch(function () { EXPFAC._cargando = false; toast('No se pudo cargar el avance'); });
 }
 
 function expfacVerMes(p) { EXPFAC.periodoSel = p; renderExperiencia(); }
@@ -4855,8 +4856,10 @@ function expfacBorrar(id) {
 
 /* Carga inicial del submódulo. */
 function expfacInit() {
-  try { EXPFAC.inicio = localStorage.getItem(expfacInicioKey()) || ''; } catch (e) { }
-  if (EXPFAC.inicio && !EXPFAC.cobertura) expfacCargarCobertura();
+  /* Solo toma la fecha guardada si aun no hay una en memoria: este init corre en cada
+     repintado y no debe pisar lo que el usuario acaba de elegir. */
+  if (!EXPFAC.inicio) { try { EXPFAC.inicio = localStorage.getItem(expfacInicioKey()) || ''; } catch (e) { } }
+  if (EXPFAC.inicio && !EXPFAC.cobertura && !EXPFAC._cargando) { EXPFAC._cargando = true; expfacCargarCobertura(); }
 }
 
 /* ═══════ SESION Y USUARIOS ═══════ */
