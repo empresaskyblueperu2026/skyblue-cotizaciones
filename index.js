@@ -1710,6 +1710,39 @@ app.post('/api/expfac/extraer', async function (req, res) {
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
 
+/* Archiva el comprobante en Drive: SIGMA / FACTURAS EMITIDAS / <empresa> / <anio> / <anio-mes>.
+   Si Drive no esta configurado no hace nada: nunca bloquea el guardado de la factura. */
+async function expfacADrive(f, empNombre, b64, mime) {
+  if (!driveReady() || !b64) return null;
+  try {
+    var per = f.periodo || '';
+    var anio = per.slice(0, 4) || 'sin-fecha';
+    var mes = per ? (per.slice(0, 4) + '-' + per.slice(4, 6)) : 'sin-fecha';
+    var ruta = ['SIGMA', 'FACTURAS EMITIDAS', String(empNombre || 'EMPRESA'), anio, mes];
+    var tok = await driveToken();
+    var padre = await driveEnsurePath(ruta, tok);
+    var nombre = (f.serie_numero || 'comprobante').replace(/[^A-Za-z0-9_-]/g, '') + (String(mime||'').indexOf('xml') >= 0 ? '.xml' : '.pdf');
+    /* Si ya se subio antes, se reutiliza en vez de duplicar. */
+    var q = "name='" + nombre + "' and '" + padre + "' in parents and trashed=false";
+    var rb = await fetch('https://www.googleapis.com/drive/v3/files?q=' + encodeURIComponent(q) + '&fields=files(id,webViewLink)&supportsAllDrives=true&includeItemsFromAllDrives=true', { headers: { Authorization: 'Bearer ' + tok } });
+    var yaHay = await rb.json();
+    if (yaHay && yaHay.files && yaHay.files.length) return { id: yaHay.files[0].id, url: yaHay.files[0].webViewLink, carpeta: ruta.join(' / ') };
+    var lim = '----sigma' + Date.now();
+    var meta = { name: nombre, parents: [padre] };
+    var NL = String.fromCharCode(13, 10);
+    var cuerpo = Buffer.concat([
+      Buffer.from('--' + lim + NL + 'Content-Type: application/json; charset=UTF-8' + NL + NL + JSON.stringify(meta) + NL, 'utf8'),
+      Buffer.from('--' + lim + NL + 'Content-Type: ' + (mime || 'application/pdf') + NL + NL, 'utf8'),
+      Buffer.from(b64, 'base64'),
+      Buffer.from(NL + '--' + lim + '--' + NL, 'utf8')    ]);
+    var r = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&supportsAllDrives=true&fields=id,webViewLink', {
+      method: 'POST', headers: { Authorization: 'Bearer ' + tok, 'Content-Type': 'multipart/related; boundary=' + lim }, body: cuerpo });
+    var d = await r.json();
+    if (!d || !d.id) return { error: 'Drive no devolvio el archivo' };
+    return { id: d.id, url: d.webViewLink, carpeta: ruta.join(' / ') };
+  } catch (e) { return { error: String(e.message).slice(0, 90) }; }
+}
+
 /* Guarda la factura + su archivo original. Evita duplicados por numero de comprobante. */
 app.post('/api/expfac/guardar', async function (req, res) {
   try {
@@ -1741,6 +1774,12 @@ app.post('/api/expfac/guardar', async function (req, res) {
 
     f.id = (yaEsta && yaEsta.id) || ('ef' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7));
     f.periodo = expfacPeriodo(f.fecha_emision);
+    /* Archivar tambien en Drive; si falla, la factura se guarda igual. */
+    if (b.archivo_b64) {
+      var dr = await expfacADrive(f, b.empNombre, b.archivo_b64, b.mime);
+      if (dr && dr.id) { f.drive_id = dr.id; f.drive_url = dr.url; f.drive_carpeta = dr.carpeta; }
+      else if (dr && dr.error) f.drive_error = dr.error;
+    }
     f.origen = b.origen || 'manual';
     f.creado = (yaEsta && yaEsta.creado) || new Date().toISOString();
     f.actualizado = new Date().toISOString();
