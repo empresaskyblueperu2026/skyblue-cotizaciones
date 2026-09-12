@@ -549,6 +549,28 @@ async function sunatConsultarPeriodo(page, desde, hasta, traza, salida) {
 
   if (!filas.length) {
     salida.radiografia = await radiografia(page);
+    /* Volcado del HTML de las tablas, para corregir el lector con datos ciertos. */
+    salida.volcado = [];
+    for (const f of page.frames()) {
+      try {
+        const v = await f.evaluate(function () {
+          var tablas = [].slice.call(document.querySelectorAll('table'));
+          if (!tablas.length) return null;
+          /* La tabla mas profunda que mencione un comprobante. */
+          var cand = tablas.filter(function (t) {
+            return /\d{2}\/\d{2}\/\d{4}/.test(t.innerText || '') || /E\d{3}|F\d{3}|B\d{3}/.test(t.innerText || '');
+          });
+          var t = cand.length ? cand[cand.length - 1] : tablas[tablas.length - 1];
+          return {
+            filas: (t.rows || []).length,
+            celdasPrimeraFila: t.rows && t.rows[0] ? t.rows[0].cells.length : 0,
+            html: (t.outerHTML || '').replace(/\s+/g, ' ').slice(0, 2500),
+            totalTablas: tablas.length
+          };
+        });
+        if (v) salida.volcado.push({ url: String(f.url()).slice(-60), tabla: v });
+      } catch (e) { }
+    }
     let txt = '';
     try { txt = await marco.evaluate(function () { return (document.body.innerText || '').slice(0, 250); }); } catch (e) { }
     paso(traza, 'leer resultados', false, /no se encontr|sin resultado|no existe|no hay/i.test(txt)
@@ -703,7 +725,7 @@ router.post('/extraer', async function (req, res) {
 
     const facturas = filasAFacturas(filas);
     if (facturas.length) paso(traza, 'interpretar facturas', true, facturas.length + ' comprobante(s) listos');
-    res.json({ ok: !!(facturas && facturas.length), etapa: 'consulta', filas: filas || [], facturas: facturas, traza: traza, captura: img, radiografia: salida.radiografia || null });
+    res.json({ ok: !!(facturas && facturas.length), etapa: 'consulta', filas: filas || [], facturas: facturas, traza: traza, captura: img, radiografia: salida.radiografia || null, volcado: salida.volcado || null });
   } catch (e) {
     if (navegador) try { await navegador.close(); } catch (x) { }
     paso(traza, 'error', false, e.message.slice(0, 200));
